@@ -1,34 +1,26 @@
-// Otto's robot: shared types, where the model is, and how each face and pose looks.
-// The model is built by blender/build_otto.py and served from public/otto/otto.glb.
+// Otto's robot: shared types, and how each face looks on the Clay Robot's screen
+// (web/src/components/originkit/ui/clay-robot.tsx, driven by ClayScene.tsx).
 
 import { useEffect, useState } from 'react'
 
 export type RobotPose = 'idle' | 'listening' | 'talking' | 'thinking'
 export type RobotExpression = 'happy' | 'searching' | 'excited' | 'alert' | 'resting'
 
-export const ROBOT_MODEL = `${import.meta.env.BASE_URL}otto/otto.glb`
-
 /** Characters a second for the speech bubble: about the pace of the Gemini voice. */
 export const SPEAK_CPS = 16
 
-/** How the eyes look for each face: width, height and where they look (x, y), in the eye's own units. */
-export type EyeShape = { sx: number; sy: number; lookX: number; lookY: number }
+/**
+ * How the eyes look for each face: how open (1 = the robot's own), how much they bend into happy arcs (0..1), where
+ * they look on the screen (head units), how strongly they glow, and their colour (null: ROBOT_COLORS.eyes).
+ */
+export type FaceShape = { open: number; joy: number; lookX: number; lookY: number; glow: number; color: string | null }
 
-export const EYES: Record<RobotExpression, EyeShape> = {
-  happy: { sx: 1, sy: 1, lookX: 0, lookY: 0 },
-  searching: { sx: 1, sy: 0.75, lookX: 0.035, lookY: 0.03 },
-  excited: { sx: 1.15, sy: 1.2, lookX: 0, lookY: 0.01 },
-  alert: { sx: 0.85, sy: 1.35, lookX: 0, lookY: 0 },
-  resting: { sx: 1.15, sy: 0.14, lookX: 0, lookY: -0.03 },
-}
-
-/** The glow colour for each face (null: the configured glow colour), and how bright it is. */
-export const GLOW: Record<RobotExpression, { color: string | null; intensity: number }> = {
-  happy: { color: null, intensity: 3.5 },
-  searching: { color: '#8fc7ff', intensity: 3.5 },
-  excited: { color: null, intensity: 5 },
-  alert: { color: '#ff5a4f', intensity: 4.5 },
-  resting: { color: null, intensity: 1.2 },
+export const FACES: Record<RobotExpression, FaceShape> = {
+  happy: { open: 1, joy: 0, lookX: 0, lookY: 0, glow: 0.6, color: null },
+  searching: { open: 0.7, joy: 0, lookX: 0.25, lookY: 0.18, glow: 0.6, color: '#8fc7ff' },
+  excited: { open: 1, joy: 0.85, lookX: 0, lookY: 0.04, glow: 1, color: null },
+  alert: { open: 1.1, joy: 0, lookX: 0, lookY: 0, glow: 0.9, color: '#ff5a4f' },
+  resting: { open: 0.12, joy: 0, lookX: 0, lookY: -0.12, glow: 0.25, color: null },
 }
 
 /** What is left to say: the new part when the line carries on from what was said, otherwise the whole line. */
@@ -54,11 +46,11 @@ export function useReducedMotion(): boolean {
   return reduced
 }
 
-/** WebGL is there (the robot needs it). Without it, the dock shows only its button. */
+/** WebGL 2 is there (the Clay Robot needs it). Without it, the dock shows only its button. */
 export function hasWebGL(): boolean {
   try {
     const canvas = document.createElement('canvas')
-    return !!(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
+    return !!canvas.getContext('webgl2')
   } catch {
     return false
   }

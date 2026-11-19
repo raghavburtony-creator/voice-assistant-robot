@@ -1,7 +1,7 @@
 // EDIT THIS FILE for each new project: Otto's name, your pages, and the commands Otto may run.
 // PAGES and COMMANDS must match server/app/voice/app_config.py (server/tests/test_voice.py checks it).
 
-import type { GestureName } from './otto/robot/gestures.js'
+import type { GestureName } from './otto/robot/gestures'
 
 export const ASSISTANT_NAME = 'Otto'
 
@@ -47,14 +47,22 @@ export const COMMAND_LABELS: Record<CommandName, string> = {
  */
 export const WAKE_PHRASE = /\b(?:hey+|hay|hei|okay|ok)[\s,.!-]*(?:otto|ottos|auto|audo|oddo|odo|oto)\b[\s,.!?-]*(.*)$/i
 
-/** Otto's colours: the body shell and the light in its eyes and mouth. */
+/** Otto's colours (the Clay Robot): the clay of its helmet and body, the screen in its visor, and its eyes and mouth. */
 export const ROBOT_COLORS = {
-  shell: '#3c4046',
-  glow: '#f2f0e8',
+  clay: '#B5A1FF',
+  visor: '#22225E',
+  eyes: '#FFFFFF',
+}
+
+/** The backdrop behind the robot: a cyclorama gradient and the colour of its shadow on the floor. */
+export const ROBOT_BACKGROUND = {
+  top: '#909EA9',
+  bottom: '#CCD0D3',
+  shadow: '#2E4D6A',
 }
 
 /**
- * Otto's gestures (web/src/otto/robot/gestures.js). Each lifecycle moment names the gesture it plays, or null for none.
+ * Otto's gestures (web/src/otto/robot/gestures.ts). Each lifecycle moment names the gesture it plays, or null for none.
  * Any gesture can also be played from code: `<Otto gestures={channel} />` with `channel.play('celebrate')`.
  */
 export const GESTURE_SETTINGS = {

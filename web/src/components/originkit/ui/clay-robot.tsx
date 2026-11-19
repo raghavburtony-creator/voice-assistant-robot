@@ -173,6 +173,8 @@ const SUN = [0.293, 0.227, 0.17]
 const DPR_CAP = 2
 const PIXEL_BUDGET = 2.6e6
 const LEVELS = [1, 0.85, 0.72, 0.6]
+// Otto: a closed mouth, when no control drives it.
+const NO_MOUTH = new Float32Array(5)
 
 /* --------------------------------------------------------------- types */
 
@@ -228,6 +230,46 @@ export interface ClayRobotAdvanced {
     gradientCurve?: number
 }
 
+/** Otto: one arm's pose, added to the robot's own (radians; ext 0..1 stretches the clay arm). */
+export interface ClayArm {
+    raise: number
+    swing: number
+    ext: number
+}
+
+/**
+ * Otto: lets the host drive the robot every frame (voice states, gestures, lip-sync) on top of its own motion.
+ * Angles are added to the robot's own (radians, the robot's conventions: +pitch looks up, +yaw turns to the viewer's
+ * right). `update` runs once per animation tick; return true while something is moving so the loop keeps drawing.
+ */
+export interface ClayControl {
+    update(dt: number): boolean
+    /** 0..1: how much of the cursor-following head turn survives. */
+    look: number
+    yaw: number
+    pitch: number
+    roll: number
+    /** Whole-robot lift (scene units) and squash (+ squashes, - stretches). */
+    lift: number
+    squash: number
+    armL: ClayArm
+    armR: ClayArm
+    /** 0..1 per arm: how much of the robot's own arm motion (walk swing, its own wave) survives. */
+    baseL: number
+    baseR: number
+    /** Multiplies how open the eyes are; joy (0..1) bends them into happy arcs; eyeX/eyeY shift the gaze. */
+    eyeOpen: number
+    joy: number
+    eyeX: number
+    eyeY: number
+    /** Eye glow, or null for the `advanced.eyeGlow` prop; eye colour (sRGB 0..1), or null for `colors.eyes`. */
+    glow: number | null
+    eyeColor: [number, number, number] | null
+    /** Five mouth bars, 0..1 each, and how much of the mouth shows (0 hides it). */
+    mouth: Float32Array
+    mouthOn: number
+}
+
 export interface ClayRobotProps {
     background?: ClayRobotBackground
     colors?: ClayRobotColors
@@ -251,6 +293,8 @@ export interface ClayRobotProps {
     blink?: boolean
     advanced?: ClayRobotAdvanced
     style?: CSSProperties
+    /** Otto: drive the robot from outside (see ClayControl). */
+    control?: ClayControl
 }
 
 /* ------------------------------------------------------------- colours */
@@ -344,6 +388,9 @@ uniform vec4 uArms;     // left (raise, swing), right (raise, swing)
 uniform vec2 uArmExt;   // how far each arm is stretched out, 0..1
 uniform vec4 uBodyBox;  // body box: centre y, half size xyz
 uniform int uSamples;
+// Otto: a five-bar mouth under the eyes, driven by the voice (0..1 per bar), and how much of it shows.
+uniform float uMouth[5];
+uniform float uMouthOn;
 
 out vec4 fragColor;
 
@@ -595,6 +642,19 @@ float eyeSD(vec2 p) {
     return mix(rect, arc, uEye.w);
 }
 
+// Otto: the mouth, in the same screen space as the eyes, following their gaze a little.
+float mouthSD(vec2 p) {
+    if (uMouthOn < 0.01) return 1e3;
+    vec2 c = p - vec2(uEye.x * 0.6, -1.22 + uEye.y * 0.6);
+    float d = 1e3;
+    for (int i = 0; i < 5; i++) {
+        vec2 q = c - vec2(float(i - 2) * 0.2, 0.0);
+        float hy = (0.045 + 0.34 * uMouth[i]) * uMouthOn;
+        d = min(d, sdRR(q, vec2(0.055 * uMouthOn, hy), 0.045 * uMouthOn));
+    }
+    return d;
+}
+
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
@@ -722,7 +782,7 @@ void main() {
                     // Eyes: a 2-D shape on the screen, anti-aliased over
                     // the pixel's footprint in head units.
                     vec3 ph = toHead(toBody(uW2S * p));
-                    float eD = eyeSD(ph.xy);
+                    float eD = min(eyeSD(ph.xy), mouthSD(ph.xy)); // Otto: + mouth
                     float eW = 0.75 * pxk * t / (uScale * kq);
                     float eye = 1.0 - smoothstep(-eW, eW, eD);
                     float front = smoothstep(0.3, 0.5, ph.z);
@@ -885,6 +945,7 @@ export default function ClayRobot({
     blink = DEFAULTS.blink,
     advanced = {"eyeGlow":0.6,"sunAngle":90,"occlusion":1,"skyStrength":1,"sunStrength":1,"sunElevation":25,"gradientCurve":1.3,"cameraDistance":30,"shadowSoftness":6},
     style,
+    control,
 }: ClayRobotProps) {
     const bgc = { ...DEFAULT_BACKGROUND, ...background }
     const col = { ...DEFAULT_COLORS, ...colors }
@@ -900,6 +961,9 @@ export default function ClayRobot({
     const live = { bgc, col, place, resp, adv, scale, animate, delay, walk, walkSpeed, wave, glance, blink }
     const propsRef = useRef(live)
     propsRef.current = live
+    // Otto: read every frame, outside `live` so it never rebuilds GL.
+    const controlRef = useRef(control)
+    controlRef.current = control
     const wakeRef = useRef<() => void>(() => {})
     const propKey = JSON.stringify(live)
     useEffect(() => {
@@ -1041,6 +1105,7 @@ export default function ClayRobot({
                 "uBody", "uHead", "uEye", "uBoxMin", "uBoxMax", "uSun", "uSunCol", "uSky",
                 "uSkyUp", "uSkySide", "uSkyAway", "uSoft", "uAO", "uBgTop", "uBgBot", "uCurve", "uShadowCol", "uShDepth", "uClay",
                 "uVisor", "uEyeCol", "uGlow", "uSamples", "uWalkX", "uFeet", "uArms", "uArmExt", "uBodyBox",
+                "uMouth", "uMouthOn", // Otto
             ]
             for (const n of names) uni[n] = gl.getUniformLocation(prog, n)
             timerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2") as typeof timerExt
@@ -1234,15 +1299,37 @@ export default function ClayRobot({
             }
             if (dropAt >= 0 && !dropDone && clock - dropAt < DROP_S + 0.1) open = 0.12
 
+            // Otto: the host's layer on top of the robot's own motion.
+            const ctl = controlRef.current
+            const look = ctl ? ctl.look : 1
+            let eyeOffX = 0, eyeOffY = 0, rollAdd = 0, yawAdd = 0, pitchAdd = 0
+            if (ctl) {
+                yawAdd = ctl.yaw
+                pitchAdd = ctl.pitch
+                rollAdd = ctl.roll
+                lift += ctl.lift
+                squash += ctl.squash
+                armL = ARM_REST + (armL - ARM_REST) * ctl.baseL + ctl.armL.raise
+                swingL = swingL * ctl.baseL + ctl.armL.swing
+                extL = Math.min(1, Math.max(0, extL * ctl.baseL + ctl.armL.ext))
+                armR = ARM_REST + (armR - ARM_REST) * ctl.baseR + ctl.armR.raise
+                swingR = swingR * ctl.baseR + ctl.armR.swing
+                extR = Math.min(1, Math.max(0, extR * ctl.baseR + ctl.armR.ext))
+                open *= ctl.eyeOpen
+                joy = Math.max(joy, ctl.joy)
+                eyeOffX = ctl.eyeX
+                eyeOffY = ctl.eyeY
+            }
+
             // Matrices.
             const k = p.scale / 100
             const tilt = (-p.place.tilt * Math.PI) / 180
             rotX(tilt, mW2S)
             for (let i = 0; i < 9; i++) mW2S[i] /= k
-            const hy = yaw.x - bodyYaw.x
-            mul3(rotY(hy, tA), rotX(-pitch.x, tB), tmp)
-            mul3(tmp, rotZ(HEAD_ROLL * hy, tA), mHead)
-            mul3(rotY(bodyYaw.x, tA), rotZ(roll, tB), mBody)
+            const hy = (yaw.x - bodyYaw.x) * look + yawAdd // Otto: look scales the cursor turn
+            mul3(rotY(hy, tA), rotX(-(pitch.x * look + pitchAdd), tB), tmp)
+            mul3(tmp, rotZ(HEAD_ROLL * hy + rollAdd, tA), mHead)
+            mul3(rotY(bodyYaw.x * look, tA), rotZ(roll, tB), mBody)
 
             const az = (p.adv.sunAngle * Math.PI) / 180
             const el = (p.adv.sunElevation * Math.PI) / 180
@@ -1274,7 +1361,7 @@ export default function ClayRobot({
             g.uniform2f(uni.uSq, 1 + sq * 0.5, 1 - sq)
             g.uniformMatrix3fv(uni.uBody, false, mBody)
             g.uniformMatrix3fv(uni.uHead, false, mHead)
-            g.uniform4f(uni.uEye, eyeX.x, eyeY.x, open, joy)
+            g.uniform4f(uni.uEye, eyeX.x + eyeOffX, eyeY.x + eyeOffY, open, joy)
             g.uniform3f(uni.uBoxMin, walkX - 3.25, -0.05, -2.7)
             g.uniform3f(uni.uBoxMax, walkX + 3.25, 6.55 + lift + Math.max(0, -sq) * 6, 2.7)
             g.uniform3f(uni.uSun, sunX, sunY, sunZ)
@@ -1293,14 +1380,19 @@ export default function ClayRobot({
             g.uniform1f(uni.uShDepth, Math.max(0, Math.min(100, shDepth)) / 100)
             g.uniform3f(uni.uClay, lin(clay[0]) / CLAY_LIN[0], lin(clay[1]) / CLAY_LIN[1], lin(clay[2]) / CLAY_LIN[2])
             g.uniform3f(uni.uVisor, lin(visor[0]) / CLAY_LIN[0], lin(visor[1]) / CLAY_LIN[1], lin(visor[2]) / CLAY_LIN[2])
-            g.uniform3f(uni.uEyeCol, eyes[0], eyes[1], eyes[2])
-            g.uniform1f(uni.uGlow, p.adv.eyeGlow)
+            const eyeC = ctl?.eyeColor ?? eyes // Otto: faces recolour the eyes
+            g.uniform3f(uni.uEyeCol, eyeC[0], eyeC[1], eyeC[2])
+            g.uniform1f(uni.uGlow, ctl?.glow ?? p.adv.eyeGlow)
+            g.uniform1fv(uni.uMouth, ctl ? ctl.mouth : NO_MOUTH)
+            g.uniform1f(uni.uMouthOn, ctl ? ctl.mouthOn : 0)
             g.uniform1f(uni.uWalkX, walkX)
             g.uniform2f(uni.uFeet, liftL, liftR)
             g.uniform4f(uni.uArms, armL, swingL, armR, swingR)
             g.uniform2f(uni.uArmExt, extL, extR)
             // The body's box only grows to hold a stretched, raised arm.
-            if (extL + extR > 0) g.uniform4f(uni.uBodyBox, 1.48, 3.0, 1.55, 0.9)
+            // Otto: also for an arm raised or swung by the host without stretching.
+            const armOut = armL > 0.9 || armR > 0.9 || Math.abs(swingL) > 0.6 || Math.abs(swingR) > 0.6
+            if (extL + extR > 0 || armOut) g.uniform4f(uni.uBodyBox, 1.48, 3.0, 1.55, 0.9)
             else g.uniform4f(uni.uBodyBox, 1.05, 1.45, 1.12, 0.85)
             g.uniform1i(uni.uSamples, 5)
 
@@ -1485,7 +1577,10 @@ export default function ClayRobot({
                 blinkAt = -1
             }
 
+            // Otto: the host's per-tick update; it keeps the loop drawing while it moves anything.
+            const hostBusy = controlRef.current ? controlRef.current.update(dt) : false
             const busy =
+                hostBusy ||
                 dirty ||
                 springBusy(yaw, tYaw) ||
                 springBusy(pitch, tPitch) ||

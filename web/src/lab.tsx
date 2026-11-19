@@ -1,9 +1,9 @@
 // Otto lab (npm run dev, then http://localhost:5173/lab.html): every face, pose and gesture, and a fake voice for the mouth, with no server.
 import { StrictMode, useCallback, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createGestureChannel, GESTURE_NAMES } from './otto/robot/gestures.js'
+import { createGestureChannel, GESTURE_NAMES } from './otto/robot/gestures'
 import OttoRobot from './otto/robot/OttoRobot'
-import { EYES, type RobotExpression, type RobotPose } from './otto/robot/robot'
+import { FACES, type RobotExpression, type RobotPose } from './otto/robot/robot'
 import './otto/voice.css'
 import './app.css'
 
@@ -29,7 +29,7 @@ function Lab() {
           setSay(item === 'talking' ? 'Hi, I am Otto. Ask me anything about this app.' : '')
           if (item === 'talking') setExpression('excited')
         }}>{item}</button>)}</fieldset>
-      <fieldset><legend>Face</legend>{(Object.keys(EYES) as RobotExpression[]).map(item =>
+      <fieldset><legend>Face</legend>{(Object.keys(FACES) as RobotExpression[]).map(item =>
         <button key={item} type="button" className="otto-btn otto-btn--tonal" aria-pressed={expression === item} onClick={() => setExpression(item)}>{item}</button>)}</fieldset>
       {/* Pose "thinking" holds thinkingHand by itself (GESTURE_SETTINGS.whileThinking); the buttons here play one-shots. */}
       <fieldset><legend>Gesture</legend>{GESTURE_NAMES.map(name =>

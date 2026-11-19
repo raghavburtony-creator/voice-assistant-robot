@@ -111,7 +111,8 @@
 @media (max-width: 640px) { .otto-dock { inline-size: 140px; block-size: 126px; } }
 .otto-dock--beside-voice { inset-inline-end: calc(24px + min(420px, 100vw - 32px) - 20px); }
 @media (max-width: 640px) { .otto-dock--beside-voice { visibility: hidden; } }
-.otto-dock__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
+.otto-dock__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; border-radius: 20px; overflow: hidden;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
 .otto-dock__button { position: absolute; inset-block-end: 1rem; inset-inline-end: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap; }
 .otto-dock__button:not(:focus) { inline-size: 1px; block-size: 1px; min-block-size: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
 

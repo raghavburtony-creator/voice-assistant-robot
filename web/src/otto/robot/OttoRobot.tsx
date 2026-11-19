@@ -1,12 +1,12 @@
 // Otto's robot, for the dock or anywhere else. It is only a picture: hidden from screen readers and the Tab order, because the
-// dock's button and the voice panel say the same in words. The 3D scene (OttoScene) loads on its own after the page, and where
-// WebGL is missing or the scene fails, nothing is drawn and the rest of Otto still works.
+// dock's button and the voice panel say the same in words. The robot (ClayScene, the Clay Robot) loads on its own after the page, and where
+// WebGL 2 is missing or the scene fails, nothing is drawn and the rest of Otto still works.
 
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { GestureChannel } from './gestures.js'
+import type { GestureChannel } from './gestures'
 import { hasWebGL, SPEAK_CPS, type RobotExpression, type RobotPose } from './robot'
 
-const OttoScene = lazy(() => import('./OttoScene'))
+const ClayScene = lazy(() => import('./ClayScene'))
 
 type Props = {
   pose: RobotPose
@@ -58,7 +58,7 @@ export default function OttoRobot({ pose, expression, say = '', speechBands, ges
       {bubble && <p className="otto-robot__bubble">{bubble}</p>}
       {canDraw && <Quiet>
         <Suspense fallback={null}>
-          <OttoScene pose={pose} expression={expression} speechBands={speechBands} gestures={gestures} onActivate={onActivate} />
+          <ClayScene pose={pose} expression={expression} speechBands={speechBands} gestures={gestures} onActivate={onActivate} />
         </Suspense>
       </Quiet>}
     </div>

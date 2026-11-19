@@ -3,7 +3,7 @@
 
 import { ASSISTANT_NAME } from '../otto.config'
 import OttoRobot from './robot/OttoRobot'
-import type { GestureChannel } from './robot/gestures.js'
+import type { GestureChannel } from './robot/gestures'
 import type { RobotExpression, RobotPose } from './robot/robot'
 import { Button } from './ui'
 import type { AssistantStatus } from './useVoiceAssistant'

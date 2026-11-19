@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
 import OttoDock from './OttoDock'
-import { createGestureChannel, type GestureChannel } from './robot/gestures.js'
+import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureTriggers } from './useGestureTriggers'
 import type { AssistantAction } from './messages'
 import { loadAssistantAudio, useVoiceAssistant } from './useVoiceAssistant'

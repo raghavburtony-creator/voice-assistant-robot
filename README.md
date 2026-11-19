@@ -1,9 +1,9 @@
 # Otto voice kit
 
-A starter kit for adding **Otto**, a 3D robot voice guide, to a web app. You talk to Otto (or type), it answers out loud with Gemini Live, and it can act on the page: open a page, run one of your app's commands, read what is on screen. Taken out of the NASA Earth Jukebox and made generic.
+A starter kit for adding **Otto**, a clay robot voice guide, to a web app. You talk to Otto (or type), it answers out loud with Gemini Live, and it can act on the page: open a page, run one of your app's commands, read what is on screen. Taken out of the NASA Earth Jukebox and made generic.
 
-- **Robot** (`blender/`): Otto is modelled in Blender by a Python (bpy) script and exported as `web/public/otto/otto.glb`.
-- **Web** (`web/`): React, TypeScript and Vite. Otto drawn with React Three Fiber, the voice panel, "Hey Otto", consent, push-to-talk or open mic, a text fallback.
+- **Robot**: Otto is Originkit's Clay Robot (`web/src/components/originkit/ui/clay-robot.tsx`), drawn by a WebGL 2 shader, with a mouth and a control hook added for the voice kit.
+- **Web** (`web/`): React, TypeScript and Vite. The robot, the voice panel, "Hey Otto", consent, push-to-talk or open mic, a text fallback.
 - **Server** (`server/`): FastAPI and Google ADK. It holds the Gemini session and the API key, and runs Otto's tools.
 
 ## Run it
@@ -25,9 +25,7 @@ npm run dev                   # http://localhost:5173
 
 Click the robot, or press **Alt+O** (change it with `SHORTCUT_KEY` in `web/src/otto.config.ts`), and say "Take me to About" or "Show me a message".
 
-To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose and face, and a fake voice for the mouth.
-
-There is also a standalone three.js preview with no build step, [`preview/index.html`](preview/index.html): run `python3 -m http.server 8000` in the repository root and open http://localhost:8000/preview/. It can lip-sync Otto to any audio file you pick.
+To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, face and gesture, and a fake voice for the mouth.
 
 Checks: `cd server && .venv/bin/python -m pytest` and `cd web && npm run build`.
 
@@ -81,33 +79,25 @@ useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.
 - Every action is checked twice: by the tool on the server, and by `toAssistantAction` in the browser. Most can be undone from the panel.
 - The robot is only a picture. It is hidden from screen readers; the panel shows everything Otto says as text.
-- Otto's mouth bars follow its real voice while it speaks: a Web Audio `AnalyserNode` on the speech player (`SpeechPlayer.bands()` in `web/src/otto/audio.ts`) feeds `OttoScene.tsx` every frame. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
+- Otto's mouth bars follow its real voice while it speaks: a Web Audio `AnalyserNode` on the speech player (`SpeechPlayer.bands()` in `web/src/otto/audio.ts`) feeds `ClayScene.tsx` every frame. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
 - "Hey Otto" uses the browser's speech recognition. In Chrome and Edge that sends microphone sound to the browser maker while it listens. It is off until the visitor turns it on, and a banner shows whenever it is listening.
 
 ## Otto's robot
 
-Otto is our own model, built from primitives by [`blender/build_otto.py`](blender/build_otto.py): a chunky graphite bot with a big rounded head, a glossy black visor, rounded-square eyes, side pods, five small mouth bars that act as its voice meter, and a short standing body with stubby arms.
+Otto is the **Clay Robot** from [Originkit](https://www.originkit.dev), added with `npx originkit add clay-robot`: a soft lilac clay bot with a round helmet, a navy visor screen with glowing eyes, side ear pods and a short body with stubby arms. It is drawn by one raymarching shader (WebGL 2, no 3D library), follows the cursor, blinks, glances about and hops when tapped.
 
 | Layer | Where | What it does |
 |---|---|---|
-| Model | `blender/build_otto.py` (Blender, bpy) | Builds the mesh, names every moving part, exports `web/public/otto/otto.glb` |
-| Scene | `web/src/otto/robot/OttoScene.tsx` (React Three Fiber, three.js, postprocessing) | Lighting, bloom on the glowing parts, and every animation |
-| Wrapper | `web/src/otto/robot/OttoRobot.tsx` | Loads the scene after the page, shows the speech bubble, draws nothing without WebGL |
-| Faces | `web/src/otto/robot/robot.ts` | Eye shapes and glow colours for happy, searching, excited, alert and resting |
+| Robot | `web/src/components/originkit/ui/clay-robot.tsx` | The Originkit component. Two additions, marked `Otto:` so they can be re-applied after an update: a five-bar mouth on the visor, and a `control` prop the host drives every frame |
+| Scene | `web/src/otto/robot/ClayScene.tsx` | Turns pose, face, the voice and gestures into that control: listening leans in, thinking holds a hand to the chin, talking moves the mouth |
+| Wrapper | `web/src/otto/robot/OttoRobot.tsx` | Loads the robot after the page, shows the speech bubble, draws nothing without WebGL 2 |
+| Faces | `web/src/otto/robot/robot.ts` | How open the eyes are, happy arcs, gaze, glow and colour for happy, searching, excited, alert and resting |
 
-To change the model, edit the script and run it again, keeping the node names listed at its top (the app finds parts by name):
-
-```bash
-python3 -m venv .blender && .blender/bin/pip install bpy==5.3.0
-.blender/bin/python blender/build_otto.py                      # writes web/public/otto/otto.glb
-.blender/bin/python blender/build_otto.py --render otto.png    # and a Cycles render to check it
-```
-
-With **Blender MCP**, open Blender with the add-on connected and ask Claude to run `blender/build_otto.py` (its `execute_blender_code` tool), then tweak the model live and export again from File → Export → glTF 2.0 (.glb), "Apply Modifiers" on.
+Colours (clay, visor, eyes) and the backdrop gradient are `ROBOT_COLORS` and `ROBOT_BACKGROUND` in `web/src/otto.config.ts`. Re-running `originkit add clay-robot` overwrites the component: put the `Otto:` changes back after it.
 
 ### Gestures
 
-Otto has six short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake` and `thinkingHand` (held while thinking). They are defined once in [`web/src/otto/robot/gestures.js`](web/src/otto/robot/gestures.js), a plain module that the app and [`preview/`](preview/index.html) both load. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
+Otto has six short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake` and `thinkingHand` (held while thinking). They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
 
 To play one from your own code, make a channel once and pass it to `<Otto>`:
 

@@ -11,7 +11,7 @@
 
 import { useEffect, useRef } from 'react'
 import { GESTURE_SETTINGS } from '../otto.config'
-import type { GestureChannel, GestureName } from './robot/gestures.js'
+import type { GestureChannel, GestureName } from './robot/gestures'
 import type { AssistantStatus } from './useVoiceAssistant'
 
 /** `channel` should be stable (create it once); a new object each render still works. */
