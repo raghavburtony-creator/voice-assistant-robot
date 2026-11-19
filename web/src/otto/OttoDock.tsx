@@ -19,10 +19,11 @@ type Props = {
   gestures?: GestureChannel
 }
 
-const poseFor = (status: AssistantStatus): RobotPose =>
+/** How each voice status looks on the robot (the lab reuses these). */
+export const poseFor = (status: AssistantStatus): RobotPose =>
   status === 'speaking' ? 'talking' : status === 'listening' ? 'listening' : status === 'connecting' ? 'thinking' : 'idle'
 
-const expressionFor = (status: AssistantStatus): RobotExpression =>
+export const expressionFor = (status: AssistantStatus): RobotExpression =>
   status === 'error' ? 'alert' : status === 'connecting' ? 'searching' : status === 'speaking' ? 'excited' : 'happy'
 
 export default function OttoDock({ status, voiceOpen, line, speechBands, onTalk, gestures }: Props) {

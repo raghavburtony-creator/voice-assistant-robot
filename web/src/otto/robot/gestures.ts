@@ -100,7 +100,17 @@ export type GestureOptions = {
   force?: boolean
 }
 
+/** Why a gesture ended: it ran its course, a new one cut in, stop() or reduced motion ended it, or a held one was let go. */
+export type GestureEndReason = 'finished' | 'interrupted' | 'stopped' | 'released'
+
+/** Reported when a gesture starts or ends ("ended" is logical: its fade-out follows over its release time). */
+export type GestureEvent =
+  | { type: 'start'; name: GestureName; held: boolean }
+  | { type: 'end'; name: GestureName; held: boolean; reason: GestureEndReason }
+
 export type GestureControllerOptions = {
+  /** Called for every gesture start and end. */
+  onEvent?: (event: GestureEvent) => void
   intensity?: number
   /** Reduced motion: one-shot gestures are skipped; held gestures still show, at `reducedIntensity`. */
   reducedMotion?: boolean
@@ -121,12 +131,12 @@ export type GestureController = {
   setIntensity(value: number): void
   /** True while anything is still contributing (the scene keeps drawing). */
   busy(): boolean
-  /** Advances by dt seconds (clamped to 0.1) and returns this frame's offsets. Reuses one object: do not keep it. */
+  /** Advances by dt seconds (clamped to 0.25) and returns this frame's offsets. Reuses one object: do not keep it. */
   update(dt: number): GestureFrame
 }
 
 type Entry = { name: GestureName; def: GestureDef; gain: number; t: number; w: number }
-type Held = Entry & { ramp: number; target: 0 | 1 }
+type Held = Entry & { ramp: number; target: 0 | 1; ended: boolean }
 type Fading = Entry & { fade: number; from: number }
 
 export function createGestureController(options: GestureControllerOptions = {}): GestureController {
@@ -144,10 +154,19 @@ export function createGestureController(options: GestureControllerOptions = {}):
     face: { joy: 0, lookX: 0, lookY: 0 }, look: 1, baseL: 1, baseR: 1, active: [],
   }
 
+  const emit = options.onEvent ?? (() => {})
   const fadeLength = (def: GestureDef) => Math.max(0.15, def.release)
   /** Moves a one-shot to the fading list, ramping down from its current weight. */
-  const interrupt = (entry: Entry) => { fading.push({ ...entry, fade: 0, from: entry.w }) }
-  const releaseHeld = () => { for (const h of helds) h.target = 0 }
+  const interrupt = (entry: Entry, reason: GestureEndReason) => {
+    fading.push({ ...entry, fade: 0, from: entry.w })
+    emit({ type: 'end', name: entry.name, held: false, reason })
+  }
+  const releaseHeld = (reason: GestureEndReason = 'released') => {
+    for (const h of helds) {
+      h.target = 0
+      if (!h.ended) { h.ended = true; emit({ type: 'end', name: h.name, held: true, reason }) }
+    }
+  }
   const effective = () => (reduced ? reducedIntensity : intensity)
 
   return {
@@ -159,9 +178,10 @@ export function createGestureController(options: GestureControllerOptions = {}):
         const inRelease = shot && shot.t > shot.def.duration - shot.def.release
         if (shot && !inRelease && def.priority < shot.def.priority) return false
       }
-      if (shot) interrupt(shot)
+      if (shot) interrupt(shot, 'interrupted')
       lastPlayed[name] = now
       shot = { name, def, gain: opts.intensity ?? 1, t: 0, w: 0 }
+      emit({ type: 'start', name, held: false })
       return true
     },
     hold(name, opts = {}) {
@@ -170,15 +190,17 @@ export function createGestureController(options: GestureControllerOptions = {}):
       const live = helds[helds.length - 1]
       if (live && live.target === 1 && live.name === name) return
       releaseHeld()
-      helds.push({ name, def, gain: opts.intensity ?? 1, t: 0, w: 0, ramp: 0, target: 1 })
+      helds.push({ name, def, gain: opts.intensity ?? 1, t: 0, w: 0, ramp: 0, target: 1, ended: false })
+      emit({ type: 'start', name, held: true })
     },
-    release: releaseHeld,
-    stop() { releaseHeld(); if (shot) { interrupt(shot); shot = null } },
-    setReducedMotion(on) { reduced = on; if (reduced && shot) { interrupt(shot); shot = null } }, // held gestures stay
+    release: () => releaseHeld(),
+    stop() { releaseHeld('stopped'); if (shot) { interrupt(shot, 'stopped'); shot = null } },
+    setReducedMotion(on) { reduced = on; if (reduced && shot) { interrupt(shot, 'stopped'); shot = null } }, // held gestures stay
     setIntensity(value) { intensity = value },
     busy: () => helds.length > 0 || shot !== null || fading.length > 0,
     update(dt) {
-      dt = Math.min(0.1, Math.max(0, dt || 0))
+      // Up to 250 ms a frame keeps slow devices in real time; more (a tab coming back) must not skip a gesture's middle.
+      dt = Math.min(0.25, Math.max(0, dt || 0))
       now += dt
       // Advance weights.
       for (const h of helds) {
@@ -191,7 +213,7 @@ export function createGestureController(options: GestureControllerOptions = {}):
       if (shot) {
         shot.t += dt
         const { duration, attack, release } = shot.def
-        if (shot.t >= duration) shot = null
+        if (shot.t >= duration) { emit({ type: 'end', name: shot.name, held: false, reason: 'finished' }); shot = null }
         else shot.w = smoothstep(0, attack, shot.t) * (1 - smoothstep(duration - release, duration, shot.t))
       }
       for (const f of fading) { f.t += dt; f.fade += dt; f.w = f.from * (1 - smoothstep(0, fadeLength(f.def), f.fade)) }
@@ -248,12 +270,17 @@ export type GestureChannel = {
   play(name: GestureName, options?: GestureOptions): void
   hold(name: GestureName | null, options?: GestureOptions): void
   stop(): void
-  /** Returns an unsubscribe function. */
+  /** For the robot: receive commands. Returns an unsubscribe function. */
   subscribe(listener: (command: GestureCommand) => void): () => void
+  /** For the robot: report a gesture starting or ending to everyone listening with onEvent. */
+  emit(event: GestureEvent): void
+  /** For app code: hear when gestures start and end. Returns an unsubscribe function. */
+  onEvent(listener: (event: GestureEvent) => void): () => void
 }
 
 export function createGestureChannel(): GestureChannel {
   const listeners = new Set<(command: GestureCommand) => void>()
+  const observers = new Set<(event: GestureEvent) => void>()
   // With nobody listening (the robot is lazy-loaded) keep the latest hold, and the latest play if it is still fresh.
   let pendingHold: GestureCommand | null = null
   let pendingPlay: { command: GestureCommand; at: number } | null = null
@@ -273,6 +300,11 @@ export function createGestureChannel(): GestureChannel {
       listeners.add(listener)
       for (const command of replay) if (command) listener(command)
       return () => { listeners.delete(listener) }
+    },
+    emit: event => observers.forEach(observer => observer(event)),
+    onEvent(observer) {
+      observers.add(observer)
+      return () => { observers.delete(observer) }
     },
   }
 }

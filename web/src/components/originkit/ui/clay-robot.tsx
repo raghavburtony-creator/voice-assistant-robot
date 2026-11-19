@@ -1607,7 +1607,8 @@ export default function ClayRobot({
             }
 
             // Otto: the host's per-tick update; it keeps the loop drawing while it moves anything.
-            const hostBusy = controlRef.current ? controlRef.current.update(dt) : false
+            // Wall-clock time (to 250 ms), not the loop's 50 ms-capped dt: on a slow device gestures must not play in slow motion.
+            const hostBusy = controlRef.current ? controlRef.current.update(Math.min(tickGap / 1000, 0.25)) : false
             const busy =
                 hostBusy ||
                 dirty ||

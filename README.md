@@ -25,9 +25,9 @@ npm run dev                   # http://localhost:5173
 
 Click the robot, or press **Alt+O** (change it with `SHORTCUT_KEY` in `web/src/otto.config.ts`), and say "Take me to About" or "Show me a message".
 
-To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, face and gesture, and a fake voice for the mouth.
+To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, face and gesture, a fake voice for the mouth, and a simulated voice session ("Run a conversation") that plays the lifecycle gestures through the same rules as the app, with a live log of gesture events.
 
-Checks: `cd server && .venv/bin/python -m pytest` and `cd web && npm run build`.
+Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`.
 
 ## Using it in a new project
 
@@ -99,13 +99,16 @@ Colours (clay, visor, eyes) and the backdrop are `ROBOT_COLORS` and `ROBOT_BACKG
 
 Otto has six short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake` and `thinkingHand` (held while thinking). They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
 
-To play one from your own code, make a channel once and pass it to `<Otto>`:
+To play one from your own code, make a channel once and pass it to `<Otto>`. The same channel tells you when gestures start and end:
 
 ```tsx
 const gestures = useMemo(createGestureChannel, [])
 <Otto gestures={gestures} /* ... */ />
 gestures.play('celebrate')
+useEffect(() => gestures.onEvent(event => console.log(event.type, event.name)), [gestures])  // 'end' events carry a reason
 ```
+
+How it fits together: the voice status goes through `gestureForTransition` (`web/src/otto/useGestureTriggers.ts`, a pure function) to decide what plays; the channel carries that, and anything your code plays, to the robot; `ClayScene.tsx` runs one gesture controller per robot and reports starts and ends back on the channel. A new gesture interrupts the current one if its priority is the same or higher (celebrate > waves and head shake > nod), never queues, and blends in while the old one blends out.
 
 ## Deploying
 

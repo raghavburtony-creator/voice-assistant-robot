@@ -4,7 +4,8 @@
 //   pose        -> listening leans in; thinking holds the thinkingHand gesture (GESTURE_SETTINGS.whileThinking)
 //   expression  -> eye shape, gaze, glow and colour (FACES in robot.ts)
 //   speechBands -> the five mouth bars follow Otto's real voice (Web Audio AnalyserNode in audio.ts)
-//   gestures    -> waves, nods... (gestures.ts), layered on top of all of the above
+//   gestures    -> waves, nods... (gestures.ts), layered on top of all of the above; their starts and ends go back out on
+//                  the same channel (channel.onEvent)
 
 import { useEffect, useMemo, useRef } from 'react'
 import ClayRobot, { type ClayControl } from '../../components/originkit/ui/clay-robot'
@@ -34,7 +35,11 @@ function hexToRGB(hex: string): [number, number, number] {
 
 export default function ClayScene({ pose, expression, speechBands, onActivate, gestures }: Props) {
   const calm = useReducedMotion()
+  // Gesture starts and ends go out through whichever channel this robot is given.
+  const channel = useRef(gestures)
+  useEffect(() => { channel.current = gestures }, [gestures])
   const controller = useMemo(() => createGestureController({
+    onEvent: event => channel.current?.emit(event),
     intensity: GESTURE_SETTINGS.enabled ? GESTURE_SETTINGS.intensity : 0,
     reducedIntensity: GESTURE_SETTINGS.reducedIntensity, cooldown: GESTURE_SETTINGS.cooldown,
   }), [])
