@@ -1,0 +1,136 @@
+/* Otto's voice panel, dock and controls. Change the --otto-* variables to fit a new project's look. */
+:root {
+  --otto-accent: #3b5bdb;
+  --otto-on-accent: #ffffff;
+  --otto-surface: #ffffff;
+  --otto-surface-2: #f1f3f9;
+  --otto-ink: #1b1e28;
+  --otto-muted: #555b6e;
+  --otto-line: #d4d8e4;
+  --otto-warning: #8a4b00;
+  --otto-error: #b3261e;
+  --otto-radius: 20px;
+  
+}
+:root[data-theme='dark'] {
+  --otto-accent: #9fb2ff;
+  --otto-on-accent: #0f1630;
+  --otto-surface: #1d2130;
+  --otto-surface-2: #272c3e;
+  --otto-ink: #eef0f7;
+  --otto-muted: #b6bbcc;
+  --otto-line: #3b4157;
+  --otto-warning: #ffb86b;
+  --otto-error: #ffb4ab;
+}
+
+.ui-visually-hidden {
+  position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.otto-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+.ui-choice { display: flex; align-items: center; gap: 0.5rem; min-block-size: 44px; cursor: pointer; }
+.ui-choice input { inline-size: 1.25rem; block-size: 1.25rem; accent-color: var(--otto-accent); }
+
+/* Controls */
+.otto-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-block-size: 44px; padding: 0 1rem; border-radius: 999px; border: 1px solid transparent;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.otto-btn:focus-visible { outline: 3px solid var(--otto-accent); outline-offset: 2px; }
+.otto-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.otto-btn--filled { background: var(--otto-accent); color: var(--otto-on-accent); }
+.otto-btn--tonal { background: var(--otto-surface-2); color: var(--otto-ink); border-color: var(--otto-line); }
+.otto-btn--tonal[aria-pressed='true'] { background: var(--otto-accent); color: var(--otto-on-accent); }
+.otto-btn--text { background: transparent; color: var(--otto-accent); }
+.otto-btn--icon { inline-size: 44px; padding: 0; }
+.otto-btn--icon.otto-btn--text { color: var(--otto-ink); }
+.otto-notice { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.8rem;
+  border-radius: 12px; background: var(--otto-surface-2); }
+.otto-notice--warning { color: var(--otto-warning); border: 1px solid currentColor; }
+
+/* The panel: bottom right on a wide screen, a sheet over the bottom on a phone. */
+.voice-assistant {
+  position: fixed; z-index: 40; inset-inline-end: 24px; inset-block-end: 24px;
+  inline-size: min(420px, 100vw - 32px); max-block-size: min(80vh, 720px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem;
+  background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line); border-radius: var(--otto-radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+}
+@media (max-width: 640px) {
+  .voice-assistant { inset-inline: 0; inset-block-end: 0; inline-size: 100%; border-radius: var(--otto-radius) var(--otto-radius) 0 0;
+    max-block-size: 75vh; padding-block-end: calc(1rem + env(safe-area-inset-bottom)); }
+}
+.voice-assistant__handle { display: none; }
+@media (max-width: 640px) {
+  .voice-assistant__handle { display: block; align-self: center; inline-size: 36px; block-size: 4px; border-radius: 2px; background: var(--otto-line); }
+}
+.voice-assistant__header { display: flex; align-items: center; gap: 0.75rem; }
+.voice-assistant__heading { flex: 1; min-inline-size: 0; }
+.voice-assistant__heading h2 { margin: 0; font-size: 1.15rem; }
+.voice-assistant__heading h2:focus { outline: none; }
+.voice-assistant__status { margin: 0.15rem 0 0; color: var(--otto-muted); font-size: 0.95rem; }
+.voice-assistant__status.is-error { color: var(--otto-error); }
+.voice-assistant__orb {
+  display: grid; place-items: center; inline-size: 48px; block-size: 48px; flex: none; border-radius: 50%;
+  background: var(--otto-surface-2); color: var(--otto-ink);
+}
+.voice-assistant__orb--listening, .voice-assistant__orb--speaking { background: var(--otto-accent); color: var(--otto-on-accent); }
+.voice-assistant__orb--speaking { animation: otto-pulse 1.2s ease-in-out infinite; }
+.voice-assistant__orb.is-muted { background: var(--otto-surface-2); color: var(--otto-muted); }
+@keyframes otto-pulse { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--otto-accent) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .voice-assistant__orb--speaking { animation: none; } }
+.voice-assistant__meter { display: block; block-size: 4px; margin-block-start: 0.4rem; border-radius: 2px; background: var(--otto-surface-2); overflow: hidden; }
+.voice-assistant__meter-fill { display: block; block-size: 100%; inline-size: calc(var(--level, 0) * 100%); background: var(--otto-accent); }
+.voice-assistant__why, .voice-assistant__note { margin: 0; color: var(--otto-muted); font-size: 0.85rem; }
+.voice-assistant__consent { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.8rem; border-radius: 14px; background: var(--otto-surface-2); }
+.voice-assistant__consent h3 { margin: 0; font-size: 1rem; }
+.voice-assistant__consent h3:focus { outline: none; }
+.voice-assistant__consent p { margin: 0; }
+.voice-assistant__consent-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.voice-assistant__log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; max-block-size: 260px; overflow-y: auto; }
+.voice-assistant__hint { color: var(--otto-muted); }
+.voice-assistant__line { padding: 0.5rem 0.75rem; border-radius: 14px; max-inline-size: 88%; line-height: 1.4; }
+.voice-assistant__line--user { align-self: flex-end; background: var(--otto-accent); color: var(--otto-on-accent); }
+.voice-assistant__line--assistant { align-self: flex-start; background: var(--otto-surface-2); }
+.voice-assistant__did { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; color: var(--otto-muted); }
+.voice-assistant__did li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.voice-assistant__chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.voice-assistant__chip { min-block-size: 40px; padding: 0 0.9rem; border-radius: 999px; border: 1px solid var(--otto-line);
+  background: transparent; color: var(--otto-ink); font: inherit; cursor: pointer; }
+.voice-assistant__chip:focus-visible { outline: 3px solid var(--otto-accent); outline-offset: 2px; }
+.voice-assistant__type { display: flex; gap: 0.5rem; }
+.voice-assistant__input { flex: 1; min-inline-size: 0; min-block-size: 44px; padding: 0 0.9rem; border-radius: 999px;
+  border: 1px solid var(--otto-line); background: var(--otto-surface); color: var(--otto-ink); font: inherit; }
+.voice-assistant__input:focus-visible { outline: 3px solid var(--otto-accent); outline-offset: 1px; }
+.voice-assistant__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.voice-assistant__lengths { display: flex; gap: 1rem; margin: 0; padding: 0; border: 0; }
+.voice-assistant__lengths legend { float: left; margin-inline-end: 0.5rem; padding-block: 0.7rem; font-weight: 600; }
+
+/* Otto on his stage: placed along the bottom by movement/useStage.ts (a transform from the left edge), so he can walk.
+   The robot takes the clicks; the dock's button is for the keyboard and shows when focused. */
+.otto-stage { position: fixed; z-index: 30; left: 0; inset-block-end: 0.25rem; inline-size: 240px; block-size: 216px;
+  pointer-events: none; will-change: transform; }
+@media (max-width: 640px) { .otto-stage { inline-size: 140px; block-size: 126px; } }
+.otto-stage__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
+.otto-dock__button { position: absolute; inset-block-end: 1rem; right: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap; }
+.otto-stage[data-stage-side='left'] .otto-dock__button { right: auto; left: calc(100% + 0.5rem); }
+.otto-dock__button:not(:focus) { inline-size: 1px; block-size: 1px; min-block-size: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
+
+/* Shown whenever the page may be listening for "Hey Otto", so listening is never hidden. */
+.otto-wake { position: fixed; z-index: 35; inset-block-start: 0.5rem; inset-inline: 0; margin-inline: auto; inline-size: fit-content;
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 1rem; border-radius: 999px;
+  background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line); font-size: 0.9rem; }
+.otto-open { position: fixed; z-index: 30; inset-inline-end: 1rem; inset-block-end: 1rem; }
+
+/* The robot and its speech bubble. */
+.otto-robot { position: relative; inline-size: 100%; block-size: 100%; }
+.otto-robot canvas { touch-action: none; }
+.otto-robot__bubble {
+  position: absolute; inset-block-end: 88%; inset-inline-end: 55%; z-index: 1; margin: 0;
+  inline-size: max-content; max-inline-size: min(260px, 70vw); padding: 0.55rem 0.8rem; border-radius: 16px 16px 4px 16px;
+  background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12); font-size: 0.9rem; line-height: 1.35; pointer-events: none;
+}
+/* Standing in the left half of the page, the bubble opens to his right so it stays on screen. */
+[data-stage-side='left'] .otto-robot__bubble { inset-inline-end: auto; inset-inline-start: 55%; border-radius: 16px 16px 16px 4px; }

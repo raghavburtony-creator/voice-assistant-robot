@@ -1,0 +1,4 @@
+/* Tailwind utilities for Originkit components, without its CSS reset (preflight), which would restyle the voice panel. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./components/originkit";

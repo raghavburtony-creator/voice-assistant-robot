@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=SERVER_DIR / ".env", env_file_encoding="utf-8", env_ignore_empty=True, extra="ignore")
 
-    app_name: str = "Echo Demo"
+    app_name: str = "Otto Demo"
 
     # Comma-separated explicit origins. The voice WebSocket checks it too. No wildcard.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

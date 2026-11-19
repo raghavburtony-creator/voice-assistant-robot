@@ -1,0 +1,31 @@
+/* <otto-mascot>'s own styles, inside its shadow root: nothing from the page reaches them except the custom properties below,
+   which are the theming hook (set them on otto-mascot or any ancestor). */
+:host { display: contents; --_surface: var(--otto-surface, #ffffff); --_ink: var(--otto-ink, #1b1e28); --_line: var(--otto-line, #d4d8e4);
+  --_accent: var(--otto-accent, #3b5bdb); --_on-accent: var(--otto-on-accent, #ffffff); }
+:host([placement='inline']) { display: block; position: relative; min-block-size: 216px; }
+:host([hidden]) { display: none; }
+.otto-root { font: 0.9rem/1.35 system-ui, sans-serif; color: var(--_ink); }
+:host([placement='inline']) .otto-root { position: absolute; inset: 0; overflow: hidden; }
+
+.otto-stage { position: fixed; z-index: var(--otto-z, 30); left: 0; inset-block-end: 0.25rem; inline-size: 240px; block-size: 216px;
+  pointer-events: none; will-change: transform; }
+.otto-stage--inline { position: absolute; inset-block-end: 0; }
+@media (max-width: 640px) { .otto-stage { inline-size: 140px; block-size: 126px; } }
+.otto-stage__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
+
+.otto-robot { position: relative; inline-size: 100%; block-size: 100%; }
+.otto-robot canvas { touch-action: none; }
+.otto-robot__bubble { position: absolute; inset-block-end: 88%; right: 55%; z-index: 1; margin: 0;
+  inline-size: max-content; max-inline-size: min(260px, 70vw); padding: 0.55rem 0.8rem; border-radius: 16px 16px 4px 16px;
+  background: var(--_surface); color: var(--_ink); border: 1px solid var(--_line); box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  pointer-events: none; }
+[data-stage-side='left'] .otto-robot__bubble { right: auto; left: 55%; border-radius: 16px 16px 16px 4px; }
+
+.otto-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+/* For the keyboard: hidden until focused, then a button beside Otto. */
+.otto-trigger { position: absolute; inset-block-end: 1rem; right: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap;
+  min-block-size: 44px; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--_line); background: var(--_surface); color: var(--_ink);
+  font: inherit; font-weight: 600; cursor: pointer; }
+[data-stage-side='left'] .otto-trigger { right: auto; left: calc(100% + 0.5rem); }
+.otto-trigger:focus-visible { outline: 3px solid var(--_accent); outline-offset: 2px; }
+.otto-trigger:not(:focus) { inline-size: 1px; block-size: 1px; min-block-size: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }

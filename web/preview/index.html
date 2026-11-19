@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>otto-mascot playground</title>
+  <style>
+    /* Deliberately hostile page styles: none of these reach inside Otto's shadow root. */
+    * { box-sizing: border-box; }
+    p { color: #7a2a2a; } button { text-transform: uppercase; }
+    canvas { outline: 4px solid red !important; }
+    body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #f3f4f8; color: #1b1e28; }
+    main { display: grid; grid-template-columns: minmax(280px, 1fr) 360px; gap: 1rem; max-inline-size: 76rem; padding: 1rem 1rem 260px; }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+    fieldset { border: 1px solid #d4d8e4; border-radius: 12px; margin: 0 0 0.8rem; padding: 0.6rem 0.8rem; }
+    legend { font-weight: 600; padding: 0 0.3rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-block: 0.3rem; }
+    .row button, .row select, .row input[type=text] { font: inherit; min-block-size: 36px; padding: 0 0.7rem; border-radius: 999px; border: 1px solid #c8cddb; background: #fff; text-transform: none; }
+    .row input[type=text] { border-radius: 8px; flex: 1; min-inline-size: 12rem; }
+    #log { font: 12px/1.5 ui-monospace, monospace; list-style: none; margin: 0; padding: 0; max-block-size: 22rem; overflow: auto; }
+    #log li { border-block-end: 1px solid #e3e6ee; padding: 2px 0; }
+    pre { background: #1b1e28; color: #e8eaf2; padding: 0.7rem; border-radius: 8px; overflow: auto; font-size: 12px; position: relative; }
+    pre button { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; font-size: 11px; }
+    #target { padding: 0.4rem 0.8rem; border: 2px dashed #3b5bdb; border-radius: 8px; display: inline-block; }
+    aside { position: sticky; inset-block-start: 1rem; align-self: start; }
+    #inline-box { block-size: 230px; border: 1px dashed #b8bdd0; border-radius: 12px; background: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>&lt;otto-mascot&gt; playground</h1>
+      <p>This page uses only the custom element, no framework. Its own styles are hostile on purpose (red outline on every
+        canvas, uppercase buttons): none of it reaches Otto.</p>
+
+      <fieldset><legend>Element</legend>
+        <div class="row">
+          <label>Theme <select id="theme"></select></label>
+          <label>State <select id="state"><option>idle</option><option>listening</option><option>thinking</option><option>talking</option></select></label>
+          <label>Face <select id="face"><option value="">(the state's own)</option></select></label>
+          <label><input type="checkbox" id="sound" checked /> sound-enabled</label>
+          <label><input type="checkbox" id="movement" checked /> movement-enabled</label>
+        </div>
+        <div class="row">
+          <button id="remount">Remove and add back</button>
+          <button id="cycle">Mount and unmount 20 times</button>
+          <span id="cycle-out" role="status"></span>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Gestures and sound</legend>
+        <div class="row" id="gestures"></div>
+        <div class="row" id="sounds"></div>
+      </fieldset>
+
+      <fieldset><legend>Movement</legend>
+        <div class="row">
+          <button data-x="0">Left</button><button data-x="0.5">Centre</button><button data-x="1">Right</button>
+          <button id="to-target">Walk to the target</button><span id="target">Target</span>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Voice and lip-sync</legend>
+        <div class="row"><input type="text" id="say" value="Hello! I am Otto, and I work on any page." aria-label="Text for Otto to say" />
+          <label><input type="checkbox" id="voice" /> say it aloud (browser voice)</label>
+          <button id="speak">speakText()</button></div>
+        <div class="row">
+          <button id="audio">Lip-sync a Web Audio node (synthetic speech)</button>
+          <button id="interrupt">interrupt()</button>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Awareness: tell Otto what happened</legend>
+        <div class="row" id="events"></div>
+        <div class="row"><button id="task">A 5 s task, then success</button></div>
+      </fieldset>
+
+      <fieldset><legend>Inline placement</legend>
+        <p>A second Otto inside this box (<code>placement="inline"</code>): he walks within it.</p>
+        <div class="row"><button id="inline-toggle">Add an inline Otto</button><button id="inline-walk">Walk left</button></div>
+        <div id="inline-box"></div>
+      </fieldset>
+
+      <h2>Use it</h2>
+      <pre><button data-copy>Copy</button><code>&lt;script type="module" src="/otto-mascot.js"&gt;&lt;/script&gt;
+&lt;otto-mascot theme="midnight" hotkey="O"&gt;&lt;/otto-mascot&gt;
+
+&lt;script type="module"&gt;
+  const otto = document.querySelector('otto-mascot')
+  otto.addEventListener('otto:ready', () =&gt; otto.playGesture('welcomeWave'))
+  otto.addEventListener('otto:activate', () =&gt; openMyChat())
+  // Say what happened; Otto decides how to react.
+  otto.notify({ type: 'success', where: '#save', topic: 'upload' })
+  const job = otto.task('render', { topic: 'image generation', where: '#preview' })
+  job.succeed('Your image is ready')
+&lt;/script&gt;</code></pre>
+      <pre><button data-copy>Copy</button><code>// Without the element: any container.
+import { createOtto } from 'otto-mascot'
+const otto = createOtto(document.body, { config: { theme: 'cyber', sound: { soundVolume: 0.3 } } })
+await otto.moveToElement('#cart'); otto.playGesture('celebrate')
+otto.connectAudioNode(myTtsSourceNode)   // lip-sync to your own voice
+otto.dispose()                           // on route change</code></pre>
+      <pre><button data-copy>Copy</button><code>// React, Vue or Svelte: it is just an element.
+import 'otto-mascot'
+&lt;otto-mascot theme="minimal" ref={el} onotto:reaction=... /&gt;     // React 19 passes custom events through
+&lt;otto-mascot :theme="theme" @otto:gestureend="onEnd" /&gt;          // Vue
+&lt;otto-mascot theme={theme} on:otto:activate={open} /&gt;            // Svelte</code></pre>
+    </div>
+    <aside>
+      <h2>otto:* events</h2>
+      <ol id="log" aria-live="polite"></ol>
+    </aside>
+  </main>
+
+  <otto-mascot id="otto" theme="default"></otto-mascot>
+
+  <script type="module">
+    import { THEME_NAMES, GESTURE_NAMES, SOUND_CUES, OTTO_EVENT_TYPES } from '/src/otto/element/index.ts'
+    import { fakeSpeechPcm } from '/src/lab/fakeServer.ts'
+
+    const $ = s => document.querySelector(s)
+    let otto = $('#otto')
+    const log = $('#log')
+    const note = line => { const li = document.createElement('li'); li.textContent = `${new Date().toLocaleTimeString()} ${line}`; log.prepend(li); while (log.children.length > 60) log.lastChild.remove() }
+    const describe = e => {
+      const d = e.detail ?? {}
+      if (e.type === 'otto:ready') return ''
+      if (e.type === 'otto:reaction') return `${d.event.type} -> ${d.reaction.size} (${d.reaction.why.join('; ')})`
+      return JSON.stringify(d)
+    }
+    for (const type of ['otto:ready', 'otto:statechange', 'otto:gesturestart', 'otto:gestureend', 'otto:interrupt', 'otto:error', 'otto:activate', 'otto:reaction', 'otto:move'])
+      document.addEventListener(type, e => note(`${type} ${describe(e)}`))
+
+    const fill = (sel, items) => { for (const v of items) { const o = document.createElement('option'); o.textContent = v; $(sel).append(o) } }
+    fill('#theme', THEME_NAMES)
+    fill('#face', ['happy', 'searching', 'excited', 'alert', 'resting', 'sad', 'curious'])
+    $('#theme').onchange = e => otto.setAttribute('theme', e.target.value)
+    $('#state').onchange = e => otto.setAttribute('state', e.target.value)
+    $('#face').onchange = e => e.target.value ? otto.setAttribute('face', e.target.value) : otto.removeAttribute('face')
+    $('#sound').onchange = e => otto.setAttribute('sound-enabled', String(e.target.checked))
+    $('#movement').onchange = e => otto.setAttribute('movement-enabled', String(e.target.checked))
+
+    const buttons = (sel, items, fn) => { for (const v of items) { const b = document.createElement('button'); b.textContent = v; b.onclick = () => fn(v); $(sel).append(b) } }
+    buttons('#gestures', GESTURE_NAMES, g => otto.playGesture(g, { force: true }))
+    buttons('#sounds', SOUND_CUES, c => { if (!otto.playSound(c)) note(`playSound(${c}) -> false (sound off, or no click yet)`) })
+    buttons('#events', OTTO_EVENT_TYPES.filter(t => t !== 'task'), t => otto.notify({ type: t, where: '#target', topic: `playground ${t}`, message: t === 'failure' ? 'Saving failed.' : undefined }))
+    document.querySelectorAll('[data-x]').forEach(b => { b.onclick = () => otto.moveToX(Number(b.dataset.x)).then(ok => note(`moveToX -> ${ok}`)) })
+    $('#to-target').onclick = () => otto.moveToElement('#target').then(ok => { note(`moveToElement -> ${ok}`); if (ok) otto.playGesture('welcomeWave') })
+    $('#speak').onclick = () => otto.speakText($('#say').value, { voice: $('#voice').checked }).then(done => note(`speakText -> ${done ? 'finished' : 'interrupted'}`))
+    $('#interrupt').onclick = () => otto.interrupt()
+    $('#task').onclick = () => { const job = otto.task('playground', { topic: 'a long job', where: '#target' }); setTimeout(() => job.succeed('The job is done.'), 5000) }
+
+    // A real Web Audio node: synthetic speech through a buffer source, lip-synced through the same speech-band analyzer as live.
+    let audio = null
+    $('#audio').onclick = async () => {
+      audio ??= new AudioContext({ sampleRate: 24000 })
+      await audio.resume()
+      const pcm = fakeSpeechPcm(4)
+      const buffer = audio.createBuffer(1, pcm.length, 24000)
+      buffer.getChannelData(0).set(Array.from(pcm, s => s / 0x8000))
+      const src = audio.createBufferSource()
+      src.buffer = buffer
+      src.connect(audio.destination)
+      const disconnect = otto.connectAudioNode(src)
+      const onInterrupt = () => { try { src.stop() } catch {} }
+      otto.addEventListener('otto:interrupt', onInterrupt, { once: true })
+      src.onended = () => { disconnect(); src.disconnect(); otto.removeEventListener('otto:interrupt', onInterrupt) }
+      src.start()
+    }
+
+    $('#remount').onclick = () => { const parent = otto.parentNode, next = otto.nextSibling; otto.remove(); setTimeout(() => parent.insertBefore(otto, next), 300) }
+    $('#cycle').onclick = async () => {
+      const out = $('#cycle-out')
+      for (let i = 1; i <= 20; i++) {
+        const el = document.createElement('otto-mascot')
+        document.body.append(el)
+        await new Promise(r => el.addEventListener('otto:ready', r, { once: true }))
+        await new Promise(r => setTimeout(r, 150))
+        el.remove()
+        out.textContent = `cycle ${i} of 20`
+      }
+      out.textContent = '20 mount and unmount cycles done'
+    }
+
+    let inline = null
+    $('#inline-toggle').onclick = () => {
+      if (inline) { inline.remove(); inline = null; $('#inline-toggle').textContent = 'Add an inline Otto'; return }
+      inline = document.createElement('otto-mascot')
+      inline.setAttribute('placement', 'inline')
+      inline.setAttribute('theme', 'cyber')
+      inline.setAttribute('hotkey', 'none')
+      inline.style.blockSize = '100%'
+      $('#inline-box').append(inline)
+      $('#inline-toggle').textContent = 'Remove the inline Otto'
+    }
+    $('#inline-walk').onclick = () => inline?.moveToX(0).then(ok => note(`inline moveToX(0) -> ${ok}`))
+
+    document.querySelectorAll('[data-copy]').forEach(b => { b.onclick = () => navigator.clipboard?.writeText(b.nextElementSibling.textContent).then(() => { b.textContent = 'Copied' }) })
+  </script>
+</body>
+</html>

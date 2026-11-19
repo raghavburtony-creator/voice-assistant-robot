@@ -1,10 +1,39 @@
-:root { font-family: system-ui, sans-serif; line-height: 1.5; color: var(--echo-ink); background: var(--echo-surface-2); }
+:root { font-family: system-ui, sans-serif; line-height: 1.5; color: var(--otto-ink); background: var(--otto-surface-2); }
 body { margin: 0; }
 .app-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem;
-  background: var(--echo-surface); border-block-end: 1px solid var(--echo-line); }
+  background: var(--otto-surface); border-block-end: 1px solid var(--otto-line); }
 .app-header nav { display: flex; gap: 1rem; }
-.app-header a { color: var(--echo-accent); font-weight: 600; }
-.app-header a[aria-current='page'] { color: var(--echo-ink); text-decoration-thickness: 3px; }
+.app-header a { color: var(--otto-accent); font-weight: 600; }
+.app-header a[aria-current='page'] { color: var(--otto-ink); text-decoration-thickness: 3px; }
 .app-main { max-inline-size: 42rem; padding: 1.5rem; padding-block-end: 16rem; }
 .app-main h1:focus { outline: none; }
-.app-message { padding: 0.75rem 1rem; border-radius: 12px; background: var(--echo-surface); border: 1px solid var(--echo-line); }
+.app-message { padding: 0.75rem 1rem; border-radius: 12px; background: var(--otto-surface); border: 1px solid var(--otto-line); }
+/* Robot lab only. */
+.lab-hint { margin: 0 0 0.5rem; font-size: 0.875rem; opacity: 0.75; }
+.lab-log { margin: 0; padding: 0; list-style: none; font: 0.8125rem/1.6 ui-monospace, monospace; min-block-size: 8rem; }
+.lab { display: grid; grid-template-columns: minmax(260px, 1fr) 320px; gap: 1rem; max-inline-size: 72rem; }
+@media (max-width: 760px) { .lab { grid-template-columns: 1fr; } }
+.lab-side { position: sticky; inset-block-start: 1rem; align-self: start; display: grid; gap: 0.5rem; }
+/* Room at the bottom for Otto's stage. */
+.lab { padding-block-end: 240px; }
+.lab-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block-end: 0.5rem; }
+.lab-target { margin-inline-start: 1.5rem; }
+/* A dot that drifts to and fro above Otto's stage, for "follow". */
+.lab-mover { position: fixed; z-index: 20; inset-block-end: 260px; left: 15vw; inline-size: 18px; block-size: 18px; border-radius: 50%;
+  background: var(--otto-accent); opacity: 0.25; }
+.lab-mover.is-moving { opacity: 1; animation: lab-drift 9s ease-in-out infinite alternate; }
+@keyframes lab-drift { to { left: 80vw; } }
+.lab-panel { position: fixed; z-index: 40; inset-inline-end: 24px; inset-block-end: 24px; inline-size: 360px; block-size: 300px;
+  display: grid; place-items: center; padding: 1rem; border-radius: var(--otto-radius); border: 2px dashed var(--otto-line);
+  background: var(--otto-surface); color: var(--otto-muted); text-align: center; }
+.lab-inline { display: inline-flex; align-items: center; gap: 0.4rem; margin-inline-end: 1rem; }
+.lab-file { position: relative; cursor: pointer; }
+.lab-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.lab-file:focus-within { outline: 3px solid var(--otto-accent); outline-offset: 2px; }
+.lab-meter { display: flex; gap: 0.5rem; block-size: 5.5rem; align-items: stretch; margin-block-start: 0.25rem; }
+.lab-meter > div { display: grid; grid-template-rows: 1fr auto; justify-items: center; inline-size: 3rem; }
+.lab-meter span { align-self: end; inline-size: 1rem; border-radius: 0.5rem; background: var(--otto-accent); block-size: 6%; }
+.lab-meter small { font-size: 0.6875rem; opacity: 0.7; }
+/* Places in the lab page that events can happen at. */
+.lab-spot-left { position: fixed; left: 24px; inset-block-end: 40px; inline-size: 60px; block-size: 40px; border: 2px dashed var(--otto-line); border-radius: 8px; }
+.lab-spot-top { position: fixed; left: 45vw; inset-block-start: 8px; inline-size: 80px; block-size: 24px; border: 2px dashed var(--otto-line); border-radius: 8px; }

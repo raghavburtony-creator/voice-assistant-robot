@@ -17,7 +17,7 @@ from app.voice import route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS
 from app.voice.sink import sink
 
-WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "echo.config.ts"
+WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
 
 
 class FakeLive:

@@ -1,0 +1,24 @@
+// Otto's public parts. Most apps only need <Otto /> and useAssistantContext.
+export { default as Otto } from './Otto'
+export { useAssistantContext, publishContext } from './context'
+export type { AssistantAction } from './messages'
+// Lower-level pieces, for building your own panel or dock.
+export { default as OttoRobot } from './robot/OttoRobot'
+export { default as VoiceAssistant } from './VoiceAssistant'
+export { useVoiceAssistant, type AssistantStatus } from './useVoiceAssistant'
+export { createGestureChannel, GESTURE_NAMES, isGestureName } from './robot/gestures'
+export type { GestureName, GestureChannel, GestureOptions } from './robot/gestures'
+export { SoundController, SOUND_CUES, type SoundCue } from './sound'
+export { useGestureSounds } from './useGestureSounds'
+export { MouthAnalyzer, MOUTH_BANDS, analyserMouth, type MouthSource } from './mouth'
+export type { GestureEvent } from './robot/gestures'
+export { default as OttoStage } from './OttoStage'
+export { createStage, type StageController, type StageEvent, type StageFrame, type StagePlace, type Rect } from './movement/stage'
+export { createOttoStage, useStageHost, type Obstacle } from './movement/useStage'
+export { createIdleLifecycle, useIdleLifecycle, type IdleState } from './idle'
+export type { SpeechClock, SpeechProgress } from './audio'
+// Awareness: tell Otto what happens in your app; he decides how to react.
+export { createOttoEvents, OTTO_EVENT_TYPES, type OttoEvent, type OttoEvents, type OttoEventType, type Importance } from './awareness/events'
+export { createReactor, type Reaction, type ReactionRule, type Awareness } from './awareness/reactions'
+// Per-instance mascot settings and theme presets.
+export { defineOttoConfig, OttoConfigProvider, useOttoConfig, THEMES, THEME_NAMES, DEFAULT_OTTO_CONFIG, type OttoConfig, type ThemeName } from './config'
