@@ -1,9 +1,9 @@
-// Echo lab (npm run dev, then http://localhost:5173/lab.html): every face and pose, and a fake voice for the mouth, with no server.
+// Otto lab (npm run dev, then http://localhost:5173/lab.html): every face and pose, and a fake voice for the mouth, with no server.
 import { StrictMode, useCallback, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import EchoRobot from './echo/robot/EchoRobot'
-import { EYES, type RobotExpression, type RobotPose } from './echo/robot/robot'
-import './echo/voice.css'
+import OttoRobot from './otto/robot/OttoRobot'
+import { EYES, type RobotExpression, type RobotPose } from './otto/robot/robot'
+import './otto/voice.css'
 import './app.css'
 
 const POSES: RobotPose[] = ['idle', 'listening', 'thinking', 'talking']
@@ -20,18 +20,18 @@ function Lab() {
   }, [])
   return <main className="app-main" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) 420px', gap: '1rem', maxInlineSize: '64rem' }}>
     <div>
-      <h1>Echo lab</h1>
+      <h1>Otto lab</h1>
       <fieldset><legend>Pose</legend>{POSES.map(item =>
-        <button key={item} type="button" className="echo-btn echo-btn--tonal" aria-pressed={pose === item} onClick={() => {
+        <button key={item} type="button" className="otto-btn otto-btn--tonal" aria-pressed={pose === item} onClick={() => {
           setPose(item)
-          setSay(item === 'talking' ? 'Hi, I am Echo. Ask me anything about this app.' : '')
+          setSay(item === 'talking' ? 'Hi, I am Otto. Ask me anything about this app.' : '')
           if (item === 'talking') setExpression('excited')
         }}>{item}</button>)}</fieldset>
       <fieldset><legend>Face</legend>{(Object.keys(EYES) as RobotExpression[]).map(item =>
-        <button key={item} type="button" className="echo-btn echo-btn--tonal" aria-pressed={expression === item} onClick={() => setExpression(item)}>{item}</button>)}</fieldset>
+        <button key={item} type="button" className="otto-btn otto-btn--tonal" aria-pressed={expression === item} onClick={() => setExpression(item)}>{item}</button>)}</fieldset>
     </div>
     <div style={{ blockSize: 460 }}>
-      <EchoRobot pose={pose} expression={expression} say={say} speechBands={fakeBands} />
+      <OttoRobot pose={pose} expression={expression} say={say} speechBands={fakeBands} />
     </div>
   </main>
 }

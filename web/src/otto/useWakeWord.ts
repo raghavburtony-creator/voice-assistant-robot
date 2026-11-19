@@ -1,5 +1,5 @@
-// Runs the "Hey Echo" listener (src/assistant/wakeWord.ts) only when it may: the listener turned it on, the browser can, the page has
-// had a click or key press (so Echo's answer may play, and the browser may open the microphone), the tab is visible, and the guide is
+// Runs the "Hey Otto" listener (src/assistant/wakeWord.ts) only when it may: the listener turned it on, the browser can, the page has
+// had a click or key press (so Otto's answer may play, and the browser may open the microphone), the tab is visible, and the guide is
 // not already in a conversation (they would fight over the microphone).
 
 import { useEffect, useMemo, useRef, useState } from 'react'

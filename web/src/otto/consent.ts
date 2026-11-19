@@ -1,7 +1,7 @@
-// What the visitor chose for the voice guide: whether Echo may use the microphone, push-to-talk or an open mic, and how long
+// What the visitor chose for the voice guide: whether Otto may use the microphone, push-to-talk or an open mic, and how long
 // the answers are. Remembered on this device. Storage can be blocked (private windows), so every access is guarded.
 
-import { STORAGE_PREFIX } from '../echo.config'
+import { STORAGE_PREFIX } from '../otto.config'
 
 /** "mic": the microphone may be used. "text": typing only. */
 export type MicConsent = "mic" | "text";

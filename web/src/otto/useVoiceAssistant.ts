@@ -1,4 +1,4 @@
-// Live voice conversation with Echo, over the server's /api/v1/voice/live WebSocket.
+// Live voice conversation with Otto, over the server's /api/v1/voice/live WebSocket.
 //
 // The server holds the Gemini session and runs every tool. The only things it can ask this page to do are the actions in
 // messages.ts (open a page, run a command), and each one is checked again here, because it arrives from a model.
@@ -10,14 +10,14 @@ import {
   type AnswerLength, type MicConsent, type MicTalk,
 } from './consent'
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
-import { apiBase, ASSISTANT_NAME, COMMAND_LABELS, PAGES } from '../echo.config'
+import { apiBase, ASSISTANT_NAME, COMMAND_LABELS, PAGES } from '../otto.config'
 import { parseServerMessage, toAssistantAction, type AssistantAction } from './messages'
 
 export type { AssistantAction } from './messages'
 export type AssistantStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'ended' | 'error'
 export type TranscriptEntry = { id: number; role: 'user' | 'assistant'; text: string }
 
-/** One thing Echo did, in plain words, and the action that takes it back (null when nothing can). */
+/** One thing Otto did, in plain words, and the action that takes it back (null when nothing can). */
 export type ActionRecord = { id: number; label: string; inverse: AssistantAction | null }
 
 /** The words and the undo for an action. `before` is the page that was showing. Add a case for each new kind of action. */
@@ -523,7 +523,7 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
 
   useEffect(() => teardown, [teardown])
 
-  /** Echo's voice in `count` bands (0 to 1) while it is audible, else null. Read it every frame; it renders nothing. */
+  /** Otto's voice in `count` bands (0 to 1) while it is audible, else null. Read it every frame; it renders nothing. */
   const speechBands = useCallback((count: number) => player.current?.bands(count) ?? null, [])
 
   return {

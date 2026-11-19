@@ -1,8 +1,8 @@
-"""Echo's tools. Model output is untrusted, so every argument is checked here, and the browser checks every action again.
+"""Otto's tools. Model output is untrusted, so every argument is checked here, and the browser checks every action again.
 
 A tool that should change something in the browser returns a `client_action`; it is queued in the sink and sent to the browser.
 To add a tool: write the function below, add it to TOOLS, and (if it sends an action) handle that action in
-web/src/echo.config.ts `isAllowedAction` and in App's `onAction`.
+web/src/otto.config.ts `isAllowedAction` and in App's `onAction`.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def run_command(command: Command, tool_context: ToolContext) -> dict:
     if command not in COMMANDS:
         return {"error": f"Unknown command. Valid commands: {', '.join(COMMANDS)}"}
     _send(tool_context, {"action": "command", "name": command})
-    logger.info("Echo ran a %s command", command)
+    logger.info("Otto ran a %s command", command)
     return {"ok": True, "command": command}
 
 

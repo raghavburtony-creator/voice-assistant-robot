@@ -19,9 +19,9 @@ from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.sink import sink
 
-APP_ID = "echo-voice"
+APP_ID = "otto-voice"
 USER_ID = "visitor"
-#: ADK fills this from session state each time it builds the instruction, so Echo always knows the current page.
+#: ADK fills this from session state each time it builds the instruction, so Otto always knows the current page.
 PAGE_PLACEHOLDER = "{page_title}"
 
 MAX_AUDIO_FRAME_BYTES = 64 * 1024
@@ -30,7 +30,7 @@ MAX_TEXT_CHARS = 2000
 MAX_CONTEXT_BYTES = 16 * 1024
 MAX_CONTEXT_KEYS = 8
 CONTEXT_KEY_CHARS = 40
-#: At least this long between two unprompted event prompts, so a busy page cannot make Echo talk non-stop.
+#: At least this long between two unprompted event prompts, so a busy page cannot make Otto talk non-stop.
 ANNOUNCE_GAP_SECONDS = 4.0
 
 

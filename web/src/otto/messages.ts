@@ -2,7 +2,7 @@
 // before the page uses it. Anything that does not fit is dropped, never guessed at.
 
 import { z } from 'zod'
-import { COMMANDS, isPage, type CommandName, type PageId } from '../echo.config'
+import { COMMANDS, isPage, type CommandName, type PageId } from '../otto.config'
 
 const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), limitSeconds: z.number().finite().positive().optional().catch(undefined) }),
@@ -24,7 +24,7 @@ export function parseServerMessage(text: string): ServerMessage | null {
   return parsed.success ? parsed.data : null
 }
 
-/** What Echo may make the page do. Add a variant here when you add a tool that sends a new kind of action. */
+/** What Otto may make the page do. Add a variant here when you add a tool that sends a new kind of action. */
 export type AssistantAction = { action: 'navigate'; page: PageId } | { action: 'command'; name: CommandName }
 
 const isCommand = (value: unknown): value is CommandName => typeof value === 'string' && (COMMANDS as readonly string[]).includes(value)

@@ -20,16 +20,16 @@ export function Icon({ name, size = 24, className }: { name: IconName; size?: nu
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'filled' | 'tonal' | 'text'; pressed?: boolean }
 
 export function Button({ variant = 'filled', pressed, className, type = 'button', ...rest }: ButtonProps) {
-  return <button type={type} className={['echo-btn', `echo-btn--${variant}`, className].filter(Boolean).join(' ')}
+  return <button type={type} className={['otto-btn', `otto-btn--${variant}`, className].filter(Boolean).join(' ')}
     aria-pressed={pressed === undefined ? undefined : pressed} {...rest} />
 }
 
 export function IconButton({ variant = 'text', className, ...rest }: ButtonProps) {
-  return <Button variant={variant} className={['echo-btn--icon', className].filter(Boolean).join(' ')} {...rest} />
+  return <Button variant={variant} className={['otto-btn--icon', className].filter(Boolean).join(' ')} {...rest} />
 }
 
 export function Notice({ variant = 'info', action, children }: { variant?: 'info' | 'warning'; action?: { label: string; onClick: () => void }; children: ReactNode }) {
-  return <div className={`echo-notice echo-notice--${variant}`} role={variant === 'warning' ? 'alert' : 'status'}>
+  return <div className={`otto-notice otto-notice--${variant}`} role={variant === 'warning' ? 'alert' : 'status'}>
     <span>{children}</span>
     {action && <Button variant="text" onClick={action.onClick}>{action.label}</Button>}
   </div>

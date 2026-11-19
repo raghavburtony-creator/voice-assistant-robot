@@ -1,24 +1,24 @@
-"""EDIT THIS FILE for each new project: what Echo knows about your app.
+"""EDIT THIS FILE for each new project: what Otto knows about your app.
 
-PAGE ids must match `PAGES` in web/src/echo.config.ts (tests/test_voice.py checks it).
+PAGE ids must match `PAGES` in web/src/otto.config.ts (tests/test_voice.py checks it).
 """
 from __future__ import annotations
 
-ASSISTANT_NAME = "Echo"
+ASSISTANT_NAME = "Otto"
 
 LANGUAGE_NAMES = {"en": "English"}
 
-#: Every page Echo can open or explain. `purpose` and `how_to` are what Echo says when asked how a page works.
+#: Every page Otto can open or explain. `purpose` and `how_to` are what Otto says when asked how a page works.
 PAGES: dict[str, dict] = {
     "home": {
         "title": "Home",
         "purpose": "The starting page of the demo app.",
-        "how_to": ["Use the menu at the top to move between pages.", "Press Talk to Echo to open the voice guide."],
+        "how_to": ["Use the menu at the top to move between pages.", "Press Talk to Otto to open the voice guide."],
     },
     "features": {
         "title": "Features",
         "purpose": "A list of what the app can do.",
-        "how_to": ["Scroll through the list.", "Press Show a message to see Echo's example custom action."],
+        "how_to": ["Scroll through the list.", "Press Show a message to see Otto's example custom action."],
     },
     "about": {
         "title": "About",
@@ -34,17 +34,17 @@ PERSONA = (
     "Sound curious and encouraging, and say your name only if asked or when you first greet someone."
 )
 
-APP_DESCRIPTION = "a demo web app that shows how the Echo voice guide works"
+APP_DESCRIPTION = "a demo web app that shows how the Otto voice guide works"
 
 FAQ = [
     ("Is my voice saved?", "No. While the voice guide is open, your voice is sent to Google's Gemini to answer you. "
      "This app saves none of it."),
 ]
 
-#: Commands the example `run_command` tool may send to the browser. Add your app's own here AND in web/src/echo.config.ts.
+#: Commands the example `run_command` tool may send to the browser. Add your app's own here AND in web/src/otto.config.ts.
 COMMANDS = ["show_message", "toggle_theme"]
 
-#: Things a page can announce (web: useAssistantContext(key, data, "event_name")), and what Echo should do about them unprompted.
+#: Things a page can announce (web: useAssistantContext(key, data, "event_name")), and what Otto should do about them unprompted.
 EVENTS = {
     "message_shown": "A message has just appeared on screen.",
 }

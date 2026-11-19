@@ -1,11 +1,11 @@
-// "Hey Echo": the wake phrase that opens the voice guide hands-free, like "Hey Google". Opt-in and off by default.
-// The phrase is WAKE_PHRASE in src/echo.config.ts.
+// "Hey Otto": the wake phrase that opens the voice guide hands-free, like "Hey Google". Opt-in and off by default.
+// The phrase is WAKE_PHRASE in src/otto.config.ts.
 //
 // It uses the browser's own speech recognition (Web Speech API). In Chrome and Edge that sends the microphone's sound to the browser
 // maker's speech service while it listens; nothing goes to the voice server until the phrase is heard. The panel says so before it can
 // be turned on. Where the browser has no speech recognition (Firefox), the option is not offered.
 
-import { STORAGE_PREFIX, WAKE_PHRASE } from '../echo.config'
+import { STORAGE_PREFIX, WAKE_PHRASE } from '../otto.config'
 import { useStoredValue } from './storage'
 
 export const WAKE_KEY = `${STORAGE_PREFIX}:wake-word`

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- Echo robot lab: a standalone three.js preview of the robot (no build step). From the repository root:
+<!-- Otto robot lab: a standalone three.js preview of the robot (no build step). From the repository root:
      python3 -m http.server 8000   then open http://localhost:8000/preview/ -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Echo Robot Lab</title>
+<title>Otto Robot Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -71,7 +71,7 @@ input[type="color"] { width: 36px; height: 28px; border: 0; padding: 0; backgrou
   </div>
   <aside class="rail">
     <div>
-      <h1>Echo robot lab</h1>
+      <h1>Otto robot lab</h1>
       <p class="lede">The voice kit's robot, modelled in Blender with a Python script and animated here with three.js. Pick a pose and a face, or make it talk.</p>
     </div>
     <fieldset>
@@ -99,7 +99,7 @@ input[type="color"] { width: 36px; height: 28px; border: 0; padding: 0; backgrou
         <label for="glow">Glow <input type="color" id="glow" value="#f2f0e8"></label>
       </div>
     </fieldset>
-    <p class="note">Move the pointer: Echo turns to follow it. Model: <code>blender/build_echo.py</code>. App version: <code>web/src/echo/robot/EchoScene.tsx</code>.</p>
+    <p class="note">Move the pointer: Otto turns to follow it. Model: <code>blender/build_otto.py</code>. App version: <code>web/src/otto/robot/OttoScene.tsx</code>.</p>
   </aside>
 </div>
 
@@ -112,7 +112,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 
-// The same faces and poses as the app (web/src/echo/robot/robot.ts).
+// The same faces and poses as the app (web/src/otto/robot/robot.ts).
 const EYES = {
   happy: { sx: 1, sy: 1, lookX: 0, lookY: 0 },
   searching: { sx: 1, sy: 0.75, lookX: 0.035, lookY: 0.03 },
@@ -178,8 +178,8 @@ function resize() {
 new ResizeObserver(resize).observe(stage); resize()
 
 let parts = null
-// The model the app uses, built by blender/build_echo.py. Serve the repository root (see the README) so this path resolves.
-new GLTFLoader().load('../web/public/echo/echo.glb', gltf => {
+// The model the app uses, built by blender/build_otto.py. Serve the repository root (see the README) so this path resolves.
+new GLTFLoader().load('../web/public/otto/otto.glb', gltf => {
   const root = gltf.scene
   const mats = {}
   root.traverse(n => { if (n.isMesh) mats[n.material.name] = n.material })
@@ -246,7 +246,7 @@ document.getElementById('voice').addEventListener('click', async () => {
   const f1 = audio.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 1.2
   const out = audio.createGain(); out.gain.value = 0.55
   node.connect(f1).connect(out)
-  startVoice(out, 'Hi, I am Echo. Ask me anything about this app.', 'Playing the test voice.')
+  startVoice(out, 'Hi, I am Otto. Ask me anything about this app.', 'Playing the test voice.')
   node.onended = () => stopVoice('Finished.')
   source = out; out.stop = () => node.stop()
   node.start()
@@ -279,7 +279,7 @@ function setBubble(text) {
   bubbleTimer = setInterval(() => { bubbleEl.textContent = text.slice(0, ++n); if (n >= text.length) clearInterval(bubbleTimer) }, 1000 / 16)
 }
 
-// ---- animation: a port of EchoScene.tsx ----
+// ---- animation: a port of OttoScene.tsx ----
 const pointer = new THREE.Vector2()
 addEventListener('pointermove', e => pointer.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight * 2 - 1)), { passive: true })
 const damp = (a, b, dt, k = 10) => THREE.MathUtils.damp(a, b, k, dt)

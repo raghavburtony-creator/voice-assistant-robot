@@ -1,5 +1,5 @@
-// What each screen tells Echo about itself. A page publishes a small JSON object under a key of its choosing; while a voice
-// conversation is open it is forwarded to the server, where Echo reads it with get_screen_context. Nothing is sent otherwise.
+// What each screen tells Otto about itself. A page publishes a small JSON object under a key of its choosing; while a voice
+// conversation is open it is forwarded to the server, where Otto reads it with get_screen_context. Nothing is sent otherwise.
 //
 //   useAssistantContext('cart', { items: 3, total: 'Rs 450' })
 //   useAssistantContext('form', { step: 2 }, 'message_shown')   // the third argument names an event in app_config.py EVENTS
@@ -28,7 +28,7 @@ export function subscribeContext(listener: Listener) {
 
 /**
  * Publishes `data` whenever its content changes, and clears it when the component unmounts.
- * `announce` is sent only when it changes, so each event prompts Echo once.
+ * `announce` is sent only when it changes, so each event prompts Otto once.
  */
 export function useAssistantContext(key: string, data: Record<string, unknown> | null, announce?: string, enabled = true) {
   const serialized = JSON.stringify(data ?? null)

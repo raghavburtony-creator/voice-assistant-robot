@@ -1,6 +1,6 @@
-// Echo in 3D, with React Three Fiber. Loaded on its own (EchoRobot lazy-loads it), so three.js never slows the first page.
+// Otto in 3D, with React Three Fiber. Loaded on its own (OttoRobot lazy-loads it), so three.js never slows the first page.
 //   expression -> eye shape and glow colour          pose -> head, antenna and hands
-//   speechBands -> the five mouth bars follow Echo's real voice (Web Audio AnalyserNode in audio.ts)
+//   speechBands -> the five mouth bars follow Otto's real voice (Web Audio AnalyserNode in audio.ts)
 //   idle -> breathes (a small head bob), blinks, and turns its head towards the pointer (not under reduced motion)
 
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
@@ -8,7 +8,7 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { ROBOT_COLORS } from '../../echo.config'
+import { ROBOT_COLORS } from '../../otto.config'
 import { EYES, GLOW, reducedMotion, ROBOT_MODEL, type RobotExpression, type RobotPose } from './robot'
 
 type Props = {
@@ -40,7 +40,7 @@ type Parts = {
   glow: THREE.MeshStandardMaterial
 }
 
-function useEcho(): { scene: THREE.Object3D; parts: Parts } {
+function useOtto(): { scene: THREE.Object3D; parts: Parts } {
   const { scene: source } = useGLTF(ROBOT_MODEL)
   return useMemo(() => {
     // A copy per robot, with its own materials, so two robots (or a recolour) never share state.
@@ -66,7 +66,7 @@ function useEcho(): { scene: THREE.Object3D; parts: Parts } {
     })
     const find = (name: string) => {
       const node = scene.getObjectByName(name)
-      if (!node) throw new Error(`echo.glb has no node named ${name}: rebuild it with blender/build_echo.py`)
+      if (!node) throw new Error(`otto.glb has no node named ${name}: rebuild it with blender/build_otto.py`)
       return node
     }
     const eyes = [find('EyeL'), find('EyeR')]
@@ -82,7 +82,7 @@ function useEcho(): { scene: THREE.Object3D; parts: Parts } {
 }
 
 function Robot({ pose, expression, speechBands, onActivate }: Props) {
-  const { scene, parts } = useEcho()
+  const { scene, parts } = useOtto()
   const pointer = useRef(new THREE.Vector2())
   const blink = useRef({ next: 2 + Math.random() * 3, until: 0 })
   const nod = useRef(0)
@@ -99,7 +99,7 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
     return () => window.removeEventListener('pointermove', onMove)
   }, [])
 
-  // A nod when Echo starts listening.
+  // A nod when Otto starts listening.
   useEffect(() => { if (pose === 'listening') nod.current = 1 }, [pose])
 
   useFrame((state, delta) => {
@@ -170,7 +170,7 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
     onPointerOver={() => { document.body.style.cursor = 'pointer' }} onPointerOut={() => { document.body.style.cursor = '' }} />
 }
 
-export default function EchoScene(props: Props) {
+export default function OttoScene(props: Props) {
   return (
     <Canvas camera={{ position: [0, 1.05, 5.4], fov: 26 }} dpr={[1, 2]} gl={{ alpha: true, antialias: true }}
       onCreated={({ camera }) => camera.lookAt(0, 0.84, 0)}>

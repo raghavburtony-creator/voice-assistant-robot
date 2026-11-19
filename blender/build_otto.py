@@ -1,17 +1,17 @@
-"""Builds Echo, the kit's robot, in Blender and exports web/public/echo/echo.glb.
+"""Builds Otto, the kit's robot, in Blender and exports web/public/otto/otto.glb.
 
-Run headless:   python -m pip install bpy==5.3.0 && python blender/build_echo.py
+Run headless:   python -m pip install bpy==5.3.0 && python blender/build_otto.py
 Or in Blender:  Scripting tab -> open this file -> Run Script (or send it through Blender MCP's execute_blender_code).
 
 Everything is made from primitives here, so the model is ours. The app animates these named nodes (keep the names if you
 remodel):
-  EchoRoot                  the whole robot
+  EchoRoot                  the whole robot (still named Echo on purpose: the app and existing animations look it up by this name)
   Body                      the short standing body, with its feet
   HeadPivot                 the head turns, nods and bobs around this (at the neck)
     Head, Visor             the big rounded shell and the glossy face glass
     EarL, EarR              the pods on each side of the head
     EyeL, EyeR              rounded-square eyes: the app scales them for blinks and faces
-    Mouth0 .. Mouth4        five small light bars under the eyes: the app drives them with Echo's voice (Web Audio)
+    Mouth0 .. Mouth4        five small light bars under the eyes: the app drives them with Otto's voice (Web Audio)
   HandLPivot, HandRPivot    the stubby arms (think, talk)
   (AntennaPivot, AntennaTip are optional: the app animates them if a model has them.)
 Materials: Shell (recoloured by the app), Trim, Visor, Glow (emissive; the app recolours it per face).
@@ -25,7 +25,7 @@ from pathlib import Path
 import bpy
 from mathutils import Vector
 
-OUT = Path(__file__).resolve().parents[1] / "web" / "public" / "echo" / "echo.glb"
+OUT = Path(__file__).resolve().parents[1] / "web" / "public" / "otto" / "otto.glb"
 
 
 def reset() -> None:
@@ -155,7 +155,7 @@ def build() -> None:
     for name, x in (("EyeL", -0.1), ("EyeR", 0.1)):
         rounded_box(name, (0.15, 0.03, 0.17), (x, -0.6, 1.04), glow, head_pivot, bevel=0.035, segments=3)
 
-    # Mouth: five small bars under the eyes, the voice meter. Short at rest, they stretch up to about 3x while Echo talks.
+    # Mouth: five small bars under the eyes, the voice meter. Short at rest, they stretch up to about 3x while Otto talks.
     for i in range(5):
         rounded_box(f"Mouth{i}", (0.028, 0.02, 0.03), ((i - 2) * 0.05, -0.6, 0.88), glow, head_pivot, bevel=0.012, segments=2)
 
@@ -185,7 +185,7 @@ def export() -> None:
 if __name__ == "__main__":
     build()
     export()
-    # Optional: a render to check the model without the app. python build_echo.py --render out.png
+    # Optional: a render to check the model without the app. python build_otto.py --render out.png
     if "--render" in sys.argv:
         target = sys.argv[sys.argv.index("--render") + 1]
         scene = bpy.context.scene

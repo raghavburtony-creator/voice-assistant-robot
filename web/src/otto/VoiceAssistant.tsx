@@ -1,8 +1,8 @@
-// The voice panel: status, the conversation as text, typing, push-to-talk or open mic, consent, and the "Hey Echo" switch.
-// Everything Echo says is also written here, so the panel works for people who cannot hear it and with a screen reader.
+// The voice panel: status, the conversation as text, typing, push-to-talk or open mic, consent, and the "Hey Otto" switch.
+// Everything Otto says is also written here, so the panel works for people who cannot hear it and with a screen reader.
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ASSISTANT_NAME } from '../echo.config'
+import { ASSISTANT_NAME } from '../otto.config'
 import type { AnswerLength } from './consent'
 import { Button, Icon, IconButton, Notice } from './ui'
 import { NO_RETRY_CODES, type useVoiceAssistant } from './useVoiceAssistant'

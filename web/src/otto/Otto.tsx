@@ -1,12 +1,12 @@
-// Everything in one component: the voice conversation, the robot dock, the voice panel, "Hey Echo", and Alt+E.
+// Everything in one component: the voice conversation, the robot dock, the voice panel, "Hey Otto", and the keyboard shortcut (SHORTCUT_KEY in otto.config.ts).
 //
-//   <Echo page={page} onAction={action => { if (action.action === 'navigate') setPage(action.page) }} />
+//   <Otto page={page} onAction={action => { if (action.action === 'navigate') setPage(action.page) }} />
 //
-// Put it once near the top of your app. `page` is the page the visitor is on now (an id from echo.config.ts PAGES).
+// Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ASSISTANT_NAME, LANGUAGE, type PageId } from '../echo.config'
-import EchoDock from './EchoDock'
+import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
+import OttoDock from './OttoDock'
 import type { AssistantAction } from './messages'
 import { loadAssistantAudio, useVoiceAssistant } from './useVoiceAssistant'
 import { useWakeWord, type WakeState } from './useWakeWord'
@@ -27,12 +27,12 @@ const WAKE_TEXT: Partial<Record<WakeState, string>> = {
   blocked: `“Hey ${ASSISTANT_NAME}” is off: the browser refused the microphone. Allow it for this site, then turn it on again`,
 }
 
-export default function Echo({ page, onAction, showRobot = true }: Props) {
+export default function Otto({ page, onAction, showRobot = true }: Props) {
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction })
   const { status, sendText, start, stop, transcript, speechBands } = assistant
-  /** What Echo is saying now, for the robot to mouth. */
+  /** What Otto is saying now, for the robot to mouth. */
   const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
   const openPanel = useCallback(() => {
@@ -50,7 +50,7 @@ export default function Echo({ page, onAction, showRobot = true }: Props) {
     opener.current?.focus()
   }, [stop])
 
-  // "Hey Echo" (opt-in): opens the panel and starts talking. Words said after the phrase are asked once connected.
+  // "Hey Otto" (opt-in): opens the panel and starts talking. Words said after the phrase are asked once connected.
   const [wakeOn, setWakeOn] = useWakeSetting()
   const busy = status === 'connecting' || status === 'listening' || status === 'speaking'
   const wake = useWakeWord({
@@ -64,12 +64,14 @@ export default function Echo({ page, onAction, showRobot = true }: Props) {
     sendText(question)
   }, [status, sendText])
 
-  // Alt+E opens and closes the panel, except while typing in a field.
+  // Alt+<SHORTCUT_KEY> (Alt+O by default) opens and closes the panel, except while typing in a field.
   const toggle = useRef(() => {})
   useEffect(() => { toggle.current = () => (open ? closePanel() : openPanel()) })
   useEffect(() => {
+    if (!SHORTCUT_KEY) return
+    const code = /^\d$/.test(SHORTCUT_KEY) ? `Digit${SHORTCUT_KEY}` : `Key${SHORTCUT_KEY.toUpperCase()}`
     const onKey = (event: KeyboardEvent) => {
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.code !== 'KeyE') return
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.code !== code) return
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('.voice-assistant')) return
       event.preventDefault()
@@ -82,13 +84,13 @@ export default function Echo({ page, onAction, showRobot = true }: Props) {
   const wakeText = busy ? undefined : WAKE_TEXT[wake.state]
 
   return <>
-    {wakeText && <div className="echo-wake" role="status">
+    {wakeText && <div className="otto-wake" role="status">
       <span>{wakeText}</span>
-      <button type="button" className="echo-btn echo-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
+      <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
     </div>}
     {showRobot
-      ? <EchoDock status={status} voiceOpen={open} line={line} speechBands={speechBands} onTalk={open ? () => {} : openPanel} />
-      : !open && <button type="button" className="echo-btn echo-btn--filled echo-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
+      ? <OttoDock status={status} voiceOpen={open} line={line} speechBands={speechBands} onTalk={open ? () => {} : openPanel} />
+      : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>
 }

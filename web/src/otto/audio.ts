@@ -104,7 +104,7 @@ export class SpeechPlayer {
   private nextStart = 0;
   private sources = new Set<AudioBufferSourceNode>();
   private quietAt = 0;
-  /** Reads Echo's voice as it plays, for the robot's mouth and chest bars. */
+  /** Reads Otto's voice as it plays, for the robot's mouth and chest bars. */
   private analyser: AnalyserNode;
   private bins: Uint8Array<ArrayBuffer>;
   onIdle: (() => void) | null = null;

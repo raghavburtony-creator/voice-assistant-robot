@@ -1,10 +1,10 @@
-// Echo's robot: shared types, where the model is, and how each face and pose looks.
-// The model is built by blender/build_echo.py and served from public/echo/echo.glb.
+// Otto's robot: shared types, where the model is, and how each face and pose looks.
+// The model is built by blender/build_otto.py and served from public/otto/otto.glb.
 
 export type RobotPose = 'idle' | 'listening' | 'talking' | 'thinking'
 export type RobotExpression = 'happy' | 'searching' | 'excited' | 'alert' | 'resting'
 
-export const ROBOT_MODEL = `${import.meta.env.BASE_URL}echo/echo.glb`
+export const ROBOT_MODEL = `${import.meta.env.BASE_URL}otto/otto.glb`
 
 /** Characters a second for the speech bubble: about the pace of the Gemini voice. */
 export const SPEAK_CPS = 16
