@@ -10,6 +10,7 @@ import {
   type AnswerLength, type MicConsent, type MicTalk,
 } from './consent'
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
+import type { MouthSource } from './mouth'
 import { apiBase, ASSISTANT_NAME, COMMAND_LABELS, PAGES } from '../otto.config'
 import { parseServerMessage, toAssistantAction, type AssistantAction } from './messages'
 
@@ -523,11 +524,11 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
 
   useEffect(() => teardown, [teardown])
 
-  /** Otto's voice in `count` bands (0 to 1) while it is audible, else null. Read it every frame; it renders nothing. */
-  const speechBands = useCallback((count: number) => player.current?.bands(count) ?? null, [])
+  /** Otto's mouth: five bars (0 to 1) from the voice's speech bands, or null once quiet. Read it every frame; it renders nothing. */
+  const mouth = useCallback<MouthSource>(() => player.current?.mouth() ?? null, [])
 
   return {
-    speechBands,
+    mouth,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
     start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,

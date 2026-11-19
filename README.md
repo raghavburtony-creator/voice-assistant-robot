@@ -25,7 +25,7 @@ npm run dev                   # http://localhost:5173
 
 Click the robot, or press **Alt+O** (change it with `SHORTCUT_KEY` in `web/src/otto.config.ts`), and say "Take me to About" or "Show me a message".
 
-To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, face and gesture, a fake voice for the mouth, and a simulated voice session ("Run a conversation") that plays the lifecycle gestures through the same rules as the app, with a live log of gesture events.
+To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, all seven faces and every gesture; the mouth from a fake voice or any audio file you pick, with a meter of the five bands; each sound cue; and a simulated voice session ("Run a conversation") that plays the lifecycle gestures through the same rules as the app, with a live log of gesture events.
 
 Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`.
 
@@ -79,7 +79,7 @@ useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.
 - Every action is checked twice: by the tool on the server, and by `toAssistantAction` in the browser. Most can be undone from the panel.
 - The robot is only a picture. It is hidden from screen readers; the panel shows everything Otto says as text.
-- Otto's mouth bars follow its real voice while it speaks: a Web Audio `AnalyserNode` on the speech player (`SpeechPlayer.bands()` in `web/src/otto/audio.ts`) feeds `ClayScene.tsx` every frame. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
+- Otto's mouth follows its real voice: five bars from five speech bands (`web/src/otto/mouth.ts`): the centre bar is vowel pitch (85-300 Hz), the inner pair the formants (300 Hz-2 kHz), the outer pair consonants and sibilants (2-4 kHz). A noise gate shuts the mouth in pauses, and bars rise in ~25 ms and fall in ~140 ms. The live voice, an audio file in the lab and the lab's fake voice all go through the same `MouthAnalyzer`. With reduced motion the mouth still moves; only body motion stops. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
 - "Hey Otto" uses the browser's speech recognition. In Chrome and Edge that sends microphone sound to the browser maker while it listens. It is off until the visitor turns it on, and a banner shows whenever it is listening.
 
 ## Otto's robot
@@ -91,7 +91,7 @@ Otto is the **Clay Robot** from [Originkit](https://www.originkit.dev), added wi
 | Robot | `web/src/components/originkit/ui/clay-robot.tsx` | The Originkit component. Two additions, marked `Otto:` so they can be re-applied after an update: a five-bar mouth on the visor, a `control` prop the host drives every frame, and a `transparent` mode with no backdrop |
 | Scene | `web/src/otto/robot/ClayScene.tsx` | Turns pose, face, the voice and gestures into that control: listening leans in, thinking holds a hand to the chin, talking moves the mouth |
 | Wrapper | `web/src/otto/robot/OttoRobot.tsx` | Loads the robot after the page, shows the speech bubble, draws nothing without WebGL 2 |
-| Faces | `web/src/otto/robot/robot.ts` | How open the eyes are, happy arcs, gaze, glow and colour for happy, searching, excited, alert and resting |
+| Faces | `web/src/otto/robot/robot.ts` | Seven faces (happy, searching, excited, alert, resting, sad, curious): eye openness, happy arcs, gaze, glow, colour, per-eye tilt and size, head pose and blink rate, all eased so a change of mood never snaps |
 
 Colours (clay, visor, eyes) and the backdrop are `ROBOT_COLORS` and `ROBOT_BACKGROUND` in `web/src/otto.config.ts`. By default there is no backdrop: only the robot and a soft floor shadow over your page (`transparent: true`); set it to `false` for the gradient card. Re-running `originkit add clay-robot` overwrites the component: put the `Otto:` changes back after it.
 
@@ -109,6 +109,10 @@ useEffect(() => gestures.onEvent(event => console.log(event.type, event.name)), 
 ```
 
 How it fits together: the voice status goes through `gestureForTransition` (`web/src/otto/useGestureTriggers.ts`, a pure function) to decide what plays; the channel carries that, and anything your code plays, to the robot; `ClayScene.tsx` runs one gesture controller per robot and reports starts and ends back on the channel. A new gesture interrupts the current one if its priority is the same or higher (celebrate > waves and head shake > nod), never queues, and blends in while the old one blends out.
+
+### Sound
+
+Otto chirps: six tiny cues synthesised with Web Audio, no audio files (`web/src/otto/sound.ts`): `chirpConnect`, `chirpAcknowledge`, `chirpThinking`, `chirpNegative`, `chirpCelebration`, `chirpGoodbye`. They follow the gestures: each gesture names the cue it plays when it starts in `SOUND_SETTINGS.gestureCues` (`web/src/otto.config.ts`), next to `soundEnabled` and `soundVolume`. Nothing plays from the voice state itself. Browsers only allow sound after the visitor's first click or key press: until then no audio is set up and cues are skipped. To play one yourself, `useGestureSounds(channel)` returns the controller: `sound.current?.play('chirpCelebration')`.
 
 ## Deploying
 

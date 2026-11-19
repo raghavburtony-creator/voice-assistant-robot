@@ -262,6 +262,12 @@ export interface ClayControl {
     joy: number
     eyeX: number
     eyeY: number
+    /** Each eye's tilt (rad, mirrored: + drops the outer corners) and height (viewer's left, right; 1 = the robot's own). */
+    eyeTilt: number
+    eyeScaleL: number
+    eyeScaleR: number
+    /** Multiplies the time between blinks (1 = the robot's own rhythm). */
+    blinkInterval: number
     /** Eye glow, or null for the `advanced.eyeGlow` prop; eye colour (sRGB 0..1), or null for `colors.eyes`. */
     glow: number | null
     eyeColor: [number, number, number] | null
@@ -395,6 +401,8 @@ uniform float uMouth[5];
 uniform float uMouthOn;
 // Otto: 1 draws no backdrop: only the robot and its floor shadow, with alpha, over the page.
 uniform float uClear;
+// Otto: eye shape per face -- tilt (rad, mirrored: + drops the outer corners), height of the left and right eye.
+uniform vec3 uEyeShape;
 
 out vec4 fragColor;
 
@@ -639,8 +647,12 @@ float skyVis(vec3 p, vec3 n) {
 
 float eyeSD(vec2 p) {
     vec2 q = p - vec2(uEye.x, -0.5 + uEye.y);
+    float side = q.x < 0.0 ? uEyeShape.y : uEyeShape.z; // Otto: each eye's own height
     q.x = abs(q.x) - 0.5;
-    float hy = max(0.4 * uEye.z, 0.03);
+    // Otto: tilt each eye about its centre; in the mirrored half-space one angle tilts both eyes symmetrically.
+    float ct = cos(uEyeShape.x), st = sin(uEyeShape.x);
+    q = vec2(ct * q.x - st * q.y, st * q.x + ct * q.y);
+    float hy = max(0.4 * uEye.z * side, 0.03);
     float rect = sdRR(q, vec2(0.39, hy), min(0.13, hy));
     float arc = sdArc(q + vec2(0.0, 0.15), vec2(0.906, 0.423), 0.28, 0.07);
     return mix(rect, arc, uEye.w);
@@ -1133,7 +1145,7 @@ export default function ClayRobot({
                 "uBody", "uHead", "uEye", "uBoxMin", "uBoxMax", "uSun", "uSunCol", "uSky",
                 "uSkyUp", "uSkySide", "uSkyAway", "uSoft", "uAO", "uBgTop", "uBgBot", "uCurve", "uShadowCol", "uShDepth", "uClay",
                 "uVisor", "uEyeCol", "uGlow", "uSamples", "uWalkX", "uFeet", "uArms", "uArmExt", "uBodyBox",
-                "uMouth", "uMouthOn", "uClear", // Otto
+                "uMouth", "uMouthOn", "uClear", "uEyeShape", // Otto
             ]
             for (const n of names) uni[n] = gl.getUniformLocation(prog, n)
             timerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2") as typeof timerExt
@@ -1414,6 +1426,7 @@ export default function ClayRobot({
             g.uniform1fv(uni.uMouth, ctl ? ctl.mouth : NO_MOUTH)
             g.uniform1f(uni.uMouthOn, ctl ? ctl.mouthOn : 0)
             g.uniform1f(uni.uClear, p.transparent ? 1 : 0)
+            g.uniform3f(uni.uEyeShape, ctl ? ctl.eyeTilt : 0, ctl ? ctl.eyeScaleL : 1, ctl ? ctl.eyeScaleR : 1)
             g.uniform1f(uni.uWalkX, walkX)
             g.uniform2f(uni.uFeet, liftL, liftR)
             g.uniform4f(uni.uArms, armL, swingL, armR, swingR)
@@ -1600,7 +1613,8 @@ export default function ClayRobot({
             if (p.blink && !rm) {
                 if (blinkAt < 0 && clock >= nextBlink) {
                     blinkAt = clock
-                    nextBlink = clock + (rand() < 0.2 ? 0.28 : 2.2 + rand() * 3.6)
+                    // Otto: the host's mood stretches or shortens the gap (a double blink stays quick).
+                    nextBlink = clock + (rand() < 0.2 ? 0.28 : (2.2 + rand() * 3.6) * (controlRef.current?.blinkInterval ?? 1))
                 }
             } else {
                 blinkAt = -1

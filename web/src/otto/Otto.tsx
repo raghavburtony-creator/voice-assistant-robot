@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
 import OttoDock from './OttoDock'
 import { createGestureChannel, type GestureChannel } from './robot/gestures'
+import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
 import type { AssistantAction } from './messages'
 import { loadAssistantAudio, useVoiceAssistant } from './useVoiceAssistant'
@@ -43,8 +44,10 @@ export default function Otto({ page, onAction, showRobot = true, gestures }: Pro
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction })
-  const { status, sendText, start, stop, transcript, speechBands } = assistant
+  const { status, sendText, start, stop, transcript, mouth } = assistant
   useGestureTriggers(status, channel)
+  // Chirps follow the gestures (SOUND_SETTINGS.gestureCues), never the voice state directly.
+  useGestureSounds(channel)
   /** What Otto is saying now, for the robot to mouth. */
   const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
@@ -102,7 +105,7 @@ export default function Otto({ page, onAction, showRobot = true, gestures }: Pro
       <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
     </div>}
     {showRobot
-      ? <OttoDock status={status} voiceOpen={open} line={line} speechBands={speechBands} gestures={channel} onTalk={open ? () => {} : openPanel} />
+      ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} gestures={channel} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>

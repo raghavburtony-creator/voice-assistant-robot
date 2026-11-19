@@ -1,5 +1,6 @@
 // Browser audio for the voice assistant: microphone -> 16 kHz PCM16 frames, and
 // 24 kHz PCM16 speech -> speakers. Gemini Live uses these rates in each direction.
+import { analyserMouth, type MouthSource } from './mouth';
 
 export const INPUT_RATE = 16_000;
 export const OUTPUT_RATE = 24_000;
@@ -104,36 +105,16 @@ export class SpeechPlayer {
   private nextStart = 0;
   private sources = new Set<AudioBufferSourceNode>();
   private quietAt = 0;
-  /** Reads Otto's voice as it plays, for the robot's mouth and chest bars. */
+  /** Reads Otto's voice as it plays, for the robot's mouth. */
   private analyser: AnalyserNode;
-  private bins: Uint8Array<ArrayBuffer>;
+  /** The five mouth bars from the voice's speech bands (mouth.ts), or null once quiet and settled. */
+  readonly mouth: MouthSource;
   onIdle: (() => void) | null = null;
 
   constructor() {
     this.analyser = this.context.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.analyser.smoothingTimeConstant = 0.6;
     this.analyser.connect(this.context.destination);
-    this.bins = new Uint8Array(this.analyser.frequencyBinCount);
-  }
-
-  /**
-   * The voice's loudness in `count` bands, 0 to 1, low pitch first, or null while nothing plays.
-   * Covers about 100 Hz to 4.5 kHz, where speech is: at 24 kHz each bin is about 94 Hz wide.
-   */
-  bands(count: number): number[] | null {
-    if (!this.sources.size) return null;
-    this.analyser.getByteFrequencyData(this.bins);
-    const first = 1, last = 48, out: number[] = [];
-    for (let band = 0; band < count; band++) {
-      // Wider bands for higher pitches, as hearing works.
-      const from = Math.floor(first * (last / first) ** (band / count));
-      const to = Math.max(from + 1, Math.floor(first * (last / first) ** ((band + 1) / count)));
-      let peak = 0;
-      for (let i = from; i < to; i++) peak = Math.max(peak, this.bins[i]);
-      out.push(peak / 255);
-    }
-    return out;
+    this.mouth = analyserMouth(this.analyser, () => this.sources.size > 0);
   }
 
   async resume() {

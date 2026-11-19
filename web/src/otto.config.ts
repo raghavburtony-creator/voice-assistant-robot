@@ -2,6 +2,7 @@
 // PAGES and COMMANDS must match server/app/voice/app_config.py (server/tests/test_voice.py checks it).
 
 import type { GestureName } from './otto/robot/gestures'
+import type { SoundCue } from './otto/sound'
 
 export const ASSISTANT_NAME = 'Otto'
 
@@ -92,6 +93,25 @@ export const GESTURE_SETTINGS = {
   onConnect: GestureName | null; onDisconnect: GestureName | null; onTurnEnd: GestureName | null
   onError: GestureName | null; whileThinking: GestureName | null
 }
+
+/**
+ * Otto's sound cues (web/src/otto/sound.ts): tiny synthesised chirps, no audio files. Each gesture names the cue it plays
+ * when it starts, or null for none; any cue can also be played from code. Browsers only allow sound after the visitor's
+ * first click or key press, so cues before that are skipped.
+ */
+export const SOUND_SETTINGS = {
+  soundEnabled: true,
+  /** 0 (silent) to 1. */
+  soundVolume: 0.5,
+  gestureCues: {
+    welcomeWave: 'chirpConnect',
+    nod: 'chirpAcknowledge',
+    thinkingHand: 'chirpThinking',
+    headShake: 'chirpNegative',
+    celebrate: 'chirpCelebration',
+    goodbyeWave: 'chirpGoodbye',
+  },
+} as const satisfies { soundEnabled: boolean; soundVolume: number; gestureCues: Record<GestureName, SoundCue | null> }
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */
 export function apiBase(): string {
