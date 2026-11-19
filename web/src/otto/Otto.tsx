@@ -2,11 +2,19 @@
 //
 //   <Otto page={page} onAction={action => { if (action.action === 'navigate') setPage(action.page) }} />
 //
+// Gestures: Otto waves, nods and so on by itself as the conversation goes. To trigger one yourself, pass a channel (create it once,
+// outside render or in useMemo, so it stays the same object):
+//
+//   const gestures = useMemo(createGestureChannel, [])
+//   <Otto gestures={gestures} ... />   then   gestures.play('celebrate')
+//
 // Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
 import OttoDock from './OttoDock'
+import { createGestureChannel, type GestureChannel } from './robot/gestures.js'
+import { useGestureTriggers } from './useGestureTriggers'
 import type { AssistantAction } from './messages'
 import { loadAssistantAudio, useVoiceAssistant } from './useVoiceAssistant'
 import { useWakeWord, type WakeState } from './useWakeWord'
@@ -19,6 +27,8 @@ type Props = {
   onAction: (action: AssistantAction) => void
   /** Hide the 3D robot and keep only the panel (for a small or low-power page). Default true. */
   showRobot?: boolean
+  /** Lets your code play gestures (`gestures.play('celebrate')`). Optional; keep the same object between renders. */
+  gestures?: GestureChannel
 }
 
 const WAKE_TEXT: Partial<Record<WakeState, string>> = {
@@ -27,11 +37,14 @@ const WAKE_TEXT: Partial<Record<WakeState, string>> = {
   blocked: `“Hey ${ASSISTANT_NAME}” is off: the browser refused the microphone. Allow it for this site, then turn it on again`,
 }
 
-export default function Otto({ page, onAction, showRobot = true }: Props) {
+export default function Otto({ page, onAction, showRobot = true, gestures }: Props) {
+  const ownChannel = useMemo(createGestureChannel, [])
+  const channel = gestures ?? ownChannel
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction })
   const { status, sendText, start, stop, transcript, speechBands } = assistant
+  useGestureTriggers(status, channel)
   /** What Otto is saying now, for the robot to mouth. */
   const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
@@ -89,7 +102,7 @@ export default function Otto({ page, onAction, showRobot = true }: Props) {
       <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
     </div>}
     {showRobot
-      ? <OttoDock status={status} voiceOpen={open} line={line} speechBands={speechBands} onTalk={open ? () => {} : openPanel} />
+      ? <OttoDock status={status} voiceOpen={open} line={line} speechBands={speechBands} gestures={channel} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>

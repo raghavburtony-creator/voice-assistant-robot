@@ -3,6 +3,7 @@
 // WebGL is missing or the scene fails, nothing is drawn and the rest of Otto still works.
 
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { GestureChannel } from './gestures.js'
 import { hasWebGL, SPEAK_CPS, type RobotExpression, type RobotPose } from './robot'
 
 const OttoScene = lazy(() => import('./OttoScene'))
@@ -14,6 +15,8 @@ type Props = {
   say?: string
   /** Otto's voice in bands, 0 to 1, or null when silent (useVoiceAssistant's speechBands). */
   speechBands?: (count: number) => number[] | null
+  /** Gesture requests for this robot (see createGestureChannel). */
+  gestures?: GestureChannel
   onActivate?: () => void
   className?: string
 }
@@ -45,7 +48,7 @@ function useTyped(text: string): string {
   return shown
 }
 
-export default function OttoRobot({ pose, expression, say = '', speechBands, onActivate, className }: Props) {
+export default function OttoRobot({ pose, expression, say = '', speechBands, gestures, onActivate, className }: Props) {
   const [canDraw] = useState(hasWebGL)
   const typed = useTyped(say)
   // Only the end of a long line fits: the panel has the whole of it.
@@ -55,7 +58,7 @@ export default function OttoRobot({ pose, expression, say = '', speechBands, onA
       {bubble && <p className="otto-robot__bubble">{bubble}</p>}
       {canDraw && <Quiet>
         <Suspense fallback={null}>
-          <OttoScene pose={pose} expression={expression} speechBands={speechBands} onActivate={onActivate} />
+          <OttoScene pose={pose} expression={expression} speechBands={speechBands} gestures={gestures} onActivate={onActivate} />
         </Suspense>
       </Quiet>}
     </div>

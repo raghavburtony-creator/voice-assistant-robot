@@ -3,6 +3,7 @@
 
 import { ASSISTANT_NAME } from '../otto.config'
 import OttoRobot from './robot/OttoRobot'
+import type { GestureChannel } from './robot/gestures.js'
 import type { RobotExpression, RobotPose } from './robot/robot'
 import { Button } from './ui'
 import type { AssistantStatus } from './useVoiceAssistant'
@@ -15,6 +16,7 @@ type Props = {
   line: string
   speechBands: (count: number) => number[] | null
   onTalk: () => void
+  gestures?: GestureChannel
 }
 
 const poseFor = (status: AssistantStatus): RobotPose =>
@@ -23,11 +25,11 @@ const poseFor = (status: AssistantStatus): RobotPose =>
 const expressionFor = (status: AssistantStatus): RobotExpression =>
   status === 'error' ? 'alert' : status === 'connecting' ? 'searching' : status === 'speaking' ? 'excited' : 'happy'
 
-export default function OttoDock({ status, voiceOpen, line, speechBands, onTalk }: Props) {
+export default function OttoDock({ status, voiceOpen, line, speechBands, onTalk, gestures }: Props) {
   return (
     <div className={voiceOpen ? 'otto-dock otto-dock--beside-voice' : 'otto-dock'}>
       <OttoRobot className="otto-dock__robot" pose={poseFor(status)} expression={expressionFor(status)}
-        say={voiceOpen ? line : ''} speechBands={speechBands} onActivate={onTalk} />
+        say={voiceOpen ? line : ''} speechBands={speechBands} gestures={gestures} onActivate={onTalk} />
       {!voiceOpen && <Button variant="tonal" className="otto-dock__button" onClick={onTalk}>Talk to {ASSISTANT_NAME}</Button>}
     </div>
   )
