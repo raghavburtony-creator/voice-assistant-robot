@@ -10,7 +10,7 @@
 // open, a walk) he stays awake and the clock does not run.
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { IDLE_SETTINGS } from '../otto.config'
+import { useOttoConfig } from './config'
 
 export type IdleState = 'awake' | 'idle' | 'asleep'
 /** 'look': time for an idle behaviour (a glance about, a stretch...). */
@@ -131,7 +131,9 @@ export type IdleHookOptions = {
  * The idle lifecycle, fed by the page: the cursor, scroll, clicks, keys, and the cursor over `robot`. Runs on timers set
  * for the next thing due (no frame loop). Returns the state and controls for the lab.
  */
-export function useIdleLifecycle({ busy, robot, onLook, times = IDLE_SETTINGS, enabled = true }: IdleHookOptions) {
+export function useIdleLifecycle({ busy, robot, onLook, times: given, enabled = true }: IdleHookOptions) {
+  const configured = useOttoConfig().idle
+  const times = given ?? configured
   const [state, setState] = useState<IdleState>('awake')
   const life = useRef<IdleLifecycle | null>(null)
   const timer = useRef<number | undefined>(undefined)

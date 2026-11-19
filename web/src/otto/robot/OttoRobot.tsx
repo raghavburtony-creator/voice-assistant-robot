@@ -2,7 +2,7 @@
 // dock's button and the voice panel say the same in words. The robot (ClayScene, the Clay Robot) loads on its own after the page, and where
 // WebGL 2 is missing or the scene fails, nothing is drawn and the rest of Otto still works.
 
-import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
 import type { SpeechClock } from '../audio'
 import type { MouthSource } from '../mouth'
 import type { StageFrame } from '../movement/stage'
@@ -30,12 +30,15 @@ type Props = {
   /** Dozing (idle.ts). */
   asleep?: boolean
   onActivate?: () => void
+  /** The robot cannot be drawn: no WebGL 2 here, or the scene failed. Otto's words still work. */
+  onError?: (reason: 'no-webgl' | 'failed') => void
   className?: string
 }
 
-class Quiet extends Component<{ children: ReactNode }, { failed: boolean }> {
+class Quiet extends Component<{ children: ReactNode; onError?: () => void }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(_error: unknown, _info: ErrorInfo) { this.props.onError?.() }
   render() { return this.state.failed ? null : this.props.children }
 }
 
@@ -82,15 +85,18 @@ function useTyped(text: string, clock?: SpeechClock): string {
   return shown
 }
 
-export default function OttoRobot({ pose, expression, say = '', mouth, gestures, speech, locomotion, asleep, onActivate, className }: Props) {
+export default function OttoRobot({ pose, expression, say = '', mouth, gestures, speech, locomotion, asleep, onActivate, onError, className }: Props) {
   const [canDraw] = useState(hasWebGL)
+  const report = useRef(onError)
+  report.current = onError
+  useEffect(() => { if (!canDraw) report.current?.('no-webgl') }, [canDraw])
   const typed = useTyped(say, speech)
   // Only the end of a long line fits: the panel has the whole of it.
   const bubble = typed.length > 140 ? `…${typed.slice(-140).replace(/^\S*\s/, '')}` : typed
   return (
     <div className={['otto-robot', className].filter(Boolean).join(' ')} aria-hidden="true">
       {bubble && <p className="otto-robot__bubble">{bubble}</p>}
-      {canDraw && <Quiet>
+      {canDraw && <Quiet onError={() => report.current?.('failed')}>
         <Suspense fallback={null}>
           <ClayScene pose={pose} expression={expression} mouth={mouth} gestures={gestures} onActivate={onActivate}
             locomotion={locomotion} asleep={asleep} />

@@ -1,4 +1,4 @@
-// Everything in one component: the voice conversation, the robot dock, the voice panel, "Hey Otto", and the keyboard shortcut (SHORTCUT_KEY in otto.config.ts).
+// Everything in one component: the voice conversation, the robot dock, the voice panel, "Hey Otto", and the keyboard shortcut (the config's hotkey).
 //
 //   <Otto page={page} onAction={action => { if (action.action === 'navigate') setPage(action.page) }} />
 //
@@ -16,7 +16,9 @@
 // Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
+import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, type PageId } from '../otto.config'
+import { createOttoEvents, type OttoEvents } from './awareness/events'
+import { OttoConfigProvider, useOttoConfig, type OttoConfig } from './config'
 import type { StageController } from './movement/stage'
 import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
@@ -40,6 +42,10 @@ type Props = {
   gestures?: GestureChannel
   /** Lets your code move Otto (`stage.moveToElement('#cart')`; createOttoStage). Optional; keep the same object. */
   stage?: StageController
+  /** What happens in your app, for Otto to react to (`events.notify({ type: 'success', where: '#save' })`). Keep the same object. */
+  events?: OttoEvents
+  /** The mascot's settings (default: OTTO_CONFIG in otto.config.ts). */
+  config?: OttoConfig
   /** For tests and the lab: a stand-in for the server's WebSocket. */
   createSocket?: (url: string) => WebSocket
   /** For the lab: set to the idle lifecycle's controls. */
@@ -52,15 +58,29 @@ const WAKE_TEXT: Partial<Record<WakeState, string>> = {
   blocked: `“Hey ${ASSISTANT_NAME}” is off: the browser refused the microphone. Allow it for this site, then turn it on again`,
 }
 
-export default function Otto({ page, onAction, showRobot = true, gestures, stage, createSocket, idleControls }: Props) {
+export default function Otto({ config = OTTO_CONFIG, ...props }: Props) {
+  return <OttoConfigProvider config={config}><OttoInner {...props} /></OttoConfigProvider>
+}
+
+function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, createSocket, idleControls }: Omit<Props, 'config'>) {
   const ownChannel = useMemo(createGestureChannel, [])
   const channel = gestures ?? ownChannel
-  const ottoStage = useOwnStage(stage)
+  const ownEvents = useMemo(createOttoEvents, [])
+  const otto = events ?? ownEvents
+  const config = useOttoConfig()
+  const ottoStage = useOwnStage(stage, config)
+  const SHORTCUT_KEY = config.hotkey
+  // A new page is a new section: Otto notices (a curious glance, at most).
+  const firstPage = useRef(true)
+  useEffect(() => {
+    if (firstPage.current) { firstPage.current = false; return }
+    otto.notify({ type: 'section', topic: page })
+  }, [page, otto])
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction, createSocket })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
-  // Barge-ins too: whatever Otto was doing stops, and he nods (GESTURE_SETTINGS.onInterrupt) as he goes back to listening.
+  // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.
   useGestureTriggers(status, channel, interruptions)
   // Chirps follow the gestures (SOUND_SETTINGS.gestureCues), never the voice state directly.
   useGestureSounds(channel)
@@ -111,7 +131,7 @@ export default function Otto({ page, onAction, showRobot = true, gestures, stage
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [SHORTCUT_KEY])
 
   const wakeText = busy ? undefined : WAKE_TEXT[wake.state]
 
@@ -122,7 +142,7 @@ export default function Otto({ page, onAction, showRobot = true, gestures, stage
     </div>}
     {showRobot
       ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
-          idleControls={idleControls} onTalk={open ? () => {} : openPanel} />
+          events={otto} idleControls={idleControls} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>

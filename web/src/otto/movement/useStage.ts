@@ -3,7 +3,7 @@
 // Nothing runs while Otto stands still: a frame loop only while he walks, observers otherwise.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
-import { MOVEMENT_SETTINGS } from '../../otto.config'
+import { DEFAULT_OTTO_CONFIG, useOttoConfig, type OttoConfig } from '../config'
 import { useReducedMotion } from '../robot/robot'
 import { createStage, type Rect, type StageController } from './stage'
 
@@ -13,7 +13,7 @@ export type Obstacle = string | Element | (() => Rect[] | Rect | null)
 export type StageHostOptions = {
   /** The stage: null for the viewport (the dock), or a container whose box the robot walks in. */
   container?: RefObject<HTMLElement | null> | null
-  /** What to keep clear of, besides MOVEMENT_SETTINGS.avoid. Re-read whenever `obstaclesKey` changes. */
+  /** What to keep clear of, besides the config's movement.avoid. Re-read whenever `obstaclesKey` changes. */
   obstacles?: readonly Obstacle[]
   /** Change it to make the host look for the obstacles again (e.g. when the panel opens or closes). */
   obstaclesKey?: unknown
@@ -23,14 +23,15 @@ export type StageHostOptions = {
 
 const toRect = (r: DOMRect | Rect): Rect => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
 
-/** A stage with the MOVEMENT_SETTINGS defaults. Make it once (useMemo, or outside React) and keep it. */
-export function createOttoStage(): StageController {
+/** A stage with a config's movement settings (the defaults if none). Make it once (useMemo, or outside React) and keep it. */
+export function createOttoStage(config: OttoConfig = DEFAULT_OTTO_CONFIG): StageController {
+  const m = config.movement
   return createStage({
-    speed: MOVEMENT_SETTINGS.moveSpeed,
-    margins: MOVEMENT_SETTINGS.stageMargins,
-    home: MOVEMENT_SETTINGS.home,
-    gap: MOVEMENT_SETTINGS.obstacleGap,
-    enabled: MOVEMENT_SETTINGS.movementEnabled,
+    speed: m.moveSpeed,
+    margins: m.stageMargins,
+    home: m.home,
+    gap: m.obstacleGap,
+    enabled: m.movementEnabled,
     measure: place => {
       if (typeof document === 'undefined') return null
       const element = typeof place === 'string' ? document.querySelector(place) : place
@@ -45,6 +46,7 @@ export function createOttoStage(): StageController {
  */
 export function useStageHost(stage: StageController, element: RefObject<HTMLElement | null>, options: StageHostOptions = {}) {
   const reduced = useReducedMotion()
+  const avoid = useOttoConfig().movement.avoid
   const opts = useRef(options)
   useEffect(() => { opts.current = options })
   const { obstaclesKey, container } = options
@@ -102,7 +104,7 @@ export function useStageHost(stage: StageController, element: RefObject<HTMLElem
 
   // Obstacles: looked for when `obstaclesKey` changes, and measured again when one resizes or the window does.
   useEffect(() => {
-    const list: Obstacle[] = [...MOVEMENT_SETTINGS.avoid, ...(opts.current.obstacles ?? [])]
+    const list: Obstacle[] = [...avoid, ...(opts.current.obstacles ?? [])]
     const elements: Element[] = []
     const fns: (() => Rect[] | Rect | null)[] = []
     for (const item of list) {
@@ -120,11 +122,11 @@ export function useStageHost(stage: StageController, element: RefObject<HTMLElem
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
     elements.forEach(e => ro?.observe(e))
     return () => { window.removeEventListener('resize', measure); ro?.disconnect() }
-  }, [stage, obstaclesKey])
+  }, [stage, obstaclesKey, avoid])
 }
 
 /** A stage made once for this component (when none is passed in). */
-export function useOwnStage(given?: StageController): StageController {
-  const own = useMemo(() => (given ? null : createOttoStage()), [given])
+export function useOwnStage(given?: StageController, config?: OttoConfig): StageController {
+  const own = useMemo(() => (given ? null : createOttoStage(config)), [given]) // eslint-disable-line react-hooks/exhaustive-deps
   return given ?? own!
 }

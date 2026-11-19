@@ -6,9 +6,13 @@
 //   body       every face, pose and gesture; the mouth from a fake voice or an audio file; each sound cue
 //   voice      a simulated session that drives the lifecycle gestures; or the real Otto (panel, voice pipeline, bubble,
 //              barge-in) against a simulated Gemini server that streams synthetic speech
+//   awareness  app events (success, failure, a task, attention...) at any importance and place, floods of them, and
+//              each decision Otto makes with why; what he knows right now; and the theme presets
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { SOUND_SETTINGS } from './otto.config'
+import { createOttoEvents, OTTO_EVENT_TYPES, type Importance, type OttoEvent, type OttoEventType } from './otto/awareness/events'
+import type { Awareness, Reaction } from './otto/awareness/reactions'
+import { defineOttoConfig, OttoConfigProvider, THEME_NAMES, type ThemeName } from './otto/config'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
@@ -19,6 +23,7 @@ import OttoStage, { type IdleControls } from './otto/OttoStage'
 import type { IdleState } from './otto/idle'
 import { createGestureChannel, GESTURE_NAMES, type GestureEvent } from './otto/robot/gestures'
 import { FACES, useReducedMotion, type RobotExpression, type RobotPose } from './otto/robot/robot'
+import { useOttoConfig } from './otto/config'
 import { SOUND_CUES } from './otto/sound'
 import { useGestureSounds } from './otto/useGestureSounds'
 import { useGestureTriggers } from './otto/useGestureTriggers'
@@ -90,7 +95,20 @@ const describeMove = (e: StageEvent) =>
       : e.type === 'cancel' ? `cancel (${e.reason}) at ${Math.round(e.x)}`
         : e.hidden ? 'hidden: no room on the stage' : 'shown again'
 
+const describeReaction = (e: OttoEvent, r: Reaction) => {
+  const did = r.size === 'none' ? 'no reaction' : [r.size, r.face, r.gesture, r.walk ? 'walks there' : r.look ? 'looks' : ''].filter(Boolean).join(', ')
+  return `${e.type}${e.importance ? ` (${e.importance})` : ''}: ${did}. Why: ${r.why.join('; ')}`
+}
+
 function Lab() {
+  const [theme, setTheme] = useState<ThemeName>('default')
+  const config = useMemo(() => defineOttoConfig({ theme }), [theme])
+  return <OttoConfigProvider config={config}><LabInner theme={theme} setTheme={setTheme} /></OttoConfigProvider>
+}
+
+function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeName) => void }) {
+  const config = useOttoConfig()
+  const SOUND_SETTINGS = config.sound
   const [pose, setPose] = useState<RobotPose>('idle')
   const [expression, setExpression] = useState<RobotExpression>('happy')
   const [say, setSay] = useState('')
@@ -131,6 +149,33 @@ function Lab() {
     return () => window.clearInterval(id)
   }, [stage])
   const go = (what: string, move: Promise<boolean>) => { setFollowing(false); void move.then(ok => addMove(`${what}: ${ok ? 'arrived' : 'did not arrive'}`)) }
+
+  // Awareness: events in, decisions out.
+  const events = useMemo(createOttoEvents, [])
+  const [reactions, addReaction] = useLog(10)
+  const [importance, setImportance] = useState<Importance | ''>('')
+  const [place, setPlace] = useState<'none' | 'target' | 'left' | 'top'>('target')
+  const knows = useRef<(() => Awareness) | null>(null)
+  const [known, setKnown] = useState('')
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const a = knows.current?.()
+      if (!a) return
+      const tasks = a.app.tasks.map(t => `${t.id} (${t.topic ?? 'no topic'}, ${Math.round((performance.now() - t.since) / 100) / 10} s)`).join(', ') || 'none'
+      setKnown(`Otto: ${a.self.asleep ? 'asleep' : 'awake'}${a.self.talking ? ', talking' : ''}${a.self.walking ? ', walking' : ''}${a.self.mayMove ? '' : ', staying put'}. `
+        + `Visitor: ${a.user.present ? 'here' : 'away'}${a.user.idle ? ', idle' : ''}. Tasks: ${tasks}. Section: ${a.app.section ?? 'none'}. `
+        + `Waiting on the visitor: ${a.app.waiting ? 'yes' : 'no'}. Recent: ${a.recent.slice(-4).map(r => `${r.type}->${r.size}`).join(', ') || 'none'}.`)
+    }, 300)
+    return () => window.clearInterval(id)
+  }, [])
+  const eventPlace = () => place === 'target' ? '#lab-target' : place === 'left' ? '.lab-spot-left' : place === 'top' ? '.lab-spot-top' : undefined
+  const send = (type: OttoEventType, extra: Partial<OttoEvent> = {}) =>
+    events.notify({ type, importance: importance || undefined, where: eventPlace(), topic: extra.topic ?? `lab ${type}`, ...extra })
+  const taskCount = useRef(0)
+  const runTask = (seconds: number, result: 'succeed' | 'fail') => {
+    const job = events.task(`job${++taskCount.current}`, { topic: 'lab task', where: eventPlace() })
+    window.setTimeout(() => (result === 'succeed' ? job.succeed('The lab task finished.') : job.fail('The lab task failed.')), seconds * 1000)
+  }
 
   // Idle controls.
   const [shortIdle, setShortIdle] = useState(true)
@@ -225,6 +270,32 @@ function Lab() {
           <label className="lab-inline"><input type="checkbox" checked={snap} onChange={e => setSnap(e.target.checked)} /> Snap, as with reduced motion</label>
         </fieldset>
 
+        <fieldset><legend>Awareness: what happens in the app</legend>
+          <p className="lab-hint">Send Otto an event and watch what he decides, and why (the log on the right). He reacts less to repeats, to events too close together, while asleep or talking, and not at all with the tab hidden.</p>
+          <div className="lab-row">
+            <label className="lab-inline">Importance <select value={importance} onChange={e => setImportance(e.target.value as Importance | '')}>
+              <option value="">by type</option><option value="minor">minor</option><option value="normal">normal</option><option value="major">major</option></select></label>
+            <label className="lab-inline">Where <select value={place} onChange={e => setPlace(e.target.value as typeof place)}>
+              <option value="target">the Target button</option><option value="left">bottom left of the page</option><option value="top">top of the page</option><option value="none">nowhere in particular</option></select></label>
+          </div>
+          <div className="lab-row">{OTTO_EVENT_TYPES.filter(t => t !== 'task').map(type =>
+            <button key={type} type="button" className={btn} aria-label={`Event: ${type}`} onClick={() => send(type, type === 'failure' || type === 'attention' ? { message: type === 'failure' ? 'Saving failed.' : 'Please check this.' } : {})}>{type}</button>)}
+          </div>
+          <div className="lab-row">
+            <button type="button" className={btn} onClick={() => runTask(1, 'succeed')}>A 1 s task, then success</button>
+            <button type="button" className={btn} onClick={() => runTask(6, 'succeed')}>A 6 s task, then success</button>
+            <button type="button" className={btn} onClick={() => runTask(3, 'fail')}>A 3 s task, then failure</button>
+            <button type="button" className={btn} onClick={() => { for (let i = 0; i < 5; i++) window.setTimeout(() => send('success', { topic: 'flood' }), i * 300) }}>5 successes in 1.5 s</button>
+          </div>
+          <p className="lab-hint" role="status">{known}</p>
+        </fieldset>
+
+        <fieldset><legend>Theme</legend>
+          <label className="lab-inline">Preset <select value={theme} onChange={e => setTheme(e.target.value as ThemeName)}>
+            {THEME_NAMES.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+          <p className="lab-hint">Colours, glow, gesture size, sound, speed and liveliness change at once, without rebuilding the robot. The web component playground is at <a href="/preview/">/preview/</a>.</p>
+        </fieldset>
+
         <fieldset><legend>Idle and sleep</legend>
           <p className="lab-hint">Now: <strong role="status">{idleState}</strong>. Asleep, Otto wakes when the cursor comes over him, on a click or a key.</p>
           <label className="lab-inline"><input type="checkbox" checked={shortIdle} disabled={full} onChange={e => setShortIdle(e.target.checked)} /> Short timeouts (idle after 4 s, asleep after 12 s)</label>
@@ -304,6 +375,7 @@ function Lab() {
         </fieldset>
       </div>
       <aside className="lab-side">
+        <Log id="lab-reactions" title="Reactions" lines={reactions} />
         <Log id="lab-moves" title="Movement" lines={moves} />
         <Log id="lab-events" title="Gesture events" lines={log} />
         {full && <Log id="lab-server" title="Simulated server" lines={serverLines} />}
@@ -311,14 +383,17 @@ function Lab() {
     </main>
 
     <div className={following ? 'lab-mover is-moving' : 'lab-mover'} aria-hidden="true" />
+    <div className="lab-spot-left" aria-hidden="true" />
+    <div className="lab-spot-top" aria-hidden="true" />
     {panel && <div className="lab-panel" role="region" aria-label="Simulated panel">A simulated panel: Otto keeps clear of it.</div>}
 
     {full
       ? <Otto page="home" onAction={action => addServer(`action: ${JSON.stringify(action)}`)} gestures={channel} stage={stage}
-          createSocket={server.createSocket} idleControls={idle} />
+          createSocket={server.createSocket} idleControls={idle} events={events} config={config} />
       : <OttoStage className="otto-dock" stage={stage} pose={shownPose} expression={shownExpression} say={shownSay}
           mouth={shownMouth} gestures={channel} busy={busy} obstacles={panel ? ['.lab-panel'] : undefined} obstaclesKey={panel}
-          idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={setIdleState} idleControls={idle} />}
+          idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={setIdleState} idleControls={idle}
+          events={events} onReaction={(e, r) => addReaction(describeReaction(e, r))} awarenessRef={knows} />}
   </>
 }
 

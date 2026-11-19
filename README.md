@@ -30,6 +30,7 @@ To try the robot without a key or a server, open http://localhost:5173/lab.html.
 - **Idle and sleep**: skip ahead to idle or to sleep, or wake him. Short timeouts are on by default.
 - **Body**: every pose, all seven faces and every gesture.
 - **Mouth and sound**: the mouth from a fake voice or any audio file, with a meter of the five bands, and each sound cue.
+- **Awareness and themes**: send any event at any importance and place, long tasks, floods of events; each decision is logged with why, next to what Otto knows now. Switch theme presets live.
 - **A simulated voice session**: "Run a conversation" plays the lifecycle gestures through the same rules as the app.
 - **The real Otto against a simulated Gemini server**: the panel, streamed synthetic speech through the real speech player, the bubble in step with the audio, and barge-in from either side.
 
@@ -157,6 +158,103 @@ With prefers-reduced-motion he does not walk: he moves straight to the spot.
 After `IDLE_SETTINGS.idleLookAroundMs` with nothing happening, Otto looks about now and then, taking turns through the gestures in `GESTURE_SETTINGS.idle` (`lookAround`, `stretch`).
 
 After `sleepTimeoutMs` he dozes off: eyes shut, dim glow, head bowed, slow breathing, at a third of the frame rate. He wakes when the cursor comes over him, on a click or tap, or on a key press (the hotkey included). Merely moving the cursor or scrolling keeps him awake but does not wake him, so reading the page does not disturb him. A voice session or the panel open keeps him awake. The lifecycle is `web/src/otto/idle.ts`, a state machine with a test suite.
+
+### Awareness: Otto reacts to what happens in your app
+
+Your app says what happened; Otto decides whether and how to react. You never call his face, gestures or movement for this:
+
+```tsx
+const events = useMemo(createOttoEvents, [])
+<Otto events={events} /* ... */ />
+events.notify({ type: 'success', where: '#save', topic: 'upload' })
+const job = events.task('render', { topic: 'image generation', where: '#preview' })  // a long operation
+job.succeed('Your image is ready')                                                   // or job.fail('...'), job.done()
+```
+
+**Event types:** `success`, `failure`, `attention`, `task`, `complete`, `section`, `select`, `waiting`, `arrive`, `leave`, `interact` and `idle`. Each can carry:
+- `importance`: `minor`, `normal` or `major`;
+- `where`: a selector, element or rect;
+- `topic`: what it was about;
+- `message`: words for screen readers.
+
+**Reaction sizes:** Otto (`web/src/otto/awareness/reactions.ts`, pure and tested) picks the smallest reaction that says enough:
+- **Glance:** a look toward it and a passing mood.
+- **Gesture:** a small celebration, a head shake or a nod.
+- **Big:** walk there, the full gesture, and the bubble.
+
+**Built-in reactions:**
+- **Success:** happy, then a celebration.
+- **Failure:** concerned. He turns and looks toward the problem and shakes his head.
+- **Attention:** a curious look at it, plus a wave if it's major.
+- **A long task:** searching, after `taskNoticeMs`; then thinking hard, after `thinkingAfterMs`. When it ends he looks at where it ran.
+- **Interaction with Otto:** he looks at you and nods.
+
+**What keeps him from being annoying:**
+- With the tab hidden, nothing happens. A failure or attention item waits and is shown when the visitor comes back.
+- Asleep, only a failure, attention or a major event wakes him.
+- During a voice conversation, a glance at most, and the voice keeps his face.
+- Repeats (same type and topic) shrink, and the third is ignored.
+- Each reaction size has a cooldown.
+- A per-minute gesture budget limits how often he gestures.
+
+**What Otto notices by himself:** the visitor leaving the tab and coming back, the cursor resting on him or a click on him, and page changes in `<Otto>`.
+
+**Your own rules:** `awareness.rules` in the config are functions of the event and what Otto knows. Return a reaction to react differently, for example by `topic`; the limits above still apply. The lab logs every decision with its reasons.
+
+### Themes and per-instance config
+
+Every mascot setting has a default in `web/src/otto/config.ts`. `defineOttoConfig(overrides)` layers three things, merging deeply (arrays are replaced):
+1. the defaults;
+2. a theme preset: `default`, `midnight`, `cyber` or `minimal`. Each sets look and personality: colours, glow, gesture size, sound, speed, and how lively his reactions are;
+3. your overrides.
+
+This app's overrides are `OTTO_CONFIG` in `web/src/otto.config.ts`. `<Otto config={...}>` and each `<otto-mascot>` can have their own. A theme change applies live, without rebuilding the robot.
+
+## `<otto-mascot>`: Otto in any page
+
+The mascot works without React in the host page. It includes the robot, stage, gestures, sound, lip-sync, idle life and awareness, but not the Gemini voice panel, which needs this repo's server.
+
+```bash
+cd web && npm run build:lib
+```
+
+The build writes three things to `dist-lib/`:
+- `otto-mascot.js`, the main module;
+- a separate chunk for the robot's WebGL scene, loaded later;
+- type declarations, wired through `package.json` `exports`.
+
+```html
+<script type="module" src="/otto-mascot.js"></script>
+<otto-mascot theme="midnight" hotkey="O"></otto-mascot>
+<script type="module">
+  const otto = document.querySelector('otto-mascot')
+  otto.addEventListener('otto:ready', () => otto.playGesture('welcomeWave'))
+  otto.notify({ type: 'success', where: '#save' })
+</script>
+```
+
+**Attributes**, which update live: `state`, `face`, `theme`, `sound-enabled`, `movement-enabled` and `hotkey`. `placement` (`dock`, or `inline` to stay inside the element's own box) is read when the element connects. The `config` property takes an override object.
+
+**Methods:**
+- body and look: `playGesture`, `playSound`, `setState`, `setFace`;
+- movement: `moveToX`, `moveToElement`, `goHome`, `lookAt`;
+- voice: `connectAudioNode`, which lip-syncs to any Web Audio node of yours, and `speakText`, which shows the bubble and screen-reader text with a procedural mouth, optionally spoken aloud by the browser;
+- `interrupt`;
+- awareness: `notify` and `task`.
+
+**Events:** `otto:ready`, `otto:statechange`, `otto:gesturestart`, `otto:gestureend`, `otto:interrupt`, `otto:error`, `otto:activate`, `otto:reaction` and `otto:move`. All bubble and cross the shadow boundary, and they're typed for `addEventListener`. Without the element, `createOtto(container, options)` returns the same controller.
+
+**Isolation:** Otto lives in a shadow root, so page styles don't reach him. Only the `--otto-*` custom properties do, on purpose: they are the theming hook.
+
+**Lifecycle:**
+- **Mount:** the element mounts when the browser is idle, and the WebGL code loads after that.
+- **Removal:** removing the element disposes everything. The frame loop and observers stop, listeners are removed, sound closes, and the WebGL context is released.
+- **Leak test:** 20 mount and unmount cycles left no WebGL contexts or listeners behind.
+- **Fallbacks:** without WebGL 2 the robot isn't drawn, and `otto:error` says so. Text and ARIA output still work. With reduced motion he snaps instead of walking.
+
+**Dependencies:** React is bundled inside the element, so a page needs nothing else; a React app gets a second, isolated copy. There is no Three.js to share: the robot is one WebGL 2 shader. Before publishing, give `web/package.json` a public name and remove `private`.
+
+**Playground:** with `npm run dev`, open http://localhost:5173/preview/. It has a live theme picker, every method, an `otto:*` event log, an inline Otto, a 20-cycle mount test, and copy-paste snippets. The page's own styles are deliberately hostile, to show that none of them reach Otto.
 
 ### Sound
 

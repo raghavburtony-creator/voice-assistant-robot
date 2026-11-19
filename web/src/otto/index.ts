@@ -17,3 +17,8 @@ export { createStage, type StageController, type StageEvent, type StageFrame, ty
 export { createOttoStage, useStageHost, type Obstacle } from './movement/useStage'
 export { createIdleLifecycle, useIdleLifecycle, type IdleState } from './idle'
 export type { SpeechClock, SpeechProgress } from './audio'
+// Awareness: tell Otto what happens in your app; he decides how to react.
+export { createOttoEvents, OTTO_EVENT_TYPES, type OttoEvent, type OttoEvents, type OttoEventType, type Importance } from './awareness/events'
+export { createReactor, type Reaction, type ReactionRule, type Awareness } from './awareness/reactions'
+// Per-instance mascot settings and theme presets.
+export { defineOttoConfig, OttoConfigProvider, useOttoConfig, THEMES, THEME_NAMES, DEFAULT_OTTO_CONFIG, type OttoConfig, type ThemeName } from './config'

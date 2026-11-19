@@ -34,3 +34,6 @@ body { margin: 0; }
 .lab-meter > div { display: grid; grid-template-rows: 1fr auto; justify-items: center; inline-size: 3rem; }
 .lab-meter span { align-self: end; inline-size: 1rem; border-radius: 0.5rem; background: var(--otto-accent); block-size: 6%; }
 .lab-meter small { font-size: 0.6875rem; opacity: 0.7; }
+/* Places in the lab page that events can happen at. */
+.lab-spot-left { position: fixed; left: 24px; inset-block-end: 40px; inline-size: 60px; block-size: 40px; border: 2px dashed var(--otto-line); border-radius: 8px; }
+.lab-spot-top { position: fixed; left: 45vw; inset-block-start: 8px; inline-size: 80px; block-size: 24px; border: 2px dashed var(--otto-line); border-radius: 8px; }

@@ -62,12 +62,20 @@ export function useReducedMotion(): boolean {
   return reduced
 }
 
-/** WebGL 2 is there (the Clay Robot needs it). Without it, the dock shows only its button. */
+let webgl: boolean | null = null
+/**
+ * WebGL 2 is there (the Clay Robot needs it). Without it, the dock shows only its button. Asked once per page: the probe's
+ * context is released at once, so mounting Otto again and again never piles up WebGL contexts (browsers allow ~16).
+ */
 export function hasWebGL(): boolean {
+  if (webgl !== null) return webgl
   try {
     const canvas = document.createElement('canvas')
-    return !!canvas.getContext('webgl2')
+    const gl = canvas.getContext('webgl2')
+    webgl = !!gl
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
   } catch {
-    return false
+    webgl = false
   }
+  return webgl
 }

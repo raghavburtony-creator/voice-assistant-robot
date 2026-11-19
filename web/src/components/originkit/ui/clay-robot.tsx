@@ -1856,6 +1856,12 @@ export default function ClayRobot({
                 if (buffer) gl.deleteBuffer(buffer)
                 if (vao) gl.deleteVertexArray(vao)
                 if (program) gl.deleteProgram(program)
+                // Otto: give the context back now rather than at garbage collection, so a page that mounts and
+                // unmounts the robot (SPA navigation) never runs into the browser's limit on live WebGL contexts.
+                // Only once the canvas has really left the page: React's StrictMode (and a quick re-run of this
+                // effect) reuses the same canvas, which must keep a live context.
+                const ctx = gl
+                queueMicrotask(() => { if (!canvas.isConnected) ctx.getExtension("WEBGL_lose_context")?.loseContext() })
             }
         }
     }, [])

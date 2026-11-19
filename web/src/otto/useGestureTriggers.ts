@@ -1,5 +1,5 @@
 // Turns the voice session's lifecycle into one-shot gestures. It only watches AssistantStatus transitions and asks the channel
-// to play what GESTURE_SETTINGS names (null = nothing); no gesture name and no animation math lives here.
+// to play what the config's gestures name (null = nothing); no gesture name and no animation math lives here.
 //
 //   previous -> status                    gesture
 //   not live -> listening (server ready)  onConnect (forced); now live
@@ -11,7 +11,7 @@
 // "live" means the session reached listening. A start that ends or fails before that says goodbye to nobody (error still shakes).
 
 import { useEffect, useRef } from 'react'
-import { GESTURE_SETTINGS } from '../otto.config'
+import { DEFAULT_OTTO_CONFIG, useOttoConfig } from './config'
 import type { GestureChannel, GestureName } from './robot/gestures'
 import type { AssistantStatus } from './useVoiceAssistant'
 
@@ -33,7 +33,7 @@ export type Transition = { gesture: GestureName | null; force: boolean; live: bo
 
 /** The lifecycle rules as a pure function of the previous status, the new one, and whether the session was live. */
 export function gestureForTransition(before: AssistantStatus, status: AssistantStatus, live: boolean,
-  settings: LifecycleSettings = GESTURE_SETTINGS, interrupted = false): Transition {
+  settings: LifecycleSettings = DEFAULT_OTTO_CONFIG.gestures, interrupted = false): Transition {
   const none = (nowLive: boolean): Transition => ({ gesture: null, force: false, live: nowLive })
   if (interrupted && live && (status === 'listening' || status === 'speaking')) {
     return { gesture: settings.enabled ? settings.onInterrupt ?? null : null, force: true, live: true, cancel: true }
@@ -56,6 +56,7 @@ export function gestureForTransition(before: AssistantStatus, status: AssistantS
  * (useVoiceAssistant's `interruptions`): each new one plays onInterrupt, with the status change it comes with.
  */
 export function useGestureTriggers(status: AssistantStatus, channel: GestureChannel, interruptions = 0): void {
+  const settings = useOttoConfig().gestures
   const previous = useRef<AssistantStatus>(status)
   const cuts = useRef(interruptions)
   const live = useRef(false)
@@ -66,9 +67,9 @@ export function useGestureTriggers(status: AssistantStatus, channel: GestureChan
     // Same status again (a StrictMode re-run, or a re-render for another reason): nothing happened.
     if (before === status && !cut) return
     previous.current = status
-    const next = gestureForTransition(before, status, live.current, GESTURE_SETTINGS, cut)
+    const next = gestureForTransition(before, status, live.current, settings, cut)
     live.current = next.live
     if (next.cancel) channel.stop()
     if (next.gesture) channel.play(next.gesture, next.force ? { force: true } : undefined)
-  }, [status, channel, interruptions]) // a new channel alone re-runs this with the same status, which does nothing
+  }, [status, channel, interruptions]) // eslint-disable-line react-hooks/exhaustive-deps // a new channel alone re-runs this with the same status, which does nothing
 }

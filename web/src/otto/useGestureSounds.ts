@@ -1,22 +1,20 @@
-// Plays a sound cue when a gesture starts (SOUND_SETTINGS.gestureCues). Sound follows the robot's body language through
+// Plays a sound cue when a gesture starts (the config's sound.gestureCues). Sound follows the robot's body language through
 // gesture events only: nothing in the voice state or a render loop plays sound. Returns the controller, for direct cues.
 
 import { useEffect, useRef } from 'react'
-import { SOUND_SETTINGS } from '../otto.config'
+import { useOttoConfig } from './config'
 import type { GestureChannel, GestureName } from './robot/gestures'
 import { SoundController, type SoundCue } from './sound'
 
 export type GestureSoundSettings = { enabled: boolean; volume: number; cues: Partial<Record<GestureName, SoundCue | null>> }
 
-const DEFAULTS: GestureSoundSettings = {
-  enabled: SOUND_SETTINGS.soundEnabled, volume: SOUND_SETTINGS.soundVolume, cues: SOUND_SETTINGS.gestureCues,
-}
-
 /**
  * One SoundController for as long as the component is mounted (made in an effect, so React's StrictMode re-run gets a
  * fresh one rather than a closed one), hearing `channel`'s gesture starts. `settings` may change between renders.
  */
-export function useGestureSounds(channel: GestureChannel, settings: GestureSoundSettings = DEFAULTS) {
+export function useGestureSounds(channel: GestureChannel, given?: GestureSoundSettings) {
+  const sound0 = useOttoConfig().sound
+  const settings = given ?? { enabled: sound0.soundEnabled, volume: sound0.soundVolume, cues: sound0.gestureCues }
   const sound = useRef<SoundController | null>(null)
   const latest = useRef(settings)
   useEffect(() => { latest.current = settings })

@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import ClayRobot, { type ClayControl } from '../../components/originkit/ui/clay-robot'
-import { GESTURE_SETTINGS, ROBOT_BACKGROUND, ROBOT_COLORS } from '../../otto.config'
+import { useOttoConfig } from '../config'
 import { MOUTH_BARS, type MouthSource } from '../mouth'
 import type { StageFrame } from '../movement/stage'
 import { createGestureController, type GestureChannel } from './gestures'
@@ -51,7 +51,15 @@ const FACE_SPEED: { [K in Exclude<keyof FaceShape, 'color'>]: number } = {
 type FaceKey = keyof typeof FACE_SPEED
 const FACE_KEYS = Object.keys(FACE_SPEED) as FaceKey[]
 
+const rgbCache = new Map<string, [number, number, number]>()
 function hexToRGB(hex: string): [number, number, number] {
+  const hit = rgbCache.get(hex)
+  if (hit) return [...hit]
+  const rgb = parseHex(hex)
+  rgbCache.set(hex, rgb)
+  return [...rgb]
+}
+function parseHex(hex: string): [number, number, number] {
   const h = hex.replace('#', '')
   const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.slice(0, 6), 16)
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
@@ -59,22 +67,27 @@ function hexToRGB(hex: string): [number, number, number] {
 
 export default function ClayScene({ pose, expression, mouth, onActivate, gestures, locomotion, asleep = false }: Props) {
   const calm = useReducedMotion()
+  const config = useOttoConfig()
+  const { colors, background } = config
   // Gesture starts and ends go out through whichever channel this robot is given.
   const channel = useRef(gestures)
   useEffect(() => { channel.current = gestures }, [gestures])
   const controller = useMemo(() => createGestureController({
     onEvent: event => channel.current?.emit(event),
-    intensity: GESTURE_SETTINGS.enabled ? GESTURE_SETTINGS.intensity : 0,
-    reducedIntensity: GESTURE_SETTINGS.reducedIntensity, cooldown: GESTURE_SETTINGS.cooldown,
-  }), [])
+    intensity: config.gestures.enabled ? config.gestures.intensity : 0,
+    reducedIntensity: config.gestures.reducedIntensity, cooldown: config.gestures.cooldown,
+  }), []) // eslint-disable-line react-hooks/exhaustive-deps
+  // A new theme or config changes how big gestures are, without rebuilding anything.
+  useEffect(() => { controller.setIntensity(config.gestures.enabled ? config.gestures.intensity : 0) }, [controller, config.gestures.enabled, config.gestures.intensity])
 
   // What the per-frame update reads; refreshed every render, never rebuilds the robot.
-  const live = useRef({ pose, expression, mouth, calm, locomotion, asleep })
-  useEffect(() => { live.current = { pose, expression, mouth, calm, locomotion, asleep } })
+  const live = useRef({ pose, expression, mouth, calm, locomotion, asleep, glow: config.glow, eyes: colors.eyes })
+  useEffect(() => { live.current = { pose, expression, mouth, calm, locomotion, asleep, glow: config.glow, eyes: colors.eyes } })
 
   useEffect(() => { controller.setReducedMotion(calm) }, [controller, calm])
   // The pose layer: thinking holds a gesture (hand on the chin) until the pose changes.
-  useEffect(() => { controller.hold(pose === 'thinking' ? GESTURE_SETTINGS.whileThinking : null) }, [controller, pose])
+  const whileThinking = config.gestures.whileThinking
+  useEffect(() => { controller.hold(pose === 'thinking' ? whileThinking : null) }, [controller, pose, whileThinking])
   // Gestures requested from outside.
   useEffect(() => gestures?.subscribe(command => {
     if (command.type === 'play') controller.play(command.name, command.options)
@@ -83,8 +96,7 @@ export default function ClayScene({ pose, expression, mouth, onActivate, gesture
   }), [controller, gestures])
 
   const control = useMemo<ClayControl>(() => {
-    const defaultEyes = hexToRGB(ROBOT_COLORS.eyes)
-    const eyeColor: [number, number, number] = [...defaultEyes]
+    const eyeColor: [number, number, number] = hexToRGB(live.current.eyes)
     // The eased base layer: every face value, the lean and the voice level.
     const face: Record<FaceKey, number> = Object.fromEntries(FACE_KEYS.map(k => [k, FACES.happy[k]])) as Record<FaceKey, number>
     const base = { lean: 0, level: 0, sleep: 0, breath: 0 }
@@ -99,7 +111,8 @@ export default function ClayScene({ pose, expression, mouth, onActivate, gesture
       eyeOpen: 1, joy: 0, eyeX: 0, eyeY: 0, eyeTilt: 0, eyeScaleL: 1, eyeScaleR: 1, blinkInterval: 1,
       glow: face.glow, eyeColor, mouth: bars, mouthOn: 0, travel: 0, turn: 0, lean: 0, aim: null,
       update(dt) {
-        const { pose: p, expression: e, mouth: source, calm: still, locomotion: loco, asleep: dozing } = live.current
+        const { pose: p, expression: e, mouth: source, calm: still, locomotion: loco, asleep: dozing, glow, eyes } = live.current
+        const defaultEyes = hexToRGB(eyes)
         const g = controller.update(dt)
         const target = FACES[e]
         let moved = 0
@@ -165,7 +178,7 @@ export default function ClayScene({ pose, expression, mouth, onActivate, gesture
         ctl.eyeScaleL = face.scaleL
         ctl.eyeScaleR = face.scaleR
         ctl.blinkInterval = face.blink
-        ctl.glow = face.glow + base.level * 0.6
+        ctl.glow = (face.glow + base.level * 0.6) * glow
 
         // Keep the robot drawing while anything here moves; let it rest once everything has settled. Breathing alone is
         // slow: a third of the frames is plenty, and saves the GPU while Otto sleeps.
@@ -183,10 +196,10 @@ export default function ClayScene({ pose, expression, mouth, onActivate, gesture
     <div onClick={onActivate} style={{ inlineSize: '100%', blockSize: '100%' }}>
       <ClayRobot
         control={control}
-        colors={ROBOT_COLORS}
-        transparent={ROBOT_BACKGROUND.transparent}
+        colors={colors}
+        transparent={background.transparent}
         blink={!asleep}
-        background={{ top: ROBOT_BACKGROUND.top, bottom: ROBOT_BACKGROUND.bottom, shadow: ROBOT_BACKGROUND.shadow, shadowDepth: ROBOT_BACKGROUND.transparent ? 40 : 24 }}
+        background={{ top: background.top, bottom: background.bottom, shadow: background.shadow, shadowDepth: background.transparent ? 40 : 24 }}
         // Otto's own gestures do the waving; walking about would leave the dock.
         wave={false}
         walk={false}
