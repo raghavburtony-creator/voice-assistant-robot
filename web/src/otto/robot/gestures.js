@@ -14,7 +14,7 @@ export const GESTURE_NAMES = Object.freeze(['welcomeWave', 'celebrate', 'nod', '
 export const isGestureName = value => typeof value === 'string' && GESTURE_NAMES.includes(value)
 
 // A wave: the right hand raised beside the head, wiggling at its wrist.
-const wave = (t, hz, swing, sway) => ({ px: 0.42 + sway * Math.sin(TAU * hz * t), py: 0.62, pz: 0.18, rz: swing * Math.sin(TAU * hz * t) })
+const wave = (t, hz, swing, sway) => ({ px: 0.56 + sway * Math.sin(TAU * hz * t), py: 0.88, pz: 0.3, rz: swing * Math.sin(TAU * hz * t) })
 
 /** Each def: see GestureDef in gestures.d.ts. Offsets are radians (r*) or model units (p*). */
 export const GESTURES = Object.freeze({
@@ -28,8 +28,8 @@ export const GESTURES = Object.freeze({
     sample: (u, t) => {
       const s = Math.sin(TAU * 2.2 * t), pumpL = Math.abs(s) * 0.08, pumpR = Math.abs(Math.cos(TAU * 2.2 * t)) * 0.08
       return {
-        handL: { px: -0.4, py: 0.7 + pumpL, pz: 0.15, rz: 0.35 * s },
-        handR: { px: 0.4, py: 0.7 + pumpR, pz: 0.15, rz: -0.35 * s },
+        handL: { px: -0.54, py: 1.0 + pumpL, pz: 0.25, rz: 0.35 * s },
+        handR: { px: 0.54, py: 1.0 + pumpR, pz: 0.25, rz: -0.35 * s },
         head: { rx: -0.12, py: 0.03 * Math.abs(s) },
       }
     } },
