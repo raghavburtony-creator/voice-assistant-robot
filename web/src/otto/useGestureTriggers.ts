@@ -14,13 +14,10 @@ import { GESTURE_SETTINGS } from '../otto.config'
 import type { GestureChannel, GestureName } from './robot/gestures.js'
 import type { AssistantStatus } from './useVoiceAssistant'
 
-/** `channel` should be stable (create it once); a new object each render is tolerated but only the latest is used. */
+/** `channel` should be stable (create it once); a new object each render still works. */
 export function useGestureTriggers(status: AssistantStatus, channel: GestureChannel): void {
   const previous = useRef<AssistantStatus>(status)
   const live = useRef(false)
-  const channelRef = useRef(channel)
-  channelRef.current = channel
-
   useEffect(() => {
     const before = previous.current
     // Same status again (a StrictMode re-run, or a re-render for another reason): nothing happened.
@@ -28,7 +25,7 @@ export function useGestureTriggers(status: AssistantStatus, channel: GestureChan
     previous.current = status
     if (!GESTURE_SETTINGS.enabled) return
 
-    const fire = (name: GestureName | null, force: boolean) => { if (name) channelRef.current.play(name, force ? { force: true } : undefined) }
+    const fire = (name: GestureName | null, force: boolean) => { if (name) channel.play(name, force ? { force: true } : undefined) }
 
     if (status === 'listening') {
       if (!live.current) { live.current = true; fire(GESTURE_SETTINGS.onConnect, true) }
@@ -39,5 +36,5 @@ export function useGestureTriggers(status: AssistantStatus, channel: GestureChan
       live.current = false
       fire(GESTURE_SETTINGS.onError, true)
     }
-  }, [status])
+  }, [status, channel]) // a new channel alone re-runs this with the same status, which does nothing
 }

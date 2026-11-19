@@ -1,6 +1,8 @@
 // Otto's robot: shared types, where the model is, and how each face and pose looks.
 // The model is built by blender/build_otto.py and served from public/otto/otto.glb.
 
+import { useEffect, useState } from 'react'
+
 export type RobotPose = 'idle' | 'listening' | 'talking' | 'thinking'
 export type RobotExpression = 'happy' | 'searching' | 'excited' | 'alert' | 'resting'
 
@@ -37,6 +39,20 @@ export function nextLine(said: string, text: string): string {
 
 export const reducedMotion = () =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** The visitor's reduced-motion preference, kept up to date if they change it while the page is open. */
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(reducedMotion)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const onChange = () => setReduced(query.matches)
+    onChange()
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return reduced
+}
 
 /** WebGL is there (the robot needs it). Without it, the dock shows only its button. */
 export function hasWebGL(): boolean {

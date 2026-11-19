@@ -8,14 +8,17 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { ROBOT_COLORS } from '../../otto.config'
-import { EYES, GLOW, reducedMotion, ROBOT_MODEL, type RobotExpression, type RobotPose } from './robot'
+import { GESTURE_SETTINGS, ROBOT_COLORS } from '../../otto.config'
+import { createGestureController, type GestureChannel } from './gestures'
+import { EYES, GLOW, ROBOT_MODEL, useReducedMotion, type RobotExpression, type RobotPose } from './robot'
 
 type Props = {
   pose: RobotPose
   expression: RobotExpression
   speechBands?: (count: number) => number[] | null
   onActivate?: () => void
+  /** Gesture requests (waves, nods...) from app code. */
+  gestures?: GestureChannel
 }
 
 const MOUTH_BARS = 5
@@ -35,6 +38,7 @@ type Parts = {
   antenna: THREE.Object3D | null
   tip: THREE.Object3D | null
   handL: THREE.Object3D
+  handLHome: THREE.Vector3
   handR: THREE.Object3D
   handRHome: THREE.Vector3
   glow: THREE.MeshStandardMaterial
@@ -74,19 +78,24 @@ function useOtto(): { scene: THREE.Object3D; parts: Parts } {
     const parts: Parts = {
       root: find('EchoRoot'), head, headHome: head.position.clone(), eyes, eyeHome: eyes.map(eye => eye.position.clone()),
       mouth: Array.from({ length: MOUTH_BARS }, (_, i) => find(`Mouth${i}`)),
-      antenna: scene.getObjectByName('AntennaPivot') ?? null, tip: scene.getObjectByName('AntennaTip') ?? null, handL: find('HandLPivot'), handR: find('HandRPivot'), handRHome: find('HandRPivot').position.clone(),
+      antenna: scene.getObjectByName('AntennaPivot') ?? null, tip: scene.getObjectByName('AntennaTip') ?? null, handL: find('HandLPivot'), handLHome: find('HandLPivot').position.clone(), handR: find('HandRPivot'), handRHome: find('HandRPivot').position.clone(),
       glow: materials.get('Glow') as THREE.MeshStandardMaterial,
     }
     return { scene, parts }
   }, [source])
 }
 
-function Robot({ pose, expression, speechBands, onActivate }: Props) {
+function Robot({ pose, expression, speechBands, onActivate, gestures }: Props) {
   const { scene, parts } = useOtto()
   const pointer = useRef(new THREE.Vector2())
   const blink = useRef({ next: 2 + Math.random() * 3, until: 0 })
-  const nod = useRef(0)
-  const calm = useMemo(reducedMotion, [])
+  const calm = useReducedMotion()
+  // The damped base pose. Gesture offsets are added on top (never damped), so fast gestures keep their shape.
+  const base = useRef({ ry: 0, rx: 0, talk: 0 })
+  const controller = useMemo(() => createGestureController({
+    intensity: GESTURE_SETTINGS.enabled ? GESTURE_SETTINGS.intensity : 0,
+    reducedIntensity: GESTURE_SETTINGS.reducedIntensity, cooldown: GESTURE_SETTINGS.cooldown,
+  }), [])
   const glowColor = useMemo(() => new THREE.Color(), [])
   const level = useRef(0)
 
@@ -99,34 +108,45 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
     return () => window.removeEventListener('pointermove', onMove)
   }, [])
 
-  // A nod when Otto starts listening.
-  useEffect(() => { if (pose === 'listening') nod.current = 1 }, [pose])
+  useEffect(() => { controller.setReducedMotion(calm) }, [controller, calm])
 
-  useFrame((state, delta) => {
+  // The pose layer: thinking holds a gesture (hand on the chin) until the pose changes.
+  useEffect(() => { controller.hold(pose === 'thinking' ? GESTURE_SETTINGS.whileThinking : null) }, [controller, pose])
+
+  // One-shot gestures requested from outside.
+  useEffect(() => gestures?.subscribe(command => {
+    if (command.type === 'play') controller.play(command.name, command.options)
+    else if (command.type === 'hold') controller.hold(command.name, command.options)
+    else controller.stop()
+  }), [controller, gestures])
+
+  useFrame((state, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.1)
     const t = state.clock.elapsedTime
-    const { head, headHome, eyes, eyeHome, mouth, antenna, tip, handL, handR, handRHome, glow } = parts
+    const { head, headHome, eyes, eyeHome, mouth, antenna, tip, handL, handLHome, handR, handRHome, glow } = parts
+    const g = controller.update(delta)
+    const b = base.current
 
-    // Breathing: the head bobs a little on the body, and the arms sway with it.
-    head.position.y = headHome.y + (calm ? 0 : Math.sin(t * 1.6) * 0.012)
-    handL.rotation.x = calm ? 0 : Math.sin(t * 1.6 + 0.6) * 0.08
-    handR.rotation.x = calm ? 0 : Math.sin(t * 1.6 + 1.1) * 0.08
+    // Breathing: the head bobs a little on the body, and the arms sway with it (a gesture can take an arm over).
+    head.position.y = headHome.y + (calm ? 0 : Math.sin(t * 1.6) * 0.012) + g.head.py
+    handL.rotation.x = (calm ? 0 : Math.sin(t * 1.6 + 0.6) * 0.08 * g.baseL) + g.handL.rx
+    handR.rotation.x = (calm ? 0 : Math.sin(t * 1.6 + 1.1) * 0.08 * g.baseR) + g.handR.rx
 
-    // Head: towards the pointer, plus the pose.
-    const look = calm ? { x: 0, y: 0 } : { x: pointer.current.x * 0.45, y: pointer.current.y * 0.2 }
-    nod.current = Math.max(0, nod.current - delta * 1.8)
-    const nodding = calm ? 0 : Math.sin((1 - nod.current) * Math.PI * 2) * 0.18 * nod.current
-    const tilt = pose === 'thinking' ? 0.2 : 0
-    const lean = pose === 'listening' ? 0.08 : pose === 'thinking' ? -0.1 : 0
-    head.rotation.y = damp(head.rotation.y, look.x, delta, 4)
-    head.rotation.x = damp(head.rotation.x, -look.y + lean + nodding, delta, 6)
-    head.rotation.z = damp(head.rotation.z, tilt, delta, 4)
+    // Head: towards the pointer (less while a gesture plays), plus the listening lean, plus the gesture offsets.
+    const look = calm ? { x: 0, y: 0 } : { x: pointer.current.x * 0.45 * g.look, y: pointer.current.y * 0.2 * g.look }
+    const lean = pose === 'listening' ? 0.08 : 0
+    b.ry = damp(b.ry, look.x, delta, 4)
+    b.rx = damp(b.rx, -look.y + lean, delta, 6)
+    head.rotation.y = b.ry + g.head.ry
+    head.rotation.x = b.rx + g.head.rx
+    head.rotation.z = g.head.rz
 
-    // Arms: thinking brings the right one up under the visor, like a hand on the chin; talking moves the left with the voice.
-    const thinking = pose === 'thinking'
-    handR.position.x = damp(handR.position.x, handRHome.x + (thinking ? -0.1 : 0), delta, 5)
-    handR.position.y = damp(handR.position.y, handRHome.y + (thinking ? 0.16 : 0), delta, 5)
-    handR.position.z = damp(handR.position.z, handRHome.z + (thinking ? 0.5 : 0), delta, 5)
-    handL.rotation.z = damp(handL.rotation.z, pose === 'talking' && !calm ? -level.current * 0.4 : 0, delta, 8)
+    // Arms: gestures move the hands from home; talking moves the left with the voice.
+    handL.position.set(handLHome.x + g.handL.px, handLHome.y + g.handL.py, handLHome.z + g.handL.pz)
+    handR.position.set(handRHome.x + g.handR.px, handRHome.y + g.handR.py, handRHome.z + g.handR.pz)
+    b.talk = damp(b.talk, pose === 'talking' && !calm ? -level.current * 0.4 * g.baseL : 0, delta, 8)
+    handL.rotation.z = b.talk + g.handL.rz
+    handR.rotation.z = g.handR.rz
 
     // Antenna, if the model has one: wiggles while thinking; its tip pulses while listening.
     if (antenna) antenna.rotation.z = calm ? 0 : pose === 'thinking' ? Math.sin(t * 9) * 0.12 : damp(antenna.rotation.z, 0, delta)
