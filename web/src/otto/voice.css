@@ -106,13 +106,14 @@
 .voice-assistant__lengths { display: flex; gap: 1rem; margin: 0; padding: 0; border: 0; }
 .voice-assistant__lengths legend { float: left; margin-inline-end: 0.5rem; padding-block: 0.7rem; font-weight: 600; }
 
-/* Otto's dock: bottom right on every page. The robot takes the clicks; the button is for the keyboard and shows when focused. */
-.otto-dock { position: fixed; z-index: 30; inset-inline-end: 0.5rem; inset-block-end: 0.25rem; inline-size: 240px; block-size: 216px; pointer-events: none; }
-@media (max-width: 640px) { .otto-dock { inline-size: 140px; block-size: 126px; } }
-.otto-dock--beside-voice { inset-inline-end: calc(24px + min(420px, 100vw - 32px) - 20px); }
-@media (max-width: 640px) { .otto-dock--beside-voice { visibility: hidden; } }
-.otto-dock__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
-.otto-dock__button { position: absolute; inset-block-end: 1rem; inset-inline-end: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap; }
+/* Otto on his stage: placed along the bottom by movement/useStage.ts (a transform from the left edge), so he can walk.
+   The robot takes the clicks; the dock's button is for the keyboard and shows when focused. */
+.otto-stage { position: fixed; z-index: 30; left: 0; inset-block-end: 0.25rem; inline-size: 240px; block-size: 216px;
+  pointer-events: none; will-change: transform; }
+@media (max-width: 640px) { .otto-stage { inline-size: 140px; block-size: 126px; } }
+.otto-stage__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
+.otto-dock__button { position: absolute; inset-block-end: 1rem; right: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap; }
+.otto-stage[data-stage-side='left'] .otto-dock__button { right: auto; left: calc(100% + 0.5rem); }
 .otto-dock__button:not(:focus) { inline-size: 1px; block-size: 1px; min-block-size: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
 
 /* Shown whenever the page may be listening for "Hey Otto", so listening is never hidden. */
@@ -130,3 +131,5 @@
   background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.12); font-size: 0.9rem; line-height: 1.35; pointer-events: none;
 }
+/* Standing in the left half of the page, the bubble opens to his right so it stays on screen. */
+[data-stage-side='left'] .otto-robot__bubble { inset-inline-end: auto; inset-inline-start: 55%; border-radius: 16px 16px 16px 4px; }

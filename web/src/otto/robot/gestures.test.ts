@@ -14,8 +14,8 @@ function run(c: ReturnType<typeof createGestureController>, seconds: number, eac
 }
 
 describe('gesture definitions', () => {
-  it('has exactly the six Phase 1 gestures', () => {
-    expect([...GESTURE_NAMES].sort()).toEqual(['celebrate', 'goodbyeWave', 'headShake', 'nod', 'thinkingHand', 'welcomeWave'])
+  it('has the six lifecycle gestures and the two idle ones', () => {
+    expect([...GESTURE_NAMES].sort()).toEqual(['celebrate', 'goodbyeWave', 'headShake', 'lookAround', 'nod', 'stretch', 'thinkingHand', 'welcomeWave'])
     expect(isGestureName('nod')).toBe(true)
     expect(isGestureName('dance')).toBe(false)
   })
@@ -52,6 +52,15 @@ describe('gesture definitions', () => {
 })
 
 describe('blending and arbitration', () => {
+  it('idle gestures never cut into another gesture, and anything cuts into them', () => {
+    const c = createGestureController()
+    expect(c.play('nod')).toBe(true)
+    expect(c.play('lookAround')).toBe(false)
+    run(c, 1)
+    expect(c.play('lookAround')).toBe(true)
+    expect(c.play('nod')).toBe(true)
+  })
+
   it('crossfades a wave into a goodbye without the arm overshooting either', () => {
     const c = createGestureController()
     c.play('welcomeWave', { force: true }); run(c, 1)

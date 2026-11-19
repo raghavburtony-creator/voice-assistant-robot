@@ -9,7 +9,7 @@
 //         swing  forward (+) / back at the shoulder (rad)      ext  stretch the clay arm, 0..1
 //   face  joy  happy arc eyes, 0..1          lookX / lookY  shift the gaze on the screen
 
-export const GESTURE_NAMES = ['welcomeWave', 'celebrate', 'nod', 'headShake', 'thinkingHand', 'goodbyeWave'] as const
+export const GESTURE_NAMES = ['welcomeWave', 'celebrate', 'nod', 'headShake', 'thinkingHand', 'goodbyeWave', 'lookAround', 'stretch'] as const
 export type GestureName = (typeof GESTURE_NAMES)[number]
 
 export const isGestureName = (value: unknown): value is GestureName =>
@@ -81,6 +81,24 @@ export const GESTURES: Readonly<Record<GestureName, GestureDef>> = {
       head: { rz: 0.16, rx: -0.1, ry: 0.05 * Math.sin(0.5 * t) },
       face: { lookX: -0.22, lookY: 0.22 },
     }) },
+  // Idle: a slow look to one side, then the other, eyes leading the head. The lowest priority: anything else cuts in.
+  lookAround: { duration: 3.4, attack: 0.5, release: 0.6, parts: ['head', 'face'], look: 0.15, priority: -1,
+    sample: u => {
+      const side = Math.sin(TAU * u) * smoothstep(0, 0.15, u) * (1 - smoothstep(0.85, 1, u))
+      const eyes = Math.sin(TAU * Math.min(1, u * 1.08))
+      return { head: { ry: 0.38 * side, rx: -0.05 * Math.abs(side) }, face: { lookX: 0.22 * eyes, lookY: 0.04 } }
+    } },
+  // Idle: both arms up and out, a lean back, and down again, as after sitting still too long.
+  stretch: { duration: 2.6, attack: 0.6, release: 0.7, parts: ['handL', 'handR', 'head', 'face'], look: 0.2, priority: -1,
+    sample: u => {
+      const up = smoothstep(0.05, 0.4, u) * (1 - smoothstep(0.7, 0.98, u))
+      return {
+        handL: { raise: 1.5 * up, swing: 0, ext: 0.7 * up },
+        handR: { raise: 1.5 * up, swing: 0, ext: 0.7 * up },
+        head: { rx: -0.16 * up, lift: 0.12 * up },
+        face: { joy: 0.6 * up },
+      }
+    } },
 }
 
 export type GestureFrame = Channels & {

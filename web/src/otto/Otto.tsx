@@ -8,11 +8,19 @@
 //   const gestures = useMemo(createGestureChannel, [])
 //   <Otto gestures={gestures} ... />   then   gestures.play('celebrate')
 //
+// Movement: Otto walks aside for the panel and back by himself. To send him somewhere, pass a stage the same way:
+//
+//   const stage = useMemo(createOttoStage, [])
+//   <Otto stage={stage} ... />   then   await stage.moveToElement('#cart'); gestures.play('celebrate')
+//
 // Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, SHORTCUT_KEY, type PageId } from '../otto.config'
+import type { StageController } from './movement/stage'
+import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
+import type { IdleControls } from './OttoStage'
 import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
@@ -30,6 +38,12 @@ type Props = {
   showRobot?: boolean
   /** Lets your code play gestures (`gestures.play('celebrate')`). Optional; keep the same object between renders. */
   gestures?: GestureChannel
+  /** Lets your code move Otto (`stage.moveToElement('#cart')`; createOttoStage). Optional; keep the same object. */
+  stage?: StageController
+  /** For tests and the lab: a stand-in for the server's WebSocket. */
+  createSocket?: (url: string) => WebSocket
+  /** For the lab: set to the idle lifecycle's controls. */
+  idleControls?: { current: IdleControls | null }
 }
 
 const WAKE_TEXT: Partial<Record<WakeState, string>> = {
@@ -38,14 +52,16 @@ const WAKE_TEXT: Partial<Record<WakeState, string>> = {
   blocked: `“Hey ${ASSISTANT_NAME}” is off: the browser refused the microphone. Allow it for this site, then turn it on again`,
 }
 
-export default function Otto({ page, onAction, showRobot = true, gestures }: Props) {
+export default function Otto({ page, onAction, showRobot = true, gestures, stage, createSocket, idleControls }: Props) {
   const ownChannel = useMemo(createGestureChannel, [])
   const channel = gestures ?? ownChannel
+  const ottoStage = useOwnStage(stage)
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction })
-  const { status, sendText, start, stop, transcript, mouth } = assistant
-  useGestureTriggers(status, channel)
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction, createSocket })
+  const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
+  // Barge-ins too: whatever Otto was doing stops, and he nods (GESTURE_SETTINGS.onInterrupt) as he goes back to listening.
+  useGestureTriggers(status, channel, interruptions)
   // Chirps follow the gestures (SOUND_SETTINGS.gestureCues), never the voice state directly.
   useGestureSounds(channel)
   /** What Otto is saying now, for the robot to mouth. */
@@ -105,7 +121,8 @@ export default function Otto({ page, onAction, showRobot = true, gestures }: Pro
       <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
     </div>}
     {showRobot
-      ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} gestures={channel} onTalk={open ? () => {} : openPanel} />
+      ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
+          idleControls={idleControls} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>

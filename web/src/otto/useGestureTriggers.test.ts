@@ -47,4 +47,14 @@ describe('voice lifecycle → gestures', () => {
     expect(session(['idle', 'connecting', 'listening', 'idle'], off)).toEqual([])
     expect(gestureForTransition('connecting', 'listening', false, off).live).toBe(true)
   })
+
+  it('a barge-in stops whatever plays and nods (forced) instead of the turn-end nod', () => {
+    const settings = { ...SETTINGS, onInterrupt: 'headShake' as const }
+    expect(gestureForTransition('speaking', 'listening', true, settings, true))
+      .toEqual({ gesture: 'headShake', force: true, live: true, cancel: true })
+    // Without a barge-in the same change is a turn end.
+    expect(gestureForTransition('speaking', 'listening', true, settings).gesture).toBe('nod')
+    // No session, no barge-in.
+    expect(gestureForTransition('idle', 'idle', false, settings, true).gesture).toBeNull()
+  })
 })

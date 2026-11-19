@@ -88,10 +88,52 @@ export const GESTURE_SETTINGS = {
   onError: 'headShake',
   /** Held while Otto is thinking (connecting). */
   whileThinking: 'thinkingHand',
+  /** The visitor cut Otto off mid-sentence (barge-in): whatever he was doing stops, and he plays this instead. */
+  onInterrupt: 'nod',
+  /** Played now and then while nobody is doing anything (IDLE_SETTINGS), taking turns. Empty for none. */
+  idle: ['lookAround', 'stretch'],
 } as const satisfies {
   enabled: boolean; intensity: number; reducedIntensity: number; cooldown: number
   onConnect: GestureName | null; onDisconnect: GestureName | null; onTurnEnd: GestureName | null
-  onError: GestureName | null; whileThinking: GestureName | null
+  onError: GestureName | null; whileThinking: GestureName | null; onInterrupt: GestureName | null
+  idle: readonly GestureName[]
+}
+
+/**
+ * Otto's movement (web/src/otto/movement/stage.ts): he walks along the bottom of the page, steps aside for the voice panel
+ * and walks back when it closes, and goes where your code sends him (`<Otto stage={stage} />`, `stage.moveToElement('#cart')`).
+ * With prefers-reduced-motion he does not walk: he moves straight to the spot instead.
+ */
+export const MOVEMENT_SETTINGS = {
+  /** Off: Otto stays at home, only stepping (without walking) clear of the panel; commands to go elsewhere are refused. */
+  movementEnabled: true,
+  /** Top walking speed, px a second. */
+  moveSpeed: 260,
+  /** Kept clear at the left and right edges of the page (px). */
+  stageMargins: { left: 8, right: 8 },
+  /** Where Otto normally stands, 0 (left) to 1 (right). */
+  home: 1,
+  /** Space kept between Otto and anything he keeps clear of (px). */
+  obstacleGap: 16,
+  /** Selectors of fixed parts of your page Otto should never stand in front of (a cookie bar, a chat button...). */
+  avoid: [] as string[],
+  /** Turn toward a click elsewhere on the page for a moment (his head already follows the cursor). */
+  noticeClicks: true,
+  /**
+   * Wander a little near home while nobody is doing anything. Off by default: wherever Otto stands he covers the page
+   * under him, and a robot strolling over your footer's buttons gets in the way.
+   */
+  roam: false,
+}
+
+/**
+ * Otto on his own: after `idleLookAroundMs` with nothing happening he looks about now and then (GESTURE_SETTINGS.idle), and
+ * after `sleepTimeoutMs` he dozes off (eyes shut, dim glow, slow breathing) until the cursor comes over him, a click, or a key.
+ * A voice session keeps him awake.
+ */
+export const IDLE_SETTINGS = {
+  idleLookAroundMs: 20_000,
+  sleepTimeoutMs: 120_000,
 }
 
 /**
@@ -110,8 +152,24 @@ export const SOUND_SETTINGS = {
     headShake: 'chirpNegative',
     celebrate: 'chirpCelebration',
     goodbyeWave: 'chirpGoodbye',
+    lookAround: null,
+    stretch: null,
   },
 } as const satisfies { soundEnabled: boolean; soundVolume: number; gestureCues: Record<GestureName, SoundCue | null> }
+
+/**
+ * Cutting Otto off by talking over him (open mic). While Otto is audible the microphone sends nothing (browsers do not
+ * cancel his echo reliably), so the page itself listens for a voice clearly louder than his echo: a frame peak of at
+ * least `level` (0..1) held for `holdMs`. Raise `level` if Otto cuts himself off on loud speakers; lower it if talking
+ * over him does not work. Pressing Talk (push-to-talk) or "Stop speaking" always cuts him off.
+ */
+export const BARGE_IN = {
+  enabled: true,
+  level: 0.22,
+  holdMs: 200,
+  /** The last frames held back (50 ms each) that are sent once he is cut off, so the first words reach the server. */
+  keepFrames: 8,
+}
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */
 export function apiBase(): string {

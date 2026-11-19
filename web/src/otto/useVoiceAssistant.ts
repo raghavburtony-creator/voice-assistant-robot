@@ -4,14 +4,14 @@
 // messages.ts (open a page, run a command), and each one is checked again here, because it arrives from a model.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Recorder, SpeechPlayer } from './audio'
+import type { Recorder, SpeechClock, SpeechPlayer } from './audio'
 import {
   readAnswerLength, readMicConsent, readMicTalk, saveAnswerLength, saveMicConsent, saveMicTalk,
   type AnswerLength, type MicConsent, type MicTalk,
 } from './consent'
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
-import { apiBase, ASSISTANT_NAME, COMMAND_LABELS, PAGES } from '../otto.config'
+import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES } from '../otto.config'
 import { parseServerMessage, toAssistantAction, type AssistantAction } from './messages'
 
 export type { AssistantAction } from './messages'
@@ -63,10 +63,14 @@ type Options = {
   language: string
   page: string
   onAction: (action: AssistantAction) => void
+  /** For tests and the lab: make the socket (a stand-in for the server). Default: a real WebSocket. */
+  createSocket?: (url: string) => WebSocket
 }
 
 const MAX_ENTRIES = 40
 const MIC_HEARD_LEVEL = 0.02
+/** One recorder frame (audio.ts FRAME_SAMPLES at 16 kHz). */
+const FRAME_MS = 50
 /** 5 seconds of 50 ms frames. */
 const SILENT_WARNING_FRAMES = 100
 /** Screens republish on every keystroke; forward at most this often per screen. */
@@ -105,8 +109,11 @@ export function loadAssistantAudio(): Promise<AudioModule> {
   return audioLoad
 }
 
-export function useVoiceAssistant({ language, page, onAction }: Options) {
+export function useVoiceAssistant({ language, page, onAction, createSocket }: Options) {
   const [status, setStatus] = useState<AssistantStatus>('idle')
+  /** Counts barge-ins (the visitor cut Otto off), so the robot can react to each one. */
+  const [interruptions, setInterruptions] = useState(0)
+  const socketFactory = useRef(createSocket)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
   const [error, setError] = useState('')
   const [errorCode, setErrorCode] = useState('')
@@ -149,6 +156,7 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
   useEffect(() => {
     actionRef.current = onAction
     pageRef.current = page
+    socketFactory.current = createSocket
   })
 
   const entries = useRef<TranscriptEntry[]>([])
@@ -175,6 +183,9 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
   }, [])
 
   const stopContext = useRef<(() => void) | null>(null)
+  const countInterruption = useCallback(() => setInterruptions(n => n + 1), [])
+  // Set once interrupt() exists (below); the recorder's frame callback reads it.
+  const interruptRef = useRef<() => boolean>(() => false)
 
   const forwardContext = useCallback((ws: WebSocket) => {
     const send = (update: ContextUpdate) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'context', ...update })) }
@@ -283,13 +294,33 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
     setMicSilent(false)
     let quietFrames = 0
     let heard = false
+    // Barge-in: frames held back while Otto is audible, and how long the voice has been loud over him.
+    const held: ArrayBuffer[] = []
+    let loudFor = 0
     audio.startRecorder(frame => {
       if (socket.current !== ws || !live.current) return
       // Frames that are not sent are not counted for the meter or the silence warning either.
-      if (!transmitting()) { levelRef.current = 0; return }
-      // Browser echo cancellation misses Web Audio playback, so the guide would hear itself and cut itself off.
+      if (!transmitting()) { levelRef.current = 0; held.length = 0; loudFor = 0; return }
+      // Browser echo cancellation misses Web Audio playback, so the guide would hear itself and cut itself off: while
+      // the guide is audible frames are held back, not sent. Only a voice clearly louder than Otto's echo, for a
+      // moment (BARGE_IN), cuts him off; then the held frames go first, so the start of what was said is not lost.
       // While the guide is audible the listener is not "quiet", so the open mic's 60 seconds wait.
-      if (player.current?.busy) { levelRef.current = 0; lastSound.current = Date.now(); return }
+      if (player.current?.busy) {
+        levelRef.current = 0
+        lastSound.current = Date.now()
+        if (!BARGE_IN.enabled || !player.current.playing) { held.length = 0; loudFor = 0; return }
+        held.push(frame)
+        if (held.length > BARGE_IN.keepFrames) held.shift()
+        loudFor = audio.frameLevel(frame) >= BARGE_IN.level ? loudFor + FRAME_MS : 0
+        if (loudFor < BARGE_IN.holdMs) return
+        loudFor = 0
+        interruptRef.current()
+        if (ws.readyState === WebSocket.OPEN) held.forEach(f => ws.send(f))
+        held.length = 0
+        return
+      }
+      held.length = 0
+      loudFor = 0
       if (ws.readyState === WebSocket.OPEN) ws.send(frame)
       const peak = audio.frameLevel(frame)
       levelRef.current = peak
@@ -328,7 +359,8 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
     speech.onIdle = () => setStatus(current => current === 'speaking' ? 'listening' : current)
     void speech.resume()
 
-    const ws = new WebSocket(socketUrl(SOCKET_PATH))
+    const url = socketUrl(SOCKET_PATH)
+    const ws = socketFactory.current ? socketFactory.current(url) : new WebSocket(url)
     ws.binaryType = 'arraybuffer'
     socket.current = ws
     wakeTimer.current = window.setTimeout(() => { wakeTimer.current = undefined; setWaking(true) }, WAKING_AFTER_MS)
@@ -369,10 +401,15 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
           addTranscript(message.role, message.text)
           break
         case 'interrupted':
+          // The server heard the visitor over Otto (its own voice detection). If Otto was still audible here, that is
+          // a barge-in; if this page already cut him off (interrupt()), it is the server catching up.
+          if (player.current?.playing) countInterruption()
           player.current?.flush()
+          player.current?.endTurn()
           openEntry.current = null
           break
         case 'turn_complete':
+          player.current?.endTurn()
           openEntry.current = null
           break
         case 'action':
@@ -451,13 +488,22 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
   const stop = useCallback(() => { teardown(); setStatus('idle') }, [teardown])
 
   /**
-   * Cuts the guide's sound here and keeps the conversation open. The server may still finish its turn
-   * only what is playing in this page stops.
+   * Barge-in: cuts Otto off mid-sentence and goes back to listening. What is playing stops at once (queued audio
+   * stopped, disconnected and dropped), and the rest of the turn still arriving from the server is not played. The
+   * conversation stays open. Called by the visitor's voice (BARGE_IN), Talk, "Stop speaking", or your code.
    */
-  const stopSpeaking = useCallback(() => {
-    player.current?.flush()
+  const interrupt = useCallback(() => {
+    const speech = player.current
+    if (!speech || (!speech.playing && status !== 'speaking')) return false
+    const wasPlaying = speech.playing
+    speech.interrupt()
+    openEntry.current = null
+    if (wasPlaying) countInterruption()
     setStatus(current => current === 'speaking' ? 'listening' : current)
-  }, [])
+    return true
+  }, [status, countInterruption])
+  useEffect(() => { interruptRef.current = interrupt })
+  const stopSpeaking = interrupt
 
   /** Takes back the newest action by sending its inverse the way a server action is sent. Undoing is not itself undoable. */
   const undo = useCallback(() => {
@@ -478,11 +524,12 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
     } else muteNow()
   }, [armQuiet])
 
-  /** Push-to-talk's Talk: frames are sent while it is pressed. Releasing it ends the audio stream. */
+  /** Push-to-talk's Talk: frames are sent while it is pressed. Releasing it ends the audio stream. Pressing it over Otto cuts him off. */
   const toggleTalk = useCallback(() => {
     const next = !talkingRef.current
     talkingRef.current = next
     setTalking(next)
+    if (next) interruptRef.current()
     if (!next) { levelRef.current = 0; sendMicOff() }
   }, [])
 
@@ -526,9 +573,11 @@ export function useVoiceAssistant({ language, page, onAction }: Options) {
 
   /** Otto's mouth: five bars (0 to 1) from the voice's speech bands, or null once quiet. Read it every frame; it renders nothing. */
   const mouth = useCallback<MouthSource>(() => player.current?.mouth() ?? null, [])
+  /** How far this turn of Otto's speech has played (seconds played and received), for the speech bubble. */
+  const speech = useCallback<SpeechClock>(() => player.current?.clock() ?? null, [])
 
   return {
-    mouth,
+    mouth, speech, interrupt, interruptions,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
     start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,

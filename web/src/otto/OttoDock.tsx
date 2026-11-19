@@ -1,9 +1,12 @@
-// Otto, docked bottom right. A click on the robot (or the dock's button, from the keyboard) opens the voice guide. While the guide
-// is open the robot steps beside the panel and mouths what Otto says; its chest bars follow the real voice.
+// Otto, docked along the bottom of the page (at MOVEMENT_SETTINGS.home: bottom right by default). A click on the robot (or
+// the dock's button, from the keyboard) opens the voice guide. When the guide opens Otto turns and walks aside to stand
+// beside it, and walks back home when it closes; there he mouths what he says, and the bubble keeps pace with his voice.
 
 import { ASSISTANT_NAME } from '../otto.config'
+import type { SpeechClock } from './audio'
 import type { MouthSource } from './mouth'
-import OttoRobot from './robot/OttoRobot'
+import type { StageController } from './movement/stage'
+import OttoStage, { type IdleControls } from './OttoStage'
 import type { GestureChannel } from './robot/gestures'
 import type { RobotExpression, RobotPose } from './robot/robot'
 import { Button } from './ui'
@@ -11,13 +14,16 @@ import type { AssistantStatus } from './useVoiceAssistant'
 
 type Props = {
   status: AssistantStatus
-  /** The voice panel is open: the dock steps aside, and the button goes (the panel has its own controls). */
+  /** The voice panel is open: Otto keeps clear of it, and the button goes (the panel has its own controls). */
   voiceOpen: boolean
   /** What Otto is saying now (empty when quiet). */
   line: string
   mouth: MouthSource
+  speech?: SpeechClock
   onTalk: () => void
-  gestures?: GestureChannel
+  gestures: GestureChannel
+  stage: StageController
+  idleControls?: { current: IdleControls | null }
 }
 
 /** How each voice status looks on the robot (the lab reuses these). */
@@ -27,12 +33,16 @@ export const poseFor = (status: AssistantStatus): RobotPose =>
 export const expressionFor = (status: AssistantStatus): RobotExpression =>
   status === 'error' ? 'alert' : status === 'connecting' ? 'searching' : status === 'speaking' ? 'excited' : 'happy'
 
-export default function OttoDock({ status, voiceOpen, line, mouth, onTalk, gestures }: Props) {
+/** The voice panel, which Otto steps aside for. */
+const PANEL: readonly string[] = ['.voice-assistant']
+
+export default function OttoDock({ status, voiceOpen, line, mouth, speech, onTalk, gestures, stage, idleControls }: Props) {
+  const session = status === 'connecting' || status === 'listening' || status === 'speaking'
   return (
-    <div className={voiceOpen ? 'otto-dock otto-dock--beside-voice' : 'otto-dock'}>
-      <OttoRobot className="otto-dock__robot" pose={poseFor(status)} expression={expressionFor(status)}
-        say={voiceOpen ? line : ''} mouth={mouth} gestures={gestures} onActivate={onTalk} />
+    <OttoStage className="otto-dock" stage={stage} pose={poseFor(status)} expression={expressionFor(status)}
+      say={voiceOpen ? line : ''} mouth={mouth} speech={speech} gestures={gestures} onActivate={onTalk}
+      busy={voiceOpen || session} obstacles={voiceOpen ? PANEL : undefined} obstaclesKey={voiceOpen} idleControls={idleControls}>
       {!voiceOpen && <Button variant="tonal" className="otto-dock__button" onClick={onTalk}>Talk to {ASSISTANT_NAME}</Button>}
-    </div>
+    </OttoStage>
   )
 }

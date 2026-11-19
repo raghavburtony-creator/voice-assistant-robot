@@ -11,9 +11,21 @@ body { margin: 0; }
 /* Robot lab only. */
 .lab-hint { margin: 0 0 0.5rem; font-size: 0.875rem; opacity: 0.75; }
 .lab-log { margin: 0; padding: 0; list-style: none; font: 0.8125rem/1.6 ui-monospace, monospace; min-block-size: 8rem; }
-.lab { display: grid; grid-template-columns: minmax(260px, 1fr) 420px; gap: 1rem; max-inline-size: 64rem; }
+.lab { display: grid; grid-template-columns: minmax(260px, 1fr) 320px; gap: 1rem; max-inline-size: 72rem; }
 @media (max-width: 760px) { .lab { grid-template-columns: 1fr; } }
-.lab-stage { block-size: 460px; position: sticky; inset-block-start: 1rem; }
+.lab-side { position: sticky; inset-block-start: 1rem; align-self: start; display: grid; gap: 0.5rem; }
+/* Room at the bottom for Otto's stage. */
+.lab { padding-block-end: 240px; }
+.lab-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block-end: 0.5rem; }
+.lab-target { margin-inline-start: 1.5rem; }
+/* A dot that drifts to and fro above Otto's stage, for "follow". */
+.lab-mover { position: fixed; z-index: 20; inset-block-end: 260px; left: 15vw; inline-size: 18px; block-size: 18px; border-radius: 50%;
+  background: var(--otto-accent); opacity: 0.25; }
+.lab-mover.is-moving { opacity: 1; animation: lab-drift 9s ease-in-out infinite alternate; }
+@keyframes lab-drift { to { left: 80vw; } }
+.lab-panel { position: fixed; z-index: 40; inset-inline-end: 24px; inset-block-end: 24px; inline-size: 360px; block-size: 300px;
+  display: grid; place-items: center; padding: 1rem; border-radius: var(--otto-radius); border: 2px dashed var(--otto-line);
+  background: var(--otto-surface); color: var(--otto-muted); text-align: center; }
 .lab-inline { display: inline-flex; align-items: center; gap: 0.4rem; margin-inline-end: 1rem; }
 .lab-file { position: relative; cursor: pointer; }
 .lab-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

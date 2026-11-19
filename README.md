@@ -25,7 +25,13 @@ npm run dev                   # http://localhost:5173
 
 Click the robot, or press **Alt+O** (change it with `SHORTCUT_KEY` in `web/src/otto.config.ts`), and say "Take me to About" or "Show me a message".
 
-To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose, all seven faces and every gesture; the mouth from a fake voice or any audio file you pick, with a meter of the five bands; each sound cue; and a simulated voice session ("Run a conversation") that plays the lifecycle gestures through the same rules as the app, with a live log of gesture events.
+To try the robot without a key or a server, open http://localhost:5173/lab.html. Otto stands along the bottom of the page there, as in an app, and you can test each part on its own:
+- **Movement**: walk left, centre, right or home, to a target, away from it, turn toward it, look at it, follow a moving dot, stop mid-walk, and dodge a simulated panel. Speed and a reduced-motion snap are adjustable, and every departure and arrival is logged.
+- **Idle and sleep**: skip ahead to idle or to sleep, or wake him. Short timeouts are on by default.
+- **Body**: every pose, all seven faces and every gesture.
+- **Mouth and sound**: the mouth from a fake voice or any audio file, with a meter of the five bands, and each sound cue.
+- **A simulated voice session**: "Run a conversation" plays the lifecycle gestures through the same rules as the app.
+- **The real Otto against a simulated Gemini server**: the panel, streamed synthetic speech through the real speech player, the bubble in step with the audio, and barge-in from either side.
 
 Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`.
 
@@ -79,7 +85,15 @@ useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.
 - Every action is checked twice: by the tool on the server, and by `toAssistantAction` in the browser. Most can be undone from the panel.
 - The robot is only a picture. It is hidden from screen readers; the panel shows everything Otto says as text.
-- Otto's mouth follows its real voice: five bars from five speech bands (`web/src/otto/mouth.ts`): the centre bar is vowel pitch (85-300 Hz), the inner pair the formants (300 Hz-2 kHz), the outer pair consonants and sibilants (2-4 kHz). A noise gate shuts the mouth in pauses, and bars rise in ~25 ms and fall in ~140 ms. The live voice, an audio file in the lab and the lab's fake voice all go through the same `MouthAnalyzer`. With reduced motion the mouth still moves; only body motion stops. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
+- Otto's mouth follows its real voice: five bars from five speech bands (`web/src/otto/mouth.ts`): the centre bar is vowel pitch (85-300 Hz), the inner pair the formants (300 Hz-2 kHz), the outer pair consonants and sibilants (2-4 kHz). A noise gate shuts the mouth in pauses, and bars rise in ~25 ms and fall in ~140 ms. The live voice, an audio file in the lab and the lab's fake voice all go through the same `MouthAnalyzer`. With reduced motion the mouth still moves; only body motion stops. The speech bubble shows the transcript as far as the audio has actually played, read from the speech player's own clock. It is held to at most 24 characters a second, so a transcript that arrives ahead of its audio does not run ahead. Without a clock, as in the lab's fake voice, it types at `SPEAK_CPS`.
+- Barge-in: cut Otto off and he stops at once. Queued audio is stopped and disconnected, and the rest of his turn still arriving from the server is dropped. The mouth closes, whatever gesture was playing stops, and he nods (`GESTURE_SETTINGS.onInterrupt`, with its chirp) as he goes back to listening. Four things can cut him off:
+  - the server hearing the visitor;
+  - the panel's Stop talking;
+  - pressing Talk;
+  - with an open mic, a voice clearly louder than his echo.
+
+  While Otto is audible the microphone sends nothing, because browsers do not cancel his echo reliably. So the page itself listens for that louder voice (`BARGE_IN` in `otto.config.ts`), then sends what it held back, so the first words are not lost. `BARGE_IN.level` needs tuning on real speakers and microphones.
+- Autoplay: the speech player is made inside the Start click. Made any other way ("Hey Otto"), it may start suspended. Its chunks are then queued, not dropped, and play once the visitor's next click, tap or key (Alt+O too) resumes it.
 - "Hey Otto" uses the browser's speech recognition. In Chrome and Edge that sends microphone sound to the browser maker while it listens. It is off until the visitor turns it on, and a banner shows whenever it is listening.
 
 ## Otto's robot
@@ -97,7 +111,7 @@ Colours (clay, visor, eyes) and the backdrop are `ROBOT_COLORS` and `ROBOT_BACKG
 
 ### Gestures
 
-Otto has six short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake` and `thinkingHand` (held while thinking). They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
+Otto has eight short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake`, `thinkingHand` (held while thinking), and two idle ones, `lookAround` and `stretch`, which anything else cuts into. They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
 
 To play one from your own code, make a channel once and pass it to `<Otto>`. The same channel tells you when gestures start and end:
 
@@ -109,6 +123,40 @@ useEffect(() => gestures.onEvent(event => console.log(event.type, event.name)), 
 ```
 
 How it fits together: the voice status goes through `gestureForTransition` (`web/src/otto/useGestureTriggers.ts`, a pure function) to decide what plays; the channel carries that, and anything your code plays, to the robot; `ClayScene.tsx` runs one gesture controller per robot and reports starts and ends back on the channel. A new gesture interrupts the current one if its priority is the same or higher (celebrate > waves and head shake > nod), never queues, and blends in while the old one blends out.
+
+### Movement
+
+Otto walks along the bottom of the page (`web/src/otto/movement/stage.ts`, pure logic; `useStage.ts` moves the element). When the voice panel opens he turns, walks aside and stands beside it, and he walks back home when it closes. On a phone, where the panel covers the whole bottom, he hides until it closes. A move goes:
+1. He turns toward the destination.
+2. He walks, speeding up and slowing to stop on the spot. The clay robot's own legs step in time with the distance covered, so his feet do not slide. His body turns and leans the way he goes, and his head leads.
+3. He turns back to face you, and cursor tracking fades back in.
+
+A reversal mid-walk brakes, turns, then walks back. Your code says where he should go, and the stage works out how:
+
+```tsx
+const stage = useMemo(createOttoStage, [])
+<Otto stage={stage} gestures={gestures} /* ... */ />
+if (await stage.moveToElement('#cart')) gestures.play('celebrate')   // true on arrival, false if stopped or superseded
+stage.moveToX(0.3); stage.goHome(); stage.moveAwayFrom('.toast'); stage.stop()
+stage.turnToward('#cart'); stage.lookAt('#cart', 2)                    // orient, or look, without walking
+stage.moveToElement('.marker', { follow: true })                       // keep going to it as it moves
+stage.onEvent(e => console.log(e.type))                                // depart, arrive, cancel, hidden
+```
+
+One destination is kept until the next command. Obstacles only bend it: the voice panel, and any selectors in `MOVEMENT_SETTINGS.avoid`. An element on the stage itself is stood beside, not on. A click elsewhere on the page makes him turn toward it for a moment (`noticeClicks`); his head already follows the cursor.
+
+Settings are in `MOVEMENT_SETTINGS`:
+- `movementEnabled`: off, Otto stays home, only stepping clear of the panel, and refuses other commands.
+- `moveSpeed`, `stageMargins`, `home` and `obstacleGap`.
+- `roam`: wander near home when idle. Off by default, because a robot strolling over your footer's buttons gets in the way.
+
+With prefers-reduced-motion he does not walk: he moves straight to the spot.
+
+### Idle and sleep
+
+After `IDLE_SETTINGS.idleLookAroundMs` with nothing happening, Otto looks about now and then, taking turns through the gestures in `GESTURE_SETTINGS.idle` (`lookAround`, `stretch`).
+
+After `sleepTimeoutMs` he dozes off: eyes shut, dim glow, head bowed, slow breathing, at a third of the frame rate. He wakes when the cursor comes over him, on a click or tap, or on a key press (the hotkey included). Merely moving the cursor or scrolling keeps him awake but does not wake him, so reading the page does not disturb him. A voice session or the panel open keeps him awake. The lifecycle is `web/src/otto/idle.ts`, a state machine with a test suite.
 
 ### Sound
 

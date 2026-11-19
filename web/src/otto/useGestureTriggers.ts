@@ -6,6 +6,7 @@
 //   speaking -> listening, while live     onTurnEnd
 //   live     -> idle | ended              onDisconnect (forced); not live   (idle covers stop() from closing the panel)
 //   anything -> error                     onError (forced); not live
+//   a barge-in (the visitor cut Otto off)  whatever plays stops, then onInterrupt (forced), instead of onTurnEnd
 //
 // "live" means the session reached listening. A start that ends or fails before that says goodbye to nobody (error still shakes).
 
@@ -21,15 +22,22 @@ export type LifecycleSettings = {
   onTurnEnd: GestureName | null
   onDisconnect: GestureName | null
   onError: GestureName | null
+  onInterrupt?: GestureName | null
 }
 
-/** What one status change means: the gesture to play (or null), whether it is forced, and whether the session is live after it. */
-export type Transition = { gesture: GestureName | null; force: boolean; live: boolean }
+/**
+ * What one status change means: the gesture to play (or null), whether it is forced, whether whatever plays is stopped
+ * first, and whether the session is live after it.
+ */
+export type Transition = { gesture: GestureName | null; force: boolean; live: boolean; cancel?: boolean }
 
 /** The lifecycle rules as a pure function of the previous status, the new one, and whether the session was live. */
 export function gestureForTransition(before: AssistantStatus, status: AssistantStatus, live: boolean,
-  settings: LifecycleSettings = GESTURE_SETTINGS): Transition {
+  settings: LifecycleSettings = GESTURE_SETTINGS, interrupted = false): Transition {
   const none = (nowLive: boolean): Transition => ({ gesture: null, force: false, live: nowLive })
+  if (interrupted && live && (status === 'listening' || status === 'speaking')) {
+    return { gesture: settings.enabled ? settings.onInterrupt ?? null : null, force: true, live: true, cancel: true }
+  }
   if (before === status) return none(live)
   if (status === 'listening') {
     if (!live) return { gesture: settings.enabled ? settings.onConnect : null, force: true, live: true }
@@ -43,17 +51,24 @@ export function gestureForTransition(before: AssistantStatus, status: AssistantS
   return none(live)
 }
 
-/** `channel` should be stable (create it once); a new object each render still works. */
-export function useGestureTriggers(status: AssistantStatus, channel: GestureChannel): void {
+/**
+ * `channel` should be stable (create it once); a new object each render still works. `interruptions` counts barge-ins
+ * (useVoiceAssistant's `interruptions`): each new one plays onInterrupt, with the status change it comes with.
+ */
+export function useGestureTriggers(status: AssistantStatus, channel: GestureChannel, interruptions = 0): void {
   const previous = useRef<AssistantStatus>(status)
+  const cuts = useRef(interruptions)
   const live = useRef(false)
   useEffect(() => {
     const before = previous.current
+    const cut = interruptions !== cuts.current
+    cuts.current = interruptions
     // Same status again (a StrictMode re-run, or a re-render for another reason): nothing happened.
-    if (before === status) return
+    if (before === status && !cut) return
     previous.current = status
-    const next = gestureForTransition(before, status, live.current)
+    const next = gestureForTransition(before, status, live.current, GESTURE_SETTINGS, cut)
     live.current = next.live
+    if (next.cancel) channel.stop()
     if (next.gesture) channel.play(next.gesture, next.force ? { force: true } : undefined)
-  }, [status, channel]) // a new channel alone re-runs this with the same status, which does nothing
+  }, [status, channel, interruptions]) // a new channel alone re-runs this with the same status, which does nothing
 }

@@ -274,6 +274,17 @@ export interface ClayControl {
     /** Five mouth bars, 0..1 each, and how much of the mouth shows (0 hides it). */
     mouth: Float32Array
     mouthOn: number
+    /**
+     * Otto: the robot's frame itself travels across the page at this speed (CSS px/s, + to the viewer's right). The legs
+     * walk to match it, feet planted, while the robot stays centred in its frame.
+     */
+    travel: number
+    /** Otto: body turn (rad, + toward the viewer's right), not scaled by `look`; the head turns with it. */
+    turn: number
+    /** Otto: body lean (rad, + tips the top toward the viewer's right). */
+    lean: number
+    /** Otto: a point on the page (client px) to look at instead of the cursor, or null. */
+    aim: { x: number; y: number } | null
 }
 
 export interface ClayRobotProps {
@@ -1369,7 +1380,7 @@ export default function ClayRobot({
             const hy = (yaw.x - bodyYaw.x) * look + yawAdd // Otto: look scales the cursor turn
             mul3(rotY(hy, tA), rotX(-(pitch.x * look + pitchAdd), tB), tmp)
             mul3(tmp, rotZ(HEAD_ROLL * hy + rollAdd, tA), mHead)
-            mul3(rotY(bodyYaw.x * look, tA), rotZ(roll, tB), mBody)
+            mul3(rotY(bodyYaw.x * look + (ctl ? ctl.turn : 0), tA), rotZ(roll + (ctl ? ctl.lean : 0), tB), mBody) // Otto: + turn, lean
 
             const az = (p.adv.sunAngle * Math.PI) / 180
             const el = (p.adv.sunElevation * Math.PI) / 180
@@ -1556,6 +1567,8 @@ export default function ClayRobot({
             // Pointer → targets, reading layout at most once per frame.
             const active =
                 p.resp.track === "frame" ? ptrInFrame || clock < touchUntil : ptrInPage || clock < touchUntil
+            // Otto: while the frame travels the cursor's place in it changes too.
+            if (controlRef.current?.travel) scrolled = true
             if ((ptrNew || scrolled) && ptrSeen) {
                 const r = measureShown()
                 if (r.width > 0 && r.height > 0) {
@@ -1565,7 +1578,12 @@ export default function ClayRobot({
                 ptrNew = false
                 scrolled = false
             }
-            if (active && ptrSeen) {
+            const aim = controlRef.current?.aim // Otto: looking at something the host names
+            if (aim) {
+                const r = measureShown()
+                if (r.width > 0 && r.height > 0) aimAt((aim.x - r.left) / r.width, (aim.y - r.top) / r.height)
+                nextGlance = clock + 2.5
+            } else if (active && ptrSeen) {
                 aimAt(ptrU, ptrV)
                 nextGlance = clock + 2.5
                 // A cursor that arrives, or comes back after a while, gets a
@@ -1604,7 +1622,7 @@ export default function ClayRobot({
                 if (!p.walk || rm) {
                     walkX = 0
                     walkV = 0
-                    walkAmt = 0
+                    if (rm) walkAmt = 0 // Otto: otherwise it eases out, after the host's travel
                 }
             }
             const faceT = tYaw * BODY_SHARE + Math.sign(walkV) * WALK_TURN * walkAmt
@@ -1666,6 +1684,9 @@ export default function ClayRobot({
             // gait advances with distance covered, so feet never slide.
             {
                 const vmax = 0.6 + p.walkSpeed * 0.25
+                // Otto: the host moving the whole frame (px/s) as a speed along the floor, so the steps match it.
+                const Sx = Math.min(layoutH, layoutW / REF_ASPECT)
+                const ext = rm ? 0 : ((controlRef.current?.travel ?? 0) / Math.max(1, Sx)) * FRAME_UNITS / (p.scale / 100)
                 let left = sdt
                 while (left > 0) {
                     const h = Math.min(left, 0.004)
@@ -1673,8 +1694,8 @@ export default function ClayRobot({
                     const vd = Math.max(-vmax, Math.min(vmax, err * 2.5))
                     walkV += (vd - walkV) * Math.min(1, h * 6)
                     walkX += walkV * h
-                    gait += (Math.abs(walkV) * h * Math.PI) / STRIDE
-                    const amt = Math.min(1, Math.abs(walkV) / 0.35)
+                    gait += (Math.abs(walkV + ext) * h * Math.PI) / STRIDE
+                    const amt = Math.min(1, Math.abs(walkV + ext) / 0.35)
                     walkAmt += (amt - walkAmt) * Math.min(1, h * 8)
                     left -= h
                 }
