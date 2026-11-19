@@ -27,6 +27,8 @@ Click the robot, or press **Alt+E**, and say "Take me to About" or "Show me a me
 
 To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose and face, and a fake voice for the mouth.
 
+There is also a standalone three.js preview with no build step, [`preview/index.html`](preview/index.html): run `python3 -m http.server 8000` in the repository root and open http://localhost:8000/preview/. It can lip-sync Echo to any audio file you pick.
+
 Checks: `cd server && .venv/bin/python -m pytest` and `cd web && npm run build`.
 
 ## Using it in a new project
