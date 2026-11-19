@@ -105,6 +105,18 @@ python3 -m venv .blender && .blender/bin/pip install bpy==5.3.0
 
 With **Blender MCP**, open Blender with the add-on connected and ask Claude to run `blender/build_otto.py` (its `execute_blender_code` tool), then tweak the model live and export again from File → Export → glTF 2.0 (.glb), "Apply Modifiers" on.
 
+### Gestures
+
+Otto has six short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake` and `thinkingHand` (held while thinking). They are defined once in [`web/src/otto/robot/gestures.js`](web/src/otto/robot/gestures.js), a plain module that the app and [`preview/`](preview/index.html) both load. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
+
+To play one from your own code, make a channel once and pass it to `<Otto>`:
+
+```tsx
+const gestures = useMemo(createGestureChannel, [])
+<Otto gestures={gestures} /* ... */ />
+gestures.play('celebrate')
+```
+
 ## Deploying
 
 - **Server**: any host that supports WebSockets (Render, Railway, Fly). Set `GEMINI_API_KEY` and `CORS_ORIGINS` (your site's exact origin; no wildcards). Free tiers sleep, and the panel shows "Waking Otto up" while the server starts.

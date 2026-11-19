@@ -1,6 +1,7 @@
-// Otto lab (npm run dev, then http://localhost:5173/lab.html): every face and pose, and a fake voice for the mouth, with no server.
-import { StrictMode, useCallback, useState } from 'react'
+// Otto lab (npm run dev, then http://localhost:5173/lab.html): every face, pose and gesture, and a fake voice for the mouth, with no server.
+import { StrictMode, useCallback, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createGestureChannel, GESTURE_NAMES } from './otto/robot/gestures.js'
 import OttoRobot from './otto/robot/OttoRobot'
 import { EYES, type RobotExpression, type RobotPose } from './otto/robot/robot'
 import './otto/voice.css'
@@ -12,6 +13,7 @@ function Lab() {
   const [pose, setPose] = useState<RobotPose>('idle')
   const [expression, setExpression] = useState<RobotExpression>('happy')
   const [say, setSay] = useState('')
+  const channel = useMemo(createGestureChannel, [])
   // A made-up voice: syllables a few times a second, louder in the low bands.
   const fakeBands = useCallback((count: number) => {
     const t = performance.now() / 1000
@@ -29,9 +31,13 @@ function Lab() {
         }}>{item}</button>)}</fieldset>
       <fieldset><legend>Face</legend>{(Object.keys(EYES) as RobotExpression[]).map(item =>
         <button key={item} type="button" className="otto-btn otto-btn--tonal" aria-pressed={expression === item} onClick={() => setExpression(item)}>{item}</button>)}</fieldset>
+      {/* Pose "thinking" holds thinkingHand by itself (GESTURE_SETTINGS.whileThinking); the buttons here play one-shots. */}
+      <fieldset><legend>Gesture</legend>{GESTURE_NAMES.map(name =>
+        <button key={name} type="button" className="otto-btn otto-btn--tonal" onClick={() => channel.play(name, { force: true })}>{name}</button>)}
+        <button type="button" className="otto-btn otto-btn--tonal" onClick={() => channel.stop()}>Stop gestures</button></fieldset>
     </div>
     <div style={{ blockSize: 460 }}>
-      <OttoRobot pose={pose} expression={expression} say={say} speechBands={fakeBands} />
+      <OttoRobot pose={pose} expression={expression} say={say} speechBands={fakeBands} gestures={channel} />
     </div>
   </main>
 }

@@ -120,32 +120,38 @@ export function createGestureController(options = {}) {
       zero(frame.head, HEAD_KEYS); zero(frame.handL, HAND_KEYS); zero(frame.handR, HAND_KEYS)
       frame.active.length = 0
       const shots = shot ? [shot, ...fading] : fading
-      // Per part: S = total one-shot weight, H = total held weight. Overlaps become a weighted average (never above 1).
-      const S = { head: 0, handL: 0, handR: 0 }, H = { head: 0, handL: 0, handR: 0 }
+      // Per channel (part + key): S = total one-shot weight, H = total held weight, counted only for keys the sample emits.
+      // Overlaps become a weighted average (never above 1), and a one-shot only takes over the keys it actually moves.
+      const S = {}, H = {}
       let lookLoss = 0
-      for (const e of shots) for (const part of e.def.parts) S[part] += e.w
-      for (const e of helds) for (const part of e.def.parts) H[part] += e.w
-      const add = (e, held) => {
+      const entries = []
+      const gather = (e, held) => {
         if (e.w <= 0) return
         const out = e.def.sample(held ? (e.t % e.def.duration) / e.def.duration : Math.min(1, e.t / e.def.duration), e.t)
+        const tot = held ? H : S
+        for (const part of e.def.parts) if (out[part]) for (const k in out[part]) tot[part + k] = (tot[part + k] ?? 0) + e.w
+        entries.push({ e, out, held })
+      }
+      for (const h of helds) gather(h, true)
+      for (const s of shots) gather(s, false)
+      const mask = { handL: 0, handR: 0 }
+      for (const { e, out, held } of entries) {
         const amp = e.w * e.gain * effective()
         for (const part of e.def.parts) {
           const src = out[part]
           if (!src) continue
-          const dst = frame[part]
-          const keys = part === 'head' ? HEAD_KEYS : HAND_KEYS
-          const scale = held ? amp * (1 - Math.min(1, S[part])) / Math.max(1, H[part]) : amp / Math.max(1, S[part])
-          for (const k of keys) dst[k] += (src[k] ?? 0) * scale
+          for (const k in src) {
+            const id = part + k, s1 = Math.min(1, S[id] ?? 0)
+            frame[part][k] += src[k] * amp * (held ? (1 - s1) / Math.max(1, H[id]) : 1 / Math.max(1, S[id]))
+            if (part !== 'head') mask[part] = Math.max(mask[part], s1 + (1 - s1) * Math.min(1, H[id] ?? 0))
+          }
         }
         lookLoss += e.w * (1 - e.def.look)
         if (!frame.active.includes(e.name)) frame.active.push(e.name)
       }
-      for (const h of helds) add(h, true)
-      for (const s of shots) add(s, false)
       frame.look = clamp01(1 - lookLoss)
-      const mask = part => Math.min(1, S[part]) + (1 - Math.min(1, S[part])) * Math.min(1, H[part])
-      frame.baseL = 1 - mask('handL')
-      frame.baseR = 1 - mask('handR')
+      frame.baseL = 1 - mask.handL
+      frame.baseR = 1 - mask.handR
       return frame
     },
   }
