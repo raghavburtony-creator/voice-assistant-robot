@@ -84,7 +84,7 @@ useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen
 
 ## Echo's robot
 
-Echo is our own model, built from primitives by [`blender/build_echo.py`](blender/build_echo.py): a hovering bot with a rounded head, an amber visor face, five mouth bars that act as its voice meter, an antenna, floating hands and a glowing hover ring.
+Echo is our own model, built from primitives by [`blender/build_echo.py`](blender/build_echo.py): a chunky graphite bot with a big rounded head, a glossy black visor, rounded-square eyes, side pods, five small mouth bars that act as its voice meter, and a short standing body with stubby arms.
 
 | Layer | Where | What it does |
 |---|---|---|

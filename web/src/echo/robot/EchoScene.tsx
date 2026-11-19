@@ -1,7 +1,7 @@
 // Echo in 3D, with React Three Fiber. Loaded on its own (EchoRobot lazy-loads it), so three.js never slows the first page.
 //   expression -> eye shape and glow colour          pose -> head, antenna and hands
 //   speechBands -> the five mouth bars follow Echo's real voice (Web Audio AnalyserNode in audio.ts)
-//   idle -> hovers, blinks, and turns its head towards the pointer (not under reduced motion)
+//   idle -> breathes (a small head bob), blinks, and turns its head towards the pointer (not under reduced motion)
 
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
@@ -27,11 +27,13 @@ const damp = (current: number, target: number, delta: number, speed = EASE) => T
 type Parts = {
   root: THREE.Object3D
   head: THREE.Object3D
+  headHome: THREE.Vector3
   eyes: THREE.Object3D[]
   eyeHome: THREE.Vector3[]
   mouth: THREE.Object3D[]
-  antenna: THREE.Object3D
-  tip: THREE.Object3D
+  /** Optional: animated when the model has one. */
+  antenna: THREE.Object3D | null
+  tip: THREE.Object3D | null
   handL: THREE.Object3D
   handR: THREE.Object3D
   handRHome: THREE.Vector3
@@ -68,10 +70,11 @@ function useEcho(): { scene: THREE.Object3D; parts: Parts } {
       return node
     }
     const eyes = [find('EyeL'), find('EyeR')]
+    const head = find('HeadPivot')
     const parts: Parts = {
-      root: find('EchoRoot'), head: find('HeadPivot'), eyes, eyeHome: eyes.map(eye => eye.position.clone()),
+      root: find('EchoRoot'), head, headHome: head.position.clone(), eyes, eyeHome: eyes.map(eye => eye.position.clone()),
       mouth: Array.from({ length: MOUTH_BARS }, (_, i) => find(`Mouth${i}`)),
-      antenna: find('AntennaPivot'), tip: find('AntennaTip'), handL: find('HandLPivot'), handR: find('HandRPivot'), handRHome: find('HandRPivot').position.clone(),
+      antenna: scene.getObjectByName('AntennaPivot') ?? null, tip: scene.getObjectByName('AntennaTip') ?? null, handL: find('HandLPivot'), handR: find('HandRPivot'), handRHome: find('HandRPivot').position.clone(),
       glow: materials.get('Glow') as THREE.MeshStandardMaterial,
     }
     return { scene, parts }
@@ -101,10 +104,10 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime
-    const { root, head, eyes, eyeHome, mouth, antenna, tip, handL, handR, handRHome, glow } = parts
+    const { head, headHome, eyes, eyeHome, mouth, antenna, tip, handL, handR, handRHome, glow } = parts
 
-    // Hover and sway.
-    root.position.y = calm ? 0 : Math.sin(t * 1.6) * 0.035
+    // Breathing: the head bobs a little on the body, and the arms sway with it.
+    head.position.y = headHome.y + (calm ? 0 : Math.sin(t * 1.6) * 0.012)
     handL.rotation.x = calm ? 0 : Math.sin(t * 1.6 + 0.6) * 0.08
     handR.rotation.x = calm ? 0 : Math.sin(t * 1.6 + 1.1) * 0.08
 
@@ -118,17 +121,16 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
     head.rotation.x = damp(head.rotation.x, -look.y + lean + nodding, delta, 6)
     head.rotation.z = damp(head.rotation.z, tilt, delta, 4)
 
-    // Hands: thinking brings the right hand up under the visor, like a hand on the chin; talking moves the left with the voice.
+    // Arms: thinking brings the right one up under the visor, like a hand on the chin; talking moves the left with the voice.
     const thinking = pose === 'thinking'
-    handR.position.x = damp(handR.position.x, handRHome.x + (thinking ? -0.26 : 0), delta, 5)
-    handR.position.y = damp(handR.position.y, handRHome.y + (thinking ? 0.42 : 0), delta, 5)
-    handR.position.z = damp(handR.position.z, handRHome.z + (thinking ? 0.4 : 0), delta, 5)
+    handR.position.x = damp(handR.position.x, handRHome.x + (thinking ? -0.1 : 0), delta, 5)
+    handR.position.y = damp(handR.position.y, handRHome.y + (thinking ? 0.16 : 0), delta, 5)
+    handR.position.z = damp(handR.position.z, handRHome.z + (thinking ? 0.5 : 0), delta, 5)
     handL.rotation.z = damp(handL.rotation.z, pose === 'talking' && !calm ? -level.current * 0.4 : 0, delta, 8)
 
-    // Antenna: wiggles while thinking; its tip pulses while listening.
-    antenna.rotation.z = calm ? 0 : pose === 'thinking' ? Math.sin(t * 9) * 0.12 : damp(antenna.rotation.z, 0, delta)
-    const pulse = pose === 'listening' ? 1 + Math.sin(t * 5) * 0.18 : 1
-    tip.scale.setScalar(damp(tip.scale.x, pulse, delta, 12))
+    // Antenna, if the model has one: wiggles while thinking; its tip pulses while listening.
+    if (antenna) antenna.rotation.z = calm ? 0 : pose === 'thinking' ? Math.sin(t * 9) * 0.12 : damp(antenna.rotation.z, 0, delta)
+    if (tip) tip.scale.setScalar(damp(tip.scale.x, pose === 'listening' ? 1 + Math.sin(t * 5) * 0.18 : 1, delta, 12))
 
     // Eyes: the face's shape, and a blink every few seconds (never while resting: they are already shut).
     const shape = EYES[expression]
@@ -170,8 +172,8 @@ function Robot({ pose, expression, speechBands, onActivate }: Props) {
 
 export default function EchoScene(props: Props) {
   return (
-    <Canvas camera={{ position: [0, 1.2, 6.4], fov: 26 }} dpr={[1, 2]} gl={{ alpha: true, antialias: true }}
-      onCreated={({ camera }) => camera.lookAt(0, 1.08, 0)}>
+    <Canvas camera={{ position: [0, 1.05, 5.4], fov: 26 }} dpr={[1, 2]} gl={{ alpha: true, antialias: true }}
+      onCreated={({ camera }) => camera.lookAt(0, 0.84, 0)}>
       {/* Studio light made here, so nothing is fetched from another site. */}
       <Environment resolution={128}>
         <Lightformer intensity={2.2} position={[0, 4, 3]} scale={[8, 3, 1]} />

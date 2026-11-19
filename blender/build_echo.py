@@ -6,13 +6,14 @@ Or in Blender:  Scripting tab -> open this file -> Run Script (or send it throug
 Everything is made from primitives here, so the model is ours. The app animates these named nodes (keep the names if you
 remodel):
   EchoRoot                  the whole robot
-  Body, HoverRing           the floating body and the glowing ring under it
-  HeadPivot                 the head turns and nods around this (at the neck)
-    Head, Visor             the shell and the dark face glass
-    EyeL, EyeR              the eyes: the app scales them for blinks and faces
-    Mouth0 .. Mouth4        five light bars: the app drives them with Echo's voice (Web Audio)
-    AntennaPivot, AntennaTip
-  HandLPivot, HandRPivot    the floating hands (wave, think)
+  Body                      the short standing body, with its feet
+  HeadPivot                 the head turns, nods and bobs around this (at the neck)
+    Head, Visor             the big rounded shell and the glossy face glass
+    EarL, EarR              the pods on each side of the head
+    EyeL, EyeR              rounded-square eyes: the app scales them for blinks and faces
+    Mouth0 .. Mouth4        five small light bars under the eyes: the app drives them with Echo's voice (Web Audio)
+  HandLPivot, HandRPivot    the stubby arms (think, talk)
+  (AntennaPivot, AntennaTip are optional: the app animates them if a model has them.)
 Materials: Shell (recoloured by the app), Trim, Visor, Glow (emissive; the app recolours it per face).
 """
 from __future__ import annotations
@@ -109,86 +110,64 @@ def capsule(name: str, radius: float, length: float, location, mat, parent=None,
     return finish(obj, name, mat, parent)
 
 
+def rounded_box(name: str, size, location, mat, parent, bevel: float, segments: int = 5):
+    """A box of `size` (x, y, z) with rounded edges, its scale applied so the node itself is unscaled."""
+    bpy.ops.mesh.primitive_cube_add(size=1, location=location)
+    obj = bpy.context.active_object
+    obj.scale = size
+    apply_scale(obj)
+    finish(obj, name, mat, parent, bevel=bevel)
+    obj.modifiers["Bevel"].segments = segments
+    return obj
+
+
 def build() -> None:
     reset()
     # Blender is Z-up and the face looks down -Y; the glTF exporter turns that into Y-up, facing the viewer (+Z).
-    shell = material("Shell", (0.93, 0.42, 0.26), roughness=0.38)            # warm coral, satin
-    trim = material("Trim", (0.16, 0.17, 0.22), roughness=0.55, metallic=0.2)  # graphite
-    visor = material("Visor", (0.03, 0.035, 0.05), roughness=0.08, metallic=0.1)
-    glow = material("Glow", (1.0, 0.78, 0.35), roughness=0.4, emission=(1.0, 0.72, 0.28), strength=4.0)  # amber
+    shell = material("Shell", (0.2, 0.21, 0.23), roughness=0.62)                # matte graphite
+    trim = material("Trim", (0.12, 0.125, 0.14), roughness=0.7)                  # darker graphite
+    visor = material("Visor", (0.012, 0.014, 0.018), roughness=0.06, metallic=0.0)  # glossy black glass
+    glow = material("Glow", (0.96, 0.95, 0.9), roughness=0.4, emission=(0.96, 0.95, 0.9), strength=3.0)
 
     root = empty("EchoRoot")
 
-    # Body: an egg, wider at the top, floating.
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=40, ring_count=20, radius=0.5, location=(0, 0, 0.62))
-    body = bpy.context.active_object
-    body.scale = (0.78, 0.7, 0.62)
-    apply_scale(body)
-    for vert in body.data.vertices:  # taper the lower half
-        if vert.co.z < 0:
-            k = 1 + vert.co.z * 0.9
-            vert.co.x *= k
-            vert.co.y *= k
-    finish(body, "Body", shell, root)
-
-    # A graphite band round the belly, and the glowing hover ring below.
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.36, minor_radius=0.035, major_segments=64, minor_segments=12, location=(0, 0, 0.66))
-    band = bpy.context.active_object
-    band.scale = (1.07, 0.97, 1)
-    finish(band, "BellyBand", trim, root)
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.17, minor_radius=0.03, major_segments=48, minor_segments=10, location=(0, 0, 0.2))
-    finish(bpy.context.active_object, "HoverRing", glow, root)
-
-    # Head: a rounded box on a pivot at the neck, floating a little above the body.
-    head_pivot = empty("HeadPivot", (0, 0, 1.0), root)
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 1.43))
-    head = bpy.context.active_object
-    head.scale = (1.06, 0.86, 0.78)
-    apply_scale(head)
-    finish(head, "Head", shell, head_pivot, bevel=0.2, subdiv=1)
-
-    # The visor: a dark rounded slab set into the front.
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, -0.385, 1.43))
-    face = bpy.context.active_object
-    face.scale = (0.82, 0.12, 0.52)
-    apply_scale(face)
-    finish(face, "Visor", visor, head_pivot, bevel=0.12, subdiv=1)
-
-    # Eyes: two upright pills on the visor. Their origins sit at their centres, so the app can squash them.
-    for name, x in (("EyeL", -0.19), ("EyeR", 0.19)):
-        eye = capsule(name, 0.055, 0.1, (x, -0.452, 1.5), glow, head_pivot)
-        eye.scale = (1, 0.45, 1)
-
-    # Mouth: five short bars, the voice meter.
-    for i in range(5):
-        x = (i - 2) * 0.075
-        bar = capsule(f"Mouth{i}", 0.022, 0.03, (x, -0.452, 1.29), glow, head_pivot)
-        bar.scale = (1, 0.5, 1)
-
-    # Antenna: a short stalk on the right of the crown, a glowing ball on top.
-    antenna = empty("AntennaPivot", (0.2, 0, 1.8), head_pivot)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.02, depth=0.24, location=(0.2, 0, 1.91))
-    finish(bpy.context.active_object, "AntennaStalk", trim, antenna)
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.055, location=(0.2, 0, 2.06))
-    finish(bpy.context.active_object, "AntennaTip", glow, antenna)
-
-    # Side vents: three short graphite slots on each cheek.
+    # Body: a short rounded column that stands on two soft feet.
+    body = rounded_box("Body", (0.48, 0.44, 0.6), (0, 0, 0.36), shell, root, bevel=0.14, segments=6)
     for side in (-1, 1):
-        for j in range(3):
-            slot = capsule(f"Vent{'L' if side < 0 else 'R'}{j}", 0.014, 0.09, (side * 0.535, 0, 1.36 + j * 0.07), trim, head_pivot,
-                           rotation=(0, math.radians(90), 0))
-            slot.scale = (1, 1, 1)
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.5, location=(side * 0.12, -0.01, 0.07))
+        foot = bpy.context.active_object
+        foot.scale = (0.26, 0.36, 0.16)
+        apply_scale(foot)
+        finish(foot, f"Foot{'L' if side < 0 else 'R'}", shell, body)
 
-    # Hands: floating mittens, each on a pivot at its shoulder point.
+    # Head: big, deeper than it is wide, on a pivot at the neck.
+    head_pivot = empty("HeadPivot", (0, 0, 0.62), root)
+    rounded_box("Head", (1.28, 1.12, 1.0), (0, 0.04, 1.12), shell, head_pivot, bevel=0.32, segments=6)
+    # The visor: a glossy black block sunk into the face. It is deep so its big rounded corners fit (a bevel cannot be wider
+    # than half the thinnest side); only its front 8 cm stand out of the head.
+    rounded_box("Visor", (1.02, 0.6, 0.76), (0, -0.3, 1.11), visor, head_pivot, bevel=0.28, segments=8)
+
+    # Ear pods on both sides.
+    for side in (-1, 1):
+        rounded_box(f"Ear{'L' if side < 0 else 'R'}", (0.1, 0.34, 0.3), (side * 0.66, 0.06, 1.12), trim, head_pivot, bevel=0.045)
+
+    # Eyes: two rounded squares, set low and close together. Unscaled nodes, so the app's scale is the eye's shape.
+    for name, x in (("EyeL", -0.1), ("EyeR", 0.1)):
+        rounded_box(name, (0.15, 0.03, 0.17), (x, -0.6, 1.04), glow, head_pivot, bevel=0.035, segments=3)
+
+    # Mouth: five small bars under the eyes, the voice meter. Short at rest, they stretch up to about 3x while Echo talks.
+    for i in range(5):
+        rounded_box(f"Mouth{i}", (0.028, 0.02, 0.03), ((i - 2) * 0.05, -0.6, 0.88), glow, head_pivot, bevel=0.012, segments=2)
+
+    # Arms: short stubs on the body, each on a pivot at its shoulder.
     for name, side in (("HandL", -1), ("HandR", 1)):
-        pivot = empty(f"{name}Pivot", (side * 0.46, 0, 0.82), root)
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=0.11, location=(side * 0.56, -0.02, 0.6))
+        pivot = empty(f"{name}Pivot", (side * 0.26, 0, 0.5), root)
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.5, location=(side * 0.31, -0.02, 0.44))
         hand = bpy.context.active_object
-        hand.scale = (0.7, 0.85, 1.25)
+        hand.scale = (0.15, 0.17, 0.2)
         apply_scale(hand)
         finish(hand, name, shell, pivot)
 
-    # Centre the robot on its root, feet (the ring) near the floor.
     for obj in bpy.data.objects:
         obj.select_set(False)
 
@@ -198,7 +177,6 @@ def export() -> None:
     bpy.ops.export_scene.gltf(
         filepath=str(OUT), export_format="GLB", export_apply=True, export_yup=True,
         export_materials="EXPORT", use_selection=False, export_extras=False,
-        export_texcoord=False,  # no textures, so no UVs: a smaller file
     )
     size = OUT.stat().st_size
     print(f"Wrote {OUT} ({size / 1024:.0f} KB)")
@@ -214,10 +192,10 @@ if __name__ == "__main__":
         scene.render.engine = "CYCLES"
         scene.cycles.samples = 32
         scene.render.resolution_x, scene.render.resolution_y = 600, 700
-        bpy.ops.object.camera_add(location=(1.6, -4.2, 1.9))
+        bpy.ops.object.camera_add(location=(2.2, -4.4, 1.6))
         cam = bpy.context.active_object
         cam.data.lens = 50
-        direction = Vector((0, 0, 1.05)) - cam.location
+        direction = Vector((0, 0, 0.9)) - cam.location
         cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
         scene.camera = cam
         bpy.ops.object.light_add(type="AREA", location=(2, -3, 4))

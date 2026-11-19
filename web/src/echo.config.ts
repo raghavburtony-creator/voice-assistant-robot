@@ -36,10 +36,10 @@ export const COMMAND_LABELS: Record<CommandName, string> = {
  */
 export const WAKE_PHRASE = /\b(?:hey+|hay|hei|okay|ok)[\s,.!-]*(?:echo|echoe?s|eco|ecko|ekko|ekho)\b[\s,.!?-]*(.*)$/i
 
-/** Echo's colours: the body shell and the light in its eyes, mouth, antenna and hover ring. */
+/** Echo's colours: the body shell and the light in its eyes and mouth. */
 export const ROBOT_COLORS = {
-  shell: '#ee6b42',
-  glow: '#ffb547',
+  shell: '#3c4046',
+  glow: '#f2f0e8',
 }
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */
