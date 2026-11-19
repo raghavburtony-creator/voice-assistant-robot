@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+*.tsbuildinfo
+__pycache__/
+.venv/
+.pytest_cache/
+.DS_Store
+.vscode/*
+.idea
+*.log
