@@ -1,6 +1,8 @@
 // EDIT THIS FILE for each new project: Otto's name, your pages, and the commands Otto may run.
 // PAGES and COMMANDS must match server/app/voice/app_config.py (server/tests/test_voice.py checks it).
 
+import type { GestureName } from './otto/robot/gestures.js'
+
 export const ASSISTANT_NAME = 'Otto'
 
 /** Prefix for what is remembered in localStorage (mic choice, wake word), so two apps on one origin do not share it. */
@@ -49,6 +51,34 @@ export const WAKE_PHRASE = /\b(?:hey+|hay|hei|okay|ok)[\s,.!-]*(?:otto|ottos|aut
 export const ROBOT_COLORS = {
   shell: '#3c4046',
   glow: '#f2f0e8',
+}
+
+/**
+ * Otto's gestures (web/src/otto/robot/gestures.js). Each lifecycle moment names the gesture it plays, or null for none.
+ * Any gesture can also be played from code: `<Otto gestures={channel} />` with `channel.play('celebrate')`.
+ */
+export const GESTURE_SETTINGS = {
+  enabled: true,
+  /** Scales every gesture, 0 (still) to 1.5. */
+  intensity: 1,
+  /** With prefers-reduced-motion, one-shot gestures are skipped and held ones (thinkingHand) shown at this intensity. */
+  reducedIntensity: 0.5,
+  /** The same gesture is not restarted within this many seconds. */
+  cooldown: 0.4,
+  /** The voice session connected (the server said ready). */
+  onConnect: 'welcomeWave',
+  /** The voice session ended: closed, timed out, or the visitor stopped it. */
+  onDisconnect: 'goodbyeWave',
+  /** Otto finished a reply and is listening again. */
+  onTurnEnd: 'nod',
+  /** Something went wrong. */
+  onError: 'headShake',
+  /** Held while Otto is thinking (connecting). */
+  whileThinking: 'thinkingHand',
+} as const satisfies {
+  enabled: boolean; intensity: number; reducedIntensity: number; cooldown: number
+  onConnect: GestureName | null; onDisconnect: GestureName | null; onTurnEnd: GestureName | null
+  onError: GestureName | null; whileThinking: GestureName | null
 }
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */
