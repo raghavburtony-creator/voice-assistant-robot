@@ -88,12 +88,12 @@ Otto is the **Clay Robot** from [Originkit](https://www.originkit.dev), added wi
 
 | Layer | Where | What it does |
 |---|---|---|
-| Robot | `web/src/components/originkit/ui/clay-robot.tsx` | The Originkit component. Two additions, marked `Otto:` so they can be re-applied after an update: a five-bar mouth on the visor, and a `control` prop the host drives every frame |
+| Robot | `web/src/components/originkit/ui/clay-robot.tsx` | The Originkit component. Two additions, marked `Otto:` so they can be re-applied after an update: a five-bar mouth on the visor, a `control` prop the host drives every frame, and a `transparent` mode with no backdrop |
 | Scene | `web/src/otto/robot/ClayScene.tsx` | Turns pose, face, the voice and gestures into that control: listening leans in, thinking holds a hand to the chin, talking moves the mouth |
 | Wrapper | `web/src/otto/robot/OttoRobot.tsx` | Loads the robot after the page, shows the speech bubble, draws nothing without WebGL 2 |
 | Faces | `web/src/otto/robot/robot.ts` | How open the eyes are, happy arcs, gaze, glow and colour for happy, searching, excited, alert and resting |
 
-Colours (clay, visor, eyes) and the backdrop gradient are `ROBOT_COLORS` and `ROBOT_BACKGROUND` in `web/src/otto.config.ts`. Re-running `originkit add clay-robot` overwrites the component: put the `Otto:` changes back after it.
+Colours (clay, visor, eyes) and the backdrop are `ROBOT_COLORS` and `ROBOT_BACKGROUND` in `web/src/otto.config.ts`. By default there is no backdrop: only the robot and a soft floor shadow over your page (`transparent: true`); set it to `false` for the gradient card. Re-running `originkit add clay-robot` overwrites the component: put the `Otto:` changes back after it.
 
 ### Gestures
 

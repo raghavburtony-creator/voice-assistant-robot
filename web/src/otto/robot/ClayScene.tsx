@@ -126,7 +126,8 @@ export default function ClayScene({ pose, expression, speechBands, onActivate, g
       <ClayRobot
         control={control}
         colors={ROBOT_COLORS}
-        background={{ ...ROBOT_BACKGROUND, shadowDepth: 24 }}
+        transparent={ROBOT_BACKGROUND.transparent}
+        background={{ top: ROBOT_BACKGROUND.top, bottom: ROBOT_BACKGROUND.bottom, shadow: ROBOT_BACKGROUND.shadow, shadowDepth: ROBOT_BACKGROUND.transparent ? 40 : 24 }}
         // Otto's own gestures do the waving; walking about would leave the dock.
         wave={false}
         walk={false}

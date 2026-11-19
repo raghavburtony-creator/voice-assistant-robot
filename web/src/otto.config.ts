@@ -54,8 +54,12 @@ export const ROBOT_COLORS = {
   eyes: '#FFFFFF',
 }
 
-/** The backdrop behind the robot: a cyclorama gradient and the colour of its shadow on the floor. */
+/**
+ * The backdrop behind the robot. `transparent`: no backdrop, only the robot and its soft floor shadow over the page;
+ * set it to false for the gradient card (top to bottom). `shadow` is the colour of the shadow on the floor.
+ */
 export const ROBOT_BACKGROUND = {
+  transparent: true,
   top: '#909EA9',
   bottom: '#CCD0D3',
   shadow: '#2E4D6A',

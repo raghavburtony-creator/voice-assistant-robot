@@ -295,6 +295,8 @@ export interface ClayRobotProps {
     style?: CSSProperties
     /** Otto: drive the robot from outside (see ClayControl). */
     control?: ClayControl
+    /** Otto: no backdrop -- only the robot and its floor shadow, over whatever is behind (read once, when the robot starts). */
+    transparent?: boolean
 }
 
 /* ------------------------------------------------------------- colours */
@@ -391,6 +393,8 @@ uniform int uSamples;
 // Otto: a five-bar mouth under the eyes, driven by the voice (0..1 per bar), and how much of it shows.
 uniform float uMouth[5];
 uniform float uMouthOn;
+// Otto: 1 draws no backdrop: only the robot and its floor shadow, with alpha, over the page.
+uniform float uClear;
 
 out vec4 fragColor;
 
@@ -685,8 +689,10 @@ void main() {
     // one shading block, no derivatives (ANGLE zeroes them in such loops).
     vec3 acc = vec3(0.0);
     float cnt = 0.0;
+    float aAcc = 0.0; // Otto: coverage, for uClear
     bool edge = false;
     vec3 colC = bg, colO = bg;
+    float aC = 1.0, aO = 1.0; // Otto
     bool hitC = false, haveO = false;
     float idC = 0.0, tWarm = 0.0;
     // The bound is a uniform (always 5) so the compiler cannot unroll
@@ -749,8 +755,10 @@ void main() {
 
         bool same = s > 0 && hit == hitC && (!hit || abs(hitD.y - idC) < 0.5);
         vec3 col = same ? colC : colO;
+        float al = same ? aC : aO; // Otto
         if (s == 0 || (!same && !haveO)) {
             col = bg;
+            al = 1.0; // Otto
             vec3 n = vec3(0.0, 1.0, 0.0);
             vec3 p = ro + rd * t;
             vec3 pf = ro + rd * min(tf, 1e4);
@@ -800,6 +808,15 @@ void main() {
                         sh *= mix(0.55, 1.0, clamp(mapD(pf + vec3(0.0, h, 0.0)) / h, 0.0, 1.0));
                     }
                     col = mix(uShadowCol, bg, 1.0 - (1.0 - sh) * uShDepth);
+                    // Otto: without a backdrop the floor is only its shadow, as see-through shade.
+                    if (uClear > 0.5) {
+                        // ...fading out with distance from the feet, so the frame's edge never cuts it.
+                        float fd = length(fs.xz - vec2(uWalkX, 0.0));
+                        col = uShadowCol;
+                        al = (1.0 - sh) * uShDepth * (1.0 - smoothstep(1.6, 3.4, fd));
+                    }
+                } else if (uClear > 0.5) {
+                    al = 0.0; // Otto: open sky
                 }
                 // A ray stopped by the floor inside a part's box never
                 // reaches its closest approach; measure it where it lands.
@@ -810,15 +827,25 @@ void main() {
             }
             if (s == 0) {
                 colC = col;
+                aC = al; // Otto
                 hitC = hit;
                 idC = hitD.y;
             } else {
                 colO = col;
+                aO = al; // Otto
                 haveO = true;
             }
         }
-        acc += col;
+        acc += col * (uClear > 0.5 ? al : 1.0); // Otto: premultiplied when clear
+        aAcc += al;
         cnt += 1.0;
+    }
+    if (uClear > 0.5) {
+        // Otto: premultiplied colour and coverage over the page.
+        float a = aAcc / cnt;
+        vec3 c = acc / cnt + a * (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+        fragColor = vec4(c, a);
+        return;
     }
     vec3 col = acc / cnt;
 
@@ -946,6 +973,7 @@ export default function ClayRobot({
     advanced = {"eyeGlow":0.6,"sunAngle":90,"occlusion":1,"skyStrength":1,"sunStrength":1,"sunElevation":25,"gradientCurve":1.3,"cameraDistance":30,"shadowSoftness":6},
     style,
     control,
+    transparent = false,
 }: ClayRobotProps) {
     const bgc = { ...DEFAULT_BACKGROUND, ...background }
     const col = { ...DEFAULT_COLORS, ...colors }
@@ -958,7 +986,7 @@ export default function ClayRobot({
     const [failed, setFailed] = useState(false)
 
     // Live mirror read by the loop, so a control drag never rebuilds GL.
-    const live = { bgc, col, place, resp, adv, scale, animate, delay, walk, walkSpeed, wave, glance, blink }
+    const live = { bgc, col, place, resp, adv, scale, animate, delay, walk, walkSpeed, wave, glance, blink, transparent }
     const propsRef = useRef(live)
     propsRef.current = live
     // Otto: read every frame, outside `live` so it never rebuilds GL.
@@ -1070,7 +1098,7 @@ export default function ClayRobot({
 
         function init(): boolean {
             const ctx = canvas!.getContext("webgl2", {
-                alpha: false,
+                alpha: propsRef.current.transparent, // Otto: a see-through canvas without a backdrop
                 antialias: false,
                 depth: false,
                 stencil: false,
@@ -1105,7 +1133,7 @@ export default function ClayRobot({
                 "uBody", "uHead", "uEye", "uBoxMin", "uBoxMax", "uSun", "uSunCol", "uSky",
                 "uSkyUp", "uSkySide", "uSkyAway", "uSoft", "uAO", "uBgTop", "uBgBot", "uCurve", "uShadowCol", "uShDepth", "uClay",
                 "uVisor", "uEyeCol", "uGlow", "uSamples", "uWalkX", "uFeet", "uArms", "uArmExt", "uBodyBox",
-                "uMouth", "uMouthOn", // Otto
+                "uMouth", "uMouthOn", "uClear", // Otto
             ]
             for (const n of names) uni[n] = gl.getUniformLocation(prog, n)
             timerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2") as typeof timerExt
@@ -1385,6 +1413,7 @@ export default function ClayRobot({
             g.uniform1f(uni.uGlow, ctl?.glow ?? p.adv.eyeGlow)
             g.uniform1fv(uni.uMouth, ctl ? ctl.mouth : NO_MOUTH)
             g.uniform1f(uni.uMouthOn, ctl ? ctl.mouthOn : 0)
+            g.uniform1f(uni.uClear, p.transparent ? 1 : 0)
             g.uniform1f(uni.uWalkX, walkX)
             g.uniform2f(uni.uFeet, liftL, liftR)
             g.uniform4f(uni.uArms, armL, swingL, armR, swingR)
@@ -1819,7 +1848,7 @@ export default function ClayRobot({
                 height: "100%",
                 aspectRatio: `${REF_W} / ${REF_H}`,
                 overflow: "hidden",
-                background: `linear-gradient(180deg, ${stops})`,
+                background: transparent ? "none" : `linear-gradient(180deg, ${stops})`, // Otto
                 touchAction: "pan-y",
                 cursor: resp.hop > 0 ? "pointer" : "default",
                 userSelect: "none",
