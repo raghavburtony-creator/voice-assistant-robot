@@ -1,55 +1,49 @@
-// Loading and driving the 3D robot that draws Echo: the myt Learning Hub's <robot-companion>, vendored in public/robot/
-// (read public/robot/README.md before using it in a new project). Loaded once, after the first render, never from another site.
+// Echo's robot: shared types, where the model is, and how each face and pose looks.
+// The model is built by blender/build_echo.py and served from public/echo/echo.glb.
 
 export type RobotPose = 'idle' | 'listening' | 'talking' | 'thinking'
 export type RobotExpression = 'happy' | 'searching' | 'excited' | 'alert' | 'resting'
 
-export const ROBOT_TAG = 'robot-companion'
-const BASE = import.meta.env.BASE_URL
-export const ROBOT_SCRIPT = `${BASE}robot/robot-companion.js`
-export const ROBOT_THREE = `${BASE}robot/vendor/three.module.min.js`
-export const ROBOT_LOGO = `${BASE}robot/echo-logo.png`
+export const ROBOT_MODEL = `${import.meta.env.BASE_URL}echo/echo.glb`
 
-/** Characters a second for a spoken line in the bubble: about the pace of the Gemini voice. */
+/** Characters a second for the speech bubble: about the pace of the Gemini voice. */
 export const SPEAK_CPS = 16
 
-let loading: Promise<boolean> | null = null
+/** How the eyes look for each face: width, height and where they look (x, y), in the eye's own units. */
+export type EyeShape = { sx: number; sy: number; lookX: number; lookY: number }
 
-/** Adds the robot's script to the page once. Resolves true when the element is defined, false where custom elements are missing. */
-export function loadRobot(): Promise<boolean> {
-  if (loading) return loading
-  const registry = typeof window === 'undefined' ? undefined : window.customElements
-  if (!registry) return (loading = Promise.resolve(false))
-  if (!registry.get(ROBOT_TAG) && !document.querySelector('script[data-robot]')) {
-    const script = document.createElement('script')
-    script.src = ROBOT_SCRIPT
-    script.async = true
-    script.dataset.robot = ''
-    document.head.append(script)
-  }
-  loading = registry.whenDefined(ROBOT_TAG).then(() => true)
-  return loading
+export const EYES: Record<RobotExpression, EyeShape> = {
+  happy: { sx: 1, sy: 1, lookX: 0, lookY: 0 },
+  searching: { sx: 1, sy: 0.75, lookX: 0.035, lookY: 0.03 },
+  excited: { sx: 1.15, sy: 1.2, lookX: 0, lookY: 0.01 },
+  alert: { sx: 0.85, sy: 1.35, lookX: 0, lookY: 0 },
+  resting: { sx: 1.15, sy: 0.14, lookX: 0, lookY: -0.03 },
 }
 
-/** Expressions as the robot's faces. The robot also has 'sad', 'angry', 'wink' and others: see robot-companion.js. */
-export const FACE_FOR: Record<RobotExpression, string> = {
-  happy: 'neutral',
-  searching: 'think',
-  excited: 'happy',
-  alert: 'surprised',
-  resting: 'sleepy',
-}
-
-/** A gesture as Echo changes what it is doing. Talking is the mouth; idle is the robot's own breathing. */
-export const GESTURE_FOR: Record<RobotPose, string | null> = {
-  idle: null,
-  listening: 'nod',
-  thinking: 'think',
-  talking: null,
+/** The glow colour for each face (null: the configured glow colour), and how bright it is. */
+export const GLOW: Record<RobotExpression, { color: string | null; intensity: number }> = {
+  happy: { color: null, intensity: 3.5 },
+  searching: { color: '#8fc7ff', intensity: 3.5 },
+  excited: { color: null, intensity: 5 },
+  alert: { color: '#ff5a4f', intensity: 4.5 },
+  resting: { color: null, intensity: 1.2 },
 }
 
 /** What is left to say: the new part when the line carries on from what was said, otherwise the whole line. */
 export function nextLine(said: string, text: string): string {
   if (!text) return ''
   return said && text.startsWith(said) ? text.slice(said.length).trim() : text.trim()
+}
+
+export const reducedMotion = () =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** WebGL is there (the robot needs it). Without it, the dock shows only its button. */
+export function hasWebGL(): boolean {
+  try {
+    const canvas = document.createElement('canvas')
+    return !!(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
+  } catch {
+    return false
+  }
 }

@@ -230,7 +230,7 @@ export default function VoiceAssistant({ assistant, onClose }: { assistant: Assi
         </label>
         <p id="voice-wake-why" className="voice-assistant__why">
           Say “Hey {ASSISTANT_NAME}”, or “Hey {ASSISTANT_NAME}” and a question, to start talking without a click. While this is on, your browser listens on
-          this page, and in Chrome and Edge the sound goes to the browser maker's speech service to find the phrase. Nothing reaches
+          this page, and in Chrome and Edge the sound goes to the browser maker's speech service to find the phrase. Nothing reaches{' '}
           {ASSISTANT_NAME} until you say it. The header shows when it is listening.
         </p>
       </>

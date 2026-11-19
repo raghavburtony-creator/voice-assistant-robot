@@ -2,10 +2,9 @@
 
 A starter kit for adding **Echo**, a 3D robot voice guide, to a web app. You talk to Echo (or type), it answers out loud with Gemini Live, and it can act on the page: open a page, run one of your app's commands, read what is on screen. Taken out of the NASA Earth Jukebox and made generic.
 
-- **Web** (`web/`): React, TypeScript and Vite. The robot, the voice panel, "Hey Echo", consent, push-to-talk or open mic, a text fallback.
+- **Robot** (`blender/`): Echo is modelled in Blender by a Python (bpy) script and exported as `web/public/echo/echo.glb`.
+- **Web** (`web/`): React, TypeScript and Vite. Echo drawn with React Three Fiber, the voice panel, "Hey Echo", consent, push-to-talk or open mic, a text fallback.
 - **Server** (`server/`): FastAPI and Google ADK. It holds the Gemini session and the API key, and runs Echo's tools.
-
-> **Keep this repository private.** The robot (`web/public/robot/`) belongs to the myt Learning Hub and has no open-source licence. Read [`web/public/robot/README.md`](web/public/robot/README.md) before you use it in a new project.
 
 ## Run it
 
@@ -25,6 +24,8 @@ npm run dev                   # http://localhost:5173
 ```
 
 Click the robot, or press **Alt+E**, and say "Take me to About" or "Show me a message".
+
+To tune the robot without a key or a server, open http://localhost:5173/lab.html: every pose and face, and a fake voice for the mouth.
 
 Checks: `cd server && .venv/bin/python -m pytest` and `cd web && npm run build`.
 
@@ -53,7 +54,7 @@ import { Echo, useAssistantContext, type AssistantAction } from './echo'
 useAssistantContext('cart', { items: 3, total: 'Rs 450' })
 ```
 
-Copy `web/src/echo/`, `web/src/echo.config.ts`, `web/public/robot/` and `server/app/voice/` into the new project, or start from this repository.
+Copy `web/src/echo/`, `web/src/echo.config.ts`, `web/public/echo/` and `server/app/voice/` into the new project, or start from this repository. Echo's colours are `ROBOT_COLORS` in `echo.config.ts`.
 
 ### Adding a tool
 
@@ -78,8 +79,29 @@ useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.
 - Every action is checked twice: by the tool on the server, and by `toAssistantAction` in the browser. Most can be undone from the panel.
 - The robot is only a picture. It is hidden from screen readers; the panel shows everything Echo says as text.
-- The robot's chest bars follow Echo's real voice while it speaks (`SpeechPlayer.bands()` in `web/src/echo/audio.ts`). The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
+- Echo's mouth bars follow its real voice while it speaks: a Web Audio `AnalyserNode` on the speech player (`SpeechPlayer.bands()` in `web/src/echo/audio.ts`) feeds `EchoScene.tsx` every frame. The speech bubble types the transcript at a fixed pace (`SPEAK_CPS`), so it can run slightly ahead of or behind the voice.
 - "Hey Echo" uses the browser's speech recognition. In Chrome and Edge that sends microphone sound to the browser maker while it listens. It is off until the visitor turns it on, and a banner shows whenever it is listening.
+
+## Echo's robot
+
+Echo is our own model, built from primitives by [`blender/build_echo.py`](blender/build_echo.py): a hovering bot with a rounded head, an amber visor face, five mouth bars that act as its voice meter, an antenna, floating hands and a glowing hover ring.
+
+| Layer | Where | What it does |
+|---|---|---|
+| Model | `blender/build_echo.py` (Blender, bpy) | Builds the mesh, names every moving part, exports `web/public/echo/echo.glb` |
+| Scene | `web/src/echo/robot/EchoScene.tsx` (React Three Fiber, three.js, postprocessing) | Lighting, bloom on the glowing parts, and every animation |
+| Wrapper | `web/src/echo/robot/EchoRobot.tsx` | Loads the scene after the page, shows the speech bubble, draws nothing without WebGL |
+| Faces | `web/src/echo/robot/robot.ts` | Eye shapes and glow colours for happy, searching, excited, alert and resting |
+
+To change the model, edit the script and run it again, keeping the node names listed at its top (the app finds parts by name):
+
+```bash
+python3 -m venv .blender && .blender/bin/pip install bpy==5.3.0
+.blender/bin/python blender/build_echo.py                      # writes web/public/echo/echo.glb
+.blender/bin/python blender/build_echo.py --render echo.png    # and a Cycles render to check it
+```
+
+With **Blender MCP**, open Blender with the add-on connected and ask Claude to run `blender/build_echo.py` (its `execute_blender_code` tool), then tweak the model live and export again from File → Export → glTF 2.0 (.glb), "Apply Modifiers" on.
 
 ## Deploying
 

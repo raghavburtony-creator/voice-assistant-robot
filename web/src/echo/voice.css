@@ -10,13 +10,7 @@
   --echo-warning: #8a4b00;
   --echo-error: #b3261e;
   --echo-radius: 20px;
-  /* The robot's own bubble and glow, in the same colours. */
-  --robot-accent: var(--echo-accent);
-  --robot-on-accent: var(--echo-on-accent);
-  --robot-bubble: var(--echo-surface);
-  --robot-bubble-line: var(--echo-line);
-  --robot-ink: var(--echo-ink);
-  --robot-muted: var(--echo-muted);
+  
 }
 :root[data-theme='dark'] {
   --echo-accent: #9fb2ff;
@@ -115,7 +109,7 @@
 /* Echo's dock: bottom right on every page. The robot takes the clicks; the button is for the keyboard and shows when focused. */
 .echo-dock { position: fixed; z-index: 30; inset-inline-end: 0.5rem; inset-block-end: 0.25rem; inline-size: 240px; block-size: 216px; pointer-events: none; }
 @media (max-width: 640px) { .echo-dock { inline-size: 140px; block-size: 126px; } }
-.echo-dock--beside-voice { inset-inline-end: calc(24px + min(420px, 100vw - 32px) - 60px); }
+.echo-dock--beside-voice { inset-inline-end: calc(24px + min(420px, 100vw - 32px) - 20px); }
 @media (max-width: 640px) { .echo-dock--beside-voice { visibility: hidden; } }
 .echo-dock__robot { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: auto; }
 .echo-dock__button { position: absolute; inset-block-end: 1rem; inset-inline-end: calc(100% + 0.5rem); pointer-events: auto; white-space: nowrap; }
@@ -126,3 +120,13 @@
   display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 1rem; border-radius: 999px;
   background: var(--echo-surface); color: var(--echo-ink); border: 1px solid var(--echo-line); font-size: 0.9rem; }
 .echo-open { position: fixed; z-index: 30; inset-inline-end: 1rem; inset-block-end: 1rem; }
+
+/* The robot and its speech bubble. */
+.echo-robot { position: relative; inline-size: 100%; block-size: 100%; }
+.echo-robot canvas { touch-action: none; }
+.echo-robot__bubble {
+  position: absolute; inset-block-end: 88%; inset-inline-end: 55%; z-index: 1; margin: 0;
+  inline-size: max-content; max-inline-size: min(260px, 70vw); padding: 0.55rem 0.8rem; border-radius: 16px 16px 4px 16px;
+  background: var(--echo-surface); color: var(--echo-ink); border: 1px solid var(--echo-line);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12); font-size: 0.9rem; line-height: 1.35; pointer-events: none;
+}
