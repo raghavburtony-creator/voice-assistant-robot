@@ -19,7 +19,8 @@ import { OttoConfigProvider, useOttoConfig } from './otto/useOttoConfig'
 import { createOttoGuide, planGuide, type GuideMode, type GuideRequest, type GuideTaskHandle } from './otto/guidance/guide'
 import type { GuideTaskSpec } from './otto/guidance/task'
 import { attachGuide } from './otto/guidance/runner'
-import { findGuideTarget } from './otto/guidance/targets'
+import { findGuideTarget, registerGuideTask } from './otto/guidance/targets'
+import { observeGuidance } from './otto/guidance/observe'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
@@ -56,6 +57,17 @@ const GUIDE_TASK: GuideTaskSpec = {
     { id: 's1', target: 'lab-left', say: 'First, the card on the far left.' },
     { id: 's2', target: 'lab-right', say: 'Next, the card on the far right.' },
     { id: 's3', target: 'lab-below', say: 'Last, the card down below the fold.' },
+  ],
+}
+/** A task Otto follows by himself: click the cards (or send the app events) and he notices each step. */
+const FOLLOW_TASK: GuideTaskSpec = {
+  id: 'lab-follow', title: 'A task Otto follows', intro: 'Do each step; I will notice.', doneSay: 'All done, nicely!',
+  cancelWhen: [{ on: 'event', type: 'section', topic: 'lab-away' }],
+  steps: [
+    { id: 'f1', target: 'lab-left', say: 'Click the card on the far left.', doneWhen: [{ on: 'activate' }],
+      undoneWhen: [{ on: 'event', type: 'complete', topic: 'lab-undo' }] },
+    { id: 'f2', target: 'lab-near', say: 'Now click the card beside me.', doneWhen: [{ on: 'activate' }] },
+    { id: 'f3', target: 'lab-right', say: 'Last, save: the app reports it.', doneWhen: [{ on: 'event', type: 'success', topic: 'lab-save' }] },
   ],
 }
 const kHz = (hz: number) => (hz >= 1000 ? `${hz / 1000}k` : `${hz}`)
@@ -261,6 +273,14 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
     guide.show(full_)
   }
   const startTask = () => { task.current = guide.startTask(GUIDE_TASK) }
+  // Offered to the voice: the real Otto starts it on a 'task' action (and refuses any task not offered).
+  useEffect(() => registerGuideTask(FOLLOW_TASK), [])
+  // What the visitor does, for guidance: clicks on the cards and the app events move a followed task on; events that name
+  // a help target may get an offer (logged with why).
+  useEffect(() => {
+    if (full) return
+    return observeGuidance(guide, { events, settings: () => attachDeps.current.config.guidance, onHelp: (why, target) => addGuide(`help for ${target}: ${why}`) })
+  }, [guide, events, full, addGuide])
 
   // Idle controls.
   const [shortIdle, setShortIdle] = useState(true)
@@ -397,6 +417,17 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
             <button type="button" className={btn} onClick={() => task.current?.back()}>Back</button>
             <button type="button" className={btn} onClick={() => task.current?.cancel()}>Cancel</button>
           </div>
+          <div className="lab-row"><span className="lab-hint">A task Otto follows:</span>
+            <button type="button" className={btn} onClick={() => { task.current = guide.startTask(FOLLOW_TASK) }}>Start it</button>
+            <span className="lab-hint">then click the cards, or:</span>
+            <button type="button" className={btn} onClick={() => events.notify({ type: 'success', topic: 'lab-save' })}>App: saved</button>
+            <button type="button" className={btn} onClick={() => events.notify({ type: 'complete', topic: 'lab-undo' })}>App: step 1 undone</button>
+            <button type="button" className={btn} onClick={() => events.notify({ type: 'section', topic: 'lab-away' })}>App: visitor left</button>
+          </div>
+          <div className="lab-row"><span className="lab-hint">Needs help?</span>
+            <button type="button" className={btn} onClick={() => events.notify({ type: 'failure', topic: 'lab-form', help: 'lab-right', message: 'That did not save.' })}>Failure naming a help target (press twice)</button>
+            <button type="button" className={btn} onClick={() => events.notify({ type: 'attention', help: 'lab-left', message: 'This needs you.' })}>Attention naming one</button>
+          </div>
           {offer && <div className="lab-row"><span className="lab-hint" role="status">Otto offered to show {offer.target}.</span>
             <button type="button" className={btn} onClick={() => { guide.show({ ...offer, reason: 'asked' }); setOffer(null) }}>Show me</button></div>}
           <p className="lab-hint" role="status">{taskNow ? `Task: ${taskNow}` : 'No task running.'}</p>
@@ -482,6 +513,8 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
           <div className="lab-row">
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.reply()) addServer('not connected: open the panel and start first') }}>Otto answers</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.bargeIn()) addServer('Otto is not speaking') }}>Barge in (the server hears you)</button>
+            <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: FOLLOW_TASK.id })) addServer('not connected') }}>Voice: start the followed task</button>
+            <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: 'not-offered' })) addServer('not connected') }}>Voice: start a task the page never offered</button>
           </div>
           <p className="lab-hint">To cut Otto off from this page instead, use the panel's Stop talking while he talks.</p>
         </fieldset>

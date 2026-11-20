@@ -36,6 +36,7 @@ cd server && .venv/bin/python -m pytest
 cd web && npm test && npm run typecheck && npm run build
 cd web && npm run build:lib   # when element/, react/, gemini/ or the public API changes; ends with scripts/check-dist.mjs
 cd web && npm run test:e2e    # Playwright in Chromium; first run: npx playwright install chromium
+# A Chromium already on the machine instead of Playwright's download: PLAYWRIGHT_CHROMIUM=/path/to/chrome npm run test:e2e
 ```
 
 To try the robot without a key, use `npm run dev` and open `/lab.html` (every part, plus a simulated Gemini server) or `/preview/` (the `<otto-mascot>` playground).

@@ -12,7 +12,11 @@ export default defineConfig({
     use: {
       ...devices['Desktop Chrome'],
       // Software WebGL 2 for headless Chromium.
-      launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] },
+      launchOptions: {
+        args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+        // A Chromium already on the machine (a CI image, a container) instead of Playwright's own download.
+        ...(process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {}),
+      },
     },
   }],
   webServer: {

@@ -29,7 +29,8 @@ import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
 import { attachGuide } from './guidance/runner'
-import { listGuideTargets, onGuideTargetsChange } from './guidance/targets'
+import { findGuideTask, listGuideTargets, listGuideTasks, onGuideTargetsChange, onGuideTasksChange } from './guidance/targets'
+import { observeGuidance } from './guidance/observe'
 import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
@@ -92,6 +93,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   // A voice 'guide' action (already checked against the page's targets) is shown by Otto's body; the model speaks.
   const handleAction = useCallback((action: AssistantAction) => {
     if (action.action === 'guide') ottoGuide.show({ target: action.target, reason: 'asked', say: null })
+    // A voice 'task' action (checked against the page's offered tasks): Otto walks the visitor through it, step by step.
+    if (action.action === 'task') { const spec = findGuideTask(action.task); if (spec) ottoGuide.startTask(spec) }
     onAction(action)
   }, [ottoGuide, onAction])
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })
@@ -150,6 +153,9 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     const offStop = ottoGuide.subscribe(command => { if (command.type === 'stop') clear() })
     return () => { detach(); offFeed(); offStop(); endSay(false) }
   }, [ottoGuide, ottoStage, channel])
+  // Otto follows what the visitor does: their clicks and typing move a guided task on, and events that name a help
+  // target may get an offer of help (guidance/observe.ts).
+  useEffect(() => observeGuidance(ottoGuide, { events: otto, settings: () => configRef.current.guidance }), [ottoGuide, otto])
   const answerOffer = (yes: boolean) => {
     if (yes && offer) ottoGuide.show({ ...offer.request, reason: 'asked' })
     else setGuideSay('')
@@ -163,6 +169,13 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     return () => { cancelAnimationFrame(frame); off() }
   }, [page])
   useEffect(() => () => publishContext('guide_targets', null), [])
+  // And which guided tasks the page offers (the voice can start only these).
+  useEffect(() => {
+    const publish = () => publishContext('guide_tasks', { tasks: listGuideTasks() })
+    publish()
+    const off = onGuideTasksChange(publish)
+    return () => { off(); publishContext('guide_tasks', null) }
+  }, [])
   /** What Otto is saying now, for the robot to mouth. */
   const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 

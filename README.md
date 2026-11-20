@@ -238,7 +238,7 @@ A target off screen is scrolled into view first. Asked or a task step, he points
 - Unasked, a minor one is a glance and a normal one an offer (`offerFirst`). An explicit `mode` is capped at point unless it's major.
 - In a voice conversation, a glance at most.
 
-Settings are `guidance` in the config: `cooldownMs`, `offerFirst`, `approachMinDistance`, `lookSeconds`.
+Settings are `guidance` in the config: `cooldownMs`, `offerFirst`, `approachMinDistance`, `lookSeconds`, `helpAfterFailures`, `helpWindowMs`.
 
 **Tasks** walk the visitor through steps:
 
@@ -252,15 +252,53 @@ task.complete('pick')    // the visitor already did 'pick': skip past it
 task.back(); task.goTo('open'); task.cancel()
 ```
 
-Your app reports progress with `complete`, and Otto moves on from there. Starting a task cancels the one before, and `guide.stop()` ends it.
+Your app can report progress with `complete`. Or Otto can see it for himself: a step may say what finishes it (`doneWhen`) and what undoes it (`undoneWhen`), and the task what abandons it (`cancelWhen`). A signal is one of three things:
+- the visitor using a target: a click or a press (`{ on: 'activate' }`, the step's own target unless `target` says otherwise);
+- typing in it (`{ on: 'input' }`);
+- an app event in the awareness vocabulary (`{ on: 'event', type: 'success', topic: 'save' }`).
+
+```tsx
+{ id: 'open', target: 'settings', say: 'First open Settings.', doneWhen: [{ on: 'activate' }],
+  undoneWhen: [{ on: 'event', type: 'complete', topic: 'settings-closed' }] }
+```
+
+What the signals do:
+- the current step's signal moves on to the next step;
+- a later step's skips ahead past it;
+- an earlier step's `undoneWhen` goes back to that step;
+- `cancelWhen` cancels the task;
+- anything else changes nothing.
+
+The rules are `observe` in `guidance/task.ts` (pure, tested). `guidance/observe.ts` watches clicks and typing on targets, and the app's events, only while a task runs. Steps without signals wait for `complete`, as before. Starting a task cancels the one before, and `guide.stop()` ends it.
+
+**When something that happened needs help:** most events only get a reaction (see Awareness). An event that names a guidance target in `help` may get an offer to show it (`guidance/help.ts`, pure and tested):
+- **One failure** may be a slip, so it gets no offer.
+- **The same failure again** within `helpWindowMs` (it counts after `helpAfterFailures` failures), or a major failure, gets an offer.
+- **Attention** gets an offer, or is shown at once when it's major.
+- **Waiting on the visitor** gets an offer only when it's major.
+- **A success on the same topic** forgets the failures.
+
+The offer still goes through the guide's judgement: cooldown, tab hidden, asleep, conversation. While a task runs, its steps are the guidance, so no extra offers are made.
+
+```tsx
+events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check the email address.' })
+```
 
 **Events:** `guide.onEvent`, or `otto:guide` on `<otto-mascot>`. An `offered` event carries the request: answer yes with `guide.show({ ...request, reason: 'asked' })`. `<Otto>` shows the Show me and Not now buttons itself.
 
 **Highlight:** while Otto shows something, it carries `data-otto-guiding`. The voice kit outlines it; style `[data-otto-guiding]` in your CSS to change that.
 
-**Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. `<Otto>` reports the page's targets to the server, and the tool accepts only those ids. The browser checks the id again before Otto shows it (D-02, D-14).
+**Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change.
 
-**Lab:** the Guidance panel in `/lab.html` asks for each mode, sends app suggestions at each importance, resets the cooldown, runs a task, and logs every plan and why.
+**Lab:** the Guidance panel in `/lab.html` can:
+- ask for each mode;
+- send app suggestions at each importance, and reset the cooldown;
+- run a narrated task;
+- run a task Otto follows: click the cards, or send "saved", "undone" and "left" events;
+- send a failure or attention naming a help target;
+- with the real Otto against the simulated server, have the "voice" start an offered task, or one the page never offered.
+
+Every plan and offer is logged with why.
 
 ### Themes and per-instance config
 

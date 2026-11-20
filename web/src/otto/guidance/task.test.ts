@@ -79,3 +79,59 @@ describe('createGuideTask', () => {
     expect(createGuideTask(SPEC).cancel()).toEqual([]) // not started
   })
 })
+
+describe('progress Otto sees for himself', () => {
+  // Open the menu, pick a theme (an app event), save. Closing the menu undoes step 1; leaving the page cancels.
+  const spec: GuideTaskSpec = {
+    id: 'theme', title: 'Change the theme',
+    cancelWhen: [{ on: 'event', type: 'section', topic: 'home' }],
+    steps: [
+      { id: 'menu', target: 'menu', say: 'Open the menu.', doneWhen: [{ on: 'activate' }], undoneWhen: [{ on: 'event', type: 'complete', topic: 'menu-closed' }] },
+      { id: 'pick', target: 'themes', say: 'Pick a theme.', doneWhen: [{ on: 'event', type: 'select', topic: 'theme' }] },
+      { id: 'save', target: 'save', say: 'Save it.', doneWhen: [{ on: 'activate' }] },
+    ],
+  }
+  const started = () => { const t = createGuideTask(spec); t.start(); return t }
+  const ids = (events: ReturnType<ReturnType<typeof createGuideTask>['observe']>) =>
+    events.map(e => (e.type === 'step' ? `${e.via}:${e.step.id}` : e.type === 'cancelled' ? `cancelled:${e.reason}` : e.type))
+
+  it('the visitor doing each step moves the task on, to done', () => {
+    const t = started()
+    expect(ids(t.observe({ kind: 'activate', target: 'menu' }))).toEqual(['next:pick'])
+    expect(ids(t.observe({ kind: 'event', type: 'select', topic: 'theme' }))).toEqual(['next:save'])
+    expect(ids(t.observe({ kind: 'activate', target: 'save' }))).toEqual(['done'])
+    expect(t.status).toBe('done')
+  })
+
+  it('something unrelated changes nothing', () => {
+    const t = started()
+    expect(t.observe({ kind: 'activate', target: 'elsewhere' })).toEqual([])
+    expect(t.observe({ kind: 'input', target: 'menu' })).toEqual([])           // typing is not activating
+    expect(t.observe({ kind: 'event', type: 'select', topic: 'font' })).toEqual([]) // another topic
+    expect(t.step?.id).toBe('menu')
+  })
+
+  it('skipping ahead lands after the step the visitor did', () => {
+    const t = started()
+    expect(ids(t.observe({ kind: 'event', type: 'select', topic: 'theme' }))).toEqual(['skip:save'])
+  })
+
+  it('undoing an earlier step goes back to it', () => {
+    const t = started()
+    t.observe({ kind: 'activate', target: 'menu' })
+    expect(ids(t.observe({ kind: 'event', type: 'complete', topic: 'menu-closed' }))).toEqual(['back:menu'])
+  })
+
+  it('the task\'s cancel signal abandons it, and a finished task ignores everything', () => {
+    const t = started()
+    expect(ids(t.observe({ kind: 'event', type: 'section', topic: 'home' }))).toEqual(['cancelled:user'])
+    expect(t.observe({ kind: 'activate', target: 'menu' })).toEqual([])
+  })
+
+  it('steps without signals wait for the host, as before', () => {
+    const t = createGuideTask({ id: 'x', title: 'X', steps: [{ id: 'a', target: 'a', say: 'A' }] })
+    t.start()
+    expect(t.observe({ kind: 'activate', target: 'a' })).toEqual([])
+    expect(ids(t.complete())).toEqual(['done'])
+  })
+})

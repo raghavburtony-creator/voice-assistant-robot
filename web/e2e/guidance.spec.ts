@@ -1,0 +1,71 @@
+import { test, expect } from './helpers'
+
+// Guidance without a backend: Otto follows a task by watching what the visitor does, and offers help when the same
+// failure happens again.
+
+test('Otto notices each step of a task as the visitor does it, follows them back, and finishes', async ({ page }) => {
+  await page.goto('/lab.html')
+  const log = page.locator('#lab-guides + ol')
+  const status = page.getByText(/^(Task: |No task running)/)
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await expect(status).toHaveText('Task: step 1 of 3: f1')
+
+  // The visitor does step 1 (clicking the far-left card): no "next" button, Otto sees it.
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  await expect(log).toContainText('task step 2/3 (next): f2')
+
+  // Something unrelated changes nothing; the app undoing step 1 takes them back to it.
+  await page.locator('[data-otto-target="lab-right"]').dispatchEvent('click')
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  await page.getByRole('button', { name: 'App: step 1 undone' }).click()
+  await expect(status).toHaveText('Task: step 1 of 3: f1')
+  await expect(log).toContainText('task step 1/3 (back): f1')
+
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  await page.locator('[data-otto-target="lab-near"]').dispatchEvent('click')
+  await expect(status).toHaveText('Task: step 3 of 3: f3')
+  await page.getByRole('button', { name: 'App: saved' }).click() // the app reports the last step done
+  await expect(status).toHaveText('No task running.')
+  await expect(log).toContainText('task lab-follow done')
+})
+
+test('leaving abandons a followed task', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await page.getByRole('button', { name: 'App: visitor left' }).click()
+  await expect(page.locator('#lab-guides + ol')).toContainText('task lab-follow cancelled (user)')
+})
+
+test('one failure gets a reaction only; the same failure again gets an offer of help', async ({ page }) => {
+  await page.goto('/lab.html')
+  const log = page.locator('#lab-guides + ol')
+  const fail = page.getByRole('button', { name: /^Failure naming a help target/ })
+  await fail.click()
+  await page.waitForTimeout(300)
+  await expect(log).not.toContainText('help for lab-right')
+  await fail.click()
+  await expect(log).toContainText('help for lab-right: failed 2 times: offer')
+  await expect(log).toContainText('offered lab-right: waiting for a yes')
+  // The visitor stays in control: nothing moves until they say yes.
+  await page.getByRole('button', { name: 'Show me', exact: true }).click()
+  await expect(log).toContainText(/shown lab-right: (point|approach)/)
+})
+
+test('the voice starts only a task the page offered', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Voice: start a task the page never offered' }).click()
+  await page.getByRole('button', { name: 'Voice: start the followed task' }).click()
+  const log = page.locator('#lab-guides + ol')
+  await expect(log).toContainText('task step 1/3 (start): f1 -> lab-left')
+  await expect(log).not.toContainText('not-offered')
+  // The panel lists what Otto did, in words (D-06).
+  await expect(panel).toContainText('Started: A task Otto follows')
+})

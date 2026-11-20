@@ -135,3 +135,19 @@ def test_show_target_only_allows_reported_targets():
     ctx.state["screens"] = {}
     assert tools.show_target("save", ctx)["ok"] is False
     sink.close("tool-test")
+
+
+def test_start_guided_task_only_allows_reported_tasks():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"guide_tasks": {"tasks": [{"id": "show-message", "title": "Show an example message", "steps": 2}]}}
+    out = tools.start_guided_task("nope", ctx)
+    assert out["ok"] is False and out["known"] == ["show-message"]
+    for bad in ("", "x" * 65, None, 5):
+        assert tools.start_guided_task(bad, ctx)["ok"] is False
+    assert sink.drain("tool-test") == []
+    assert tools.start_guided_task("show-message", ctx) == {"ok": True, "title": "Show an example message", "steps": 2}
+    assert sink.drain("tool-test") == [{"action": "task", "task": "show-message"}]
+    ctx.state["screens"] = {}
+    assert tools.start_guided_task("show-message", ctx)["ok"] is False
+    sink.close("tool-test")

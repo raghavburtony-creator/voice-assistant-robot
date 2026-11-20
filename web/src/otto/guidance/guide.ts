@@ -24,7 +24,7 @@ import type { Importance } from '../awareness/events'
 import type { IdleState } from '../idle'
 import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
-import { createGuideTask, type GuideTask, type GuideTaskEvent, type GuideTaskSpec, type GuideTaskStatus, type GuideTaskStep } from './task'
+import { createGuideTask, type GuideObservation, type GuideTask, type GuideTaskEvent, type GuideTaskSpec, type GuideTaskStatus, type GuideTaskStep } from './task'
 
 export type GuideSettings = OttoConfig['guidance']
 
@@ -152,6 +152,10 @@ export type OttoGuide = {
   startTask(spec: GuideTaskSpec): GuideTaskHandle
   /** Cancel the active task (reason 'user') and stop guiding. */
   stop(): void
+  /** What the visitor just did (the shell's observer calls this): the active task moves on if a step's signal matches. */
+  observe(seen: GuideObservation): void
+  /** The active task's spec while it runs, else null. */
+  readonly task: GuideTaskSpec | null
   /** For Otto (the runner): receive commands. Returns an unsubscribe function. */
   subscribe(listener: (command: GuideCommand) => void): () => void
   /** For the host: what Otto did. Returns an unsubscribe function. */
@@ -191,6 +195,11 @@ export function createOttoGuide(): OttoGuide {
       active = null
       send({ type: 'stop' })
     },
+    observe(seen) {
+      if (!active || active.task.status !== 'active') return
+      run(active.spec, active.task.observe(seen))
+    },
+    get task() { return active && active.task.status === 'active' ? active.spec : null },
     subscribe(listener) { commands.add(listener); return () => { commands.delete(listener) } },
     onEvent(listener) { events.add(listener); return () => { events.delete(listener) } },
     emit,

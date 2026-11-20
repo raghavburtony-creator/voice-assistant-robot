@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createOttoGuide, MISSING_SAY, planGuide, type GuideCommand, type GuideEvent, type GuideRequest, type GuideSettings, type GuideSituation } from './guide'
 import type { GuideTaskSpec } from './task'
 
-const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 }
+const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000 }
 const TARGET = { id: 'save', label: 'the Save button' }
 const SIT: GuideSituation = {
   side: 'right', distance: 0.5, visible: true, tabVisible: true, idle: 'awake', conversing: false, movementEnabled: true,

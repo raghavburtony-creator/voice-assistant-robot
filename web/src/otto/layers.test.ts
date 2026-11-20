@@ -11,6 +11,7 @@ const CORE = [
   'awareness/reactions.ts',
   'config.ts',
   'guidance/guide.ts',
+  'guidance/help.ts',
   'guidance/task.ts',
   'idle.ts',
   'mouth.ts',

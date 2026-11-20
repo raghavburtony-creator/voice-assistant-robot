@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-16**, **Q-02**. Before using one, check `main` and the open PRs (`gh pr list`) for the same number.
+- Take the next free number. Next free: **D-17**, **Q-02**. Before using one, check `main` and the open PRs (`gh pr list`) for the same number.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - An open question is a row in the table at the end: ID, question, owner, status (`open`, `answered by D-xx`, `dropped`).
 - When a decision changes behaviour, update the root `README.md` and the routing table in [README.md](README.md) in the same commit.
@@ -86,7 +86,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 ## D-13 The web kit has two layers, and the dependency points inward
 
 **Decision:** In `web/src/otto/`:
-- **Core:** pure rules and data. No React, no packages, no browser globals, no app config, and imports only other core files. Today that is `movement/stage.ts`, `mouth.ts`, `robot/gestures.ts`, `robot/robot.ts`, `awareness/events.ts`, `awareness/reactions.ts`, `idle.ts`, `config.ts` and `soundCues.ts`.
+- **Core:** pure rules and data. No React, no packages, no browser globals, no app config, and imports only other core files. Today that is `movement/stage.ts`, `mouth.ts`, `robot/gestures.ts`, `robot/robot.ts`, `awareness/events.ts`, `awareness/reactions.ts`, `guidance/guide.ts`, `guidance/task.ts`, `guidance/help.ts`, `idle.ts`, `config.ts` and `soundCues.ts`.
 - **Shell:** everything else in the kit. The adapters (Web Audio, the WebSocket and `messages.ts`, storage, speech recognition) and the React hooks and components. It may read `otto.config.ts`, the app's one composition root.
 - **App:** `otto.config.ts`, `App.tsx`, `main.tsx` and the lab. It may import the kit; the kit never imports it, except shell reading `otto.config.ts`. `<otto-mascot>` (`element/`) never reaches `otto.config.ts`, so it stays standalone.
 
@@ -105,6 +105,17 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 **Decision:** The React wrapper (`otto-mascot/react`) and the Gemini voice bridge (`otto-mascot/gemini`) are separate entry points, built apart from the element. In the adapters React is external (the app's own, an optional peer dependency), and the React adapter reaches the element only through a dynamic import of the root bundle. The element keeps React bundled inside. `scripts/check-dist.mjs` fails the build if adapter code reaches the root bundle, if `react.js` bundles React or defines the element, or if `gemini.js` imports React or the element.
 **Why:** A page that wants only the mascot downloads no adapter, and an app that uses an adapter doesn't get a second React through it.
 **Where:** `web/vite.lib.config.ts`, `web/vite.adapters.config.ts`, `web/scripts/check-dist.mjs` (run by `npm run build:lib`), `exports` and `peerDependencies` in `web/package.json`; README, "`<otto-mascot>`: Otto in any page".
+
+## D-16 Otto sees task progress and offers help himself; the voice can start offered tasks
+
+**Decision:**
+- **Observed progress.** A task step may name what finishes it (`doneWhen`) and what undoes it (`undoneWhen`), and the task what abandons it (`cancelWhen`). The signals are the visitor activating or typing in a target, or an app event in the awareness vocabulary.
+- **The rules are core.** `observe` in `guidance/task.ts` maps an observation to next, skip, back, cancel or nothing. The shell (`guidance/observe.ts`) watches clicks and typing on targets and the app's events, only while a task runs.
+- **Help.** An event can name a `help` target. `guidance/help.ts` (core) turns it into a guide request only when help is likely needed: the same failure again within `helpWindowMs`, a major failure, attention, or major waiting. The guide's own judgement (D-14) still decides how much to show, and no offer is made while a task runs.
+- **Voice.** The voice's `start_guided_task` tool accepts only task ids the page reported in `guide_tasks` (`registerGuideTask`), and the browser checks the id again (D-02).
+
+**Why:** Guiding means seeing that the visitor did the step, not waiting for the host to say so. Telling "something happened" apart from "something happened they need help with" needs a rule, and repetition is the cheapest honest signal. The model can't start a task the page never offered.
+**Where:** `web/src/otto/guidance/task.ts`, `help.ts`, `observe.ts`, `targets.ts` (`registerGuideTask`) and their tests; `web/e2e/guidance.spec.ts`; `start_guided_task` in `server/app/voice/tools.py`, test `test_start_guided_task_only_allows_reported_tasks`; `toAssistantAction` in `web/src/otto/messages.ts`; README, "Interactive guidance".
 
 ## Open questions
 

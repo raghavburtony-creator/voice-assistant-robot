@@ -19,6 +19,7 @@ import type { Reaction } from '../awareness/reactions'
 import { defineOttoConfig, type DeepPartial, type OttoConfig, type ThemeName } from '../config'
 import { OttoConfigProvider, useOttoConfig } from '../useOttoConfig'
 import { attachGuide } from '../guidance/runner'
+import { observeGuidance } from '../guidance/observe'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type GuideTaskHandle, type OttoGuide } from '../guidance/guide'
 import type { GuideTaskSpec } from '../guidance/task'
 import type { IdleState } from '../idle'
@@ -267,6 +268,9 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
       return { left: x, right: x, top: 0, bottom: 0 }
     },
   }))
+  // Otto follows what the visitor does: clicks and typing on targets move a guided task on, and notify() events that
+  // name a `help` target may get an offer of help.
+  cleanups.push(observeGuidance(guide, { events, settings: () => config.guidance }))
 
   function setState(next: RobotPose) {
     if (next === pose) return

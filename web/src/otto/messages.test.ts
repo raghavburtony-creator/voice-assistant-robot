@@ -14,3 +14,15 @@ describe('guide actions', () => {
     expect(toAssistantAction({ action: 'guide', target: 5 }, () => true)).toBeNull()
   })
 })
+
+describe('task actions', () => {
+  it('start only a task the page offered, checked again in the browser', () => {
+    const m = parseServerMessage('{"type":"action","action":"task","task":"show-message"}')
+    expect(m).toMatchObject({ type: 'action', action: 'task', task: 'show-message' })
+    const offered = (id: string) => id === 'show-message'
+    expect(toAssistantAction({ action: 'task', task: 'show-message' }, undefined, offered)).toEqual({ action: 'task', task: 'show-message' })
+    expect(toAssistantAction({ action: 'task', task: 'nope' }, undefined, offered)).toBeNull()
+    expect(toAssistantAction({ action: 'task', task: 'show-message' })).toBeNull() // no check given: refused
+    expect(toAssistantAction({ action: 'task', task: 7 }, undefined, () => true)).toBeNull()
+  })
+})

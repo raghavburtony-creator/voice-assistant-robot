@@ -19,8 +19,10 @@ export type { StagePlace, Rect } from '../movement/stage'
 // Interactive guidance: tell Otto what to show; he decides how.
 export { createOttoGuide, planGuide, MISSING_SAY } from '../guidance/guide'
 export type { OttoGuide, GuideRequest, GuideEvent, GuideCommand, GuidePlan, GuideStep, GuideSize, GuideMode, GuideReason, GuideSettings, GuideSituation, GuideTargetInfo, GuideTaskHandle } from '../guidance/guide'
-export type { GuideTaskSpec, GuideTaskStep, GuideTaskEvent, GuideTaskStatus } from '../guidance/task'
-export { registerGuideTarget, findGuideTarget, listGuideTargets, onGuideTargetsChange } from '../guidance/targets'
+export type { GuideTaskSpec, GuideTaskStep, GuideTaskEvent, GuideTaskStatus, GuideSignal, GuideObservation } from '../guidance/task'
+export { createHelpJudge, type HelpJudge } from '../guidance/help'
+export { observeGuidance, type GuidanceObserverOptions } from '../guidance/observe'
+export { registerGuideTarget, findGuideTarget, listGuideTargets, onGuideTargetsChange, guideTargetsAt, registerGuideTask, findGuideTask, listGuideTasks, onGuideTasksChange } from '../guidance/targets'
 export { attachGuide, type GuideRunnerDeps } from '../guidance/runner'
 
 defineOttoMascot()

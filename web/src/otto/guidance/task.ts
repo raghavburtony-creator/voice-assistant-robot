@@ -5,9 +5,48 @@
 //   t.start()          // [{ type: 'step', step: steps[0], via: 'start', ... }]
 //   t.complete()       // the current step is done: the next one, or { type: 'done' }
 //   t.complete('save') // the visitor skipped ahead: the step after 'save', or done
+//   t.observe(seen)    // what the visitor just did: Otto works out progress from the steps' signals
+//
+// Progress Otto can see for himself: a step may say what finishes it (`doneWhen`) and what undoes it (`undoneWhen`), and
+// the task what abandons it (`cancelWhen`). A signal is the visitor using a target (a click or press), typing in one, or
+// an app event (the awareness vocabulary). observe() then moves the task on:
+//   the current step's doneWhen      -> the next step
+//   a later step's doneWhen          -> skipped ahead, past that step
+//   an earlier step's undoneWhen     -> back to that step (the visitor undid it)
+//   the task's cancelWhen            -> cancelled
+// Steps without signals wait for complete(), as before: the host stays in charge of what counts as done.
 
-export type GuideTaskStep = { id: string; target: string; say: string }
-export type GuideTaskSpec = { id: string; title: string; steps: GuideTaskStep[]; intro?: string; doneSay?: string }
+/** Something the visitor did, as a step can name it. `target` defaults to the step's own target. */
+export type GuideSignal =
+  | { on: 'activate'; target?: string }
+  | { on: 'input'; target?: string }
+  | { on: 'event'; type: string; topic?: string }
+/** What Otto saw: the visitor used or typed in a target (by id), or an app event arrived. */
+export type GuideObservation = { kind: 'activate' | 'input'; target: string } | { kind: 'event'; type: string; topic?: string }
+
+export type GuideTaskStep = {
+  id: string
+  target: string
+  say: string
+  doneWhen?: readonly GuideSignal[]
+  undoneWhen?: readonly GuideSignal[]
+}
+export type GuideTaskSpec = {
+  id: string
+  title: string
+  steps: GuideTaskStep[]
+  intro?: string
+  doneSay?: string
+  cancelWhen?: readonly GuideSignal[]
+}
+
+/** Whether `seen` is `signal`, for a step whose target is `stepTarget`. */
+export function signalMatches(signal: GuideSignal, seen: GuideObservation, stepTarget: string): boolean {
+  if (signal.on === 'event') return seen.kind === 'event' && seen.type === signal.type && (signal.topic === undefined || seen.topic === signal.topic)
+  return seen.kind === signal.on && seen.target === (signal.target ?? stepTarget)
+}
+const any = (signals: readonly GuideSignal[] | undefined, seen: GuideObservation, target: string) =>
+  !!signals?.some(s => signalMatches(s, seen, target))
 export type GuideTaskStatus = 'idle' | 'active' | 'done' | 'cancelled'
 export type GuideTaskEvent =
   | { type: 'step'; task: string; step: GuideTaskStep; index: number; total: number; via: 'start' | 'next' | 'skip' | 'back' | 'goto' }
@@ -25,6 +64,8 @@ export type GuideTask = {
   back(): GuideTaskEvent[]
   goTo(stepId: string): GuideTaskEvent[]
   cancel(reason?: 'user' | 'app' | 'replaced'): GuideTaskEvent[]
+  /** Moves the task on from what the visitor did (see the signals above); [] when it changes nothing. */
+  observe(seen: GuideObservation): GuideTaskEvent[]
 }
 
 export function createGuideTask(spec: GuideTaskSpec): GuideTask {
@@ -68,6 +109,18 @@ export function createGuideTask(spec: GuideTaskSpec): GuideTask {
       if (!active()) return []
       status = 'cancelled'
       return [{ type: 'cancelled', task: spec.id, reason }]
+    },
+    observe(seen) {
+      if (!active()) return []
+      if (spec.cancelWhen?.some(s => signalMatches(s, seen, steps[index].target))) {
+        status = 'cancelled'
+        return [{ type: 'cancelled', task: spec.id, reason: 'user' }]
+      }
+      // Undone first: going back wins over a coincidental match ahead.
+      for (let j = 0; j < index; j++) if (any(steps[j].undoneWhen, seen, steps[j].target)) return go(j, 'back')
+      if (any(steps[index].doneWhen, seen, steps[index].target)) return go(index + 1, 'next')
+      for (let j = steps.length - 1; j > index; j--) if (any(steps[j].doneWhen, seen, steps[j].target)) return go(j + 1, 'skip')
+      return []
     },
   }
 }
