@@ -12,7 +12,7 @@
 // The selected text is left out unless `includeSelection` (it can be anything, and it goes to a third party).
 
 import { findGuideTarget, listGuideTargets } from '../guidance/targets'
-import { isElementHidden, isPrivateElement } from '../guidance/hidden'
+import { isElementHidden, isPrivateElement, PRIVATE_SELECTOR } from '../guidance/hidden'
 import { cleanPageText, fitPageSnapshot, PAGE_TEXT, routeHash, type PageBudget, type PageError, type PageSnapshot, type PageTarget } from './page'
 
 export type CollectPageOptions = Partial<PageBudget> & {
@@ -66,14 +66,33 @@ function isInvalid(e: Element): boolean {
 
 const hostTarget = (e: Element) => e.closest('[data-otto-target]')?.getAttribute('data-otto-target') ?? undefined
 
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** `message` with every trace of what the visitor typed in `field` replaced: the whole value, and each word of it. */
+export function withoutValue(message: string, field: { value?: unknown }): string {
+  const value = typeof field.value === 'string' ? cleanPageText(field.value, 400) : ''
+  if (!value || !message) return message
+  // The whole value first, then each word of it (an error may quote only part). A part of 3+ characters goes wherever it
+  // appears; a shorter one only as a whole word, so "12" goes from "Age 12" but not from "120".
+  const parts = [value, ...value.split(/[\s,;]+/).filter(Boolean)]
+  let out = message
+  for (const part of parts) {
+    const re = part.length >= 3 ? new RegExp(escapeRe(part), 'gi')
+      : new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(part)}(?![\\p{L}\\p{N}])`, 'giu')
+    out = out.replace(re, '(what was entered)')
+  }
+  return out
+}
+
 function collectErrors(root: ParentNode, doc: Document): PageError[] {
   const out: PageError[] = []
   for (const e of root.querySelectorAll(FIELDS)) {
     const field = e as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     if (isPrivate(field) || isSensitiveField(field) || isElementHidden(field) || !isInvalid(field)) continue
-    const message = cleanPageText(textOf(field.getAttribute('aria-errormessage'), doc), PAGE_TEXT.message)
-      || cleanPageText(field.validationMessage, PAGE_TEXT.message)
-      || cleanPageText(textOf(field.getAttribute('aria-describedby'), doc), PAGE_TEXT.message) || 'Not valid.'
+    // Error text can quote what was typed (Chrome's own: "'ada' is missing an '@'"), so the value is taken out of it.
+    const raw = cleanPageText(textOf(field.getAttribute('aria-errormessage'), doc), 400)
+      || cleanPageText(field.validationMessage, 400)
+      || cleanPageText(textOf(field.getAttribute('aria-describedby'), doc), 400)
+    const message = cleanPageText(withoutValue(raw, field), PAGE_TEXT.message) || 'Not valid.'
     const target = hostTarget(field)
     out.push(target ? { field: fieldLabel(field, doc), message, target } : { field: fieldLabel(field, doc), message })
   }
@@ -142,9 +161,16 @@ function collectSelection(doc: Document): string | undefined {
   const selection = doc.getSelection?.()
   if (!selection || selection.isCollapsed) return undefined
   // Inside a private area, or a field (whose text is a value), the selection is the visitor's: never sent.
+  const KEEP_OUT = `${FIELDS}, [contenteditable=""], [contenteditable="true"]`
   for (const node of [selection.anchorNode, selection.focusNode]) {
     const e = node instanceof Element ? node : node?.parentElement
-    if (e && (isPrivate(e) || e.closest(FIELDS) || e.closest('[contenteditable=""], [contenteditable="true"]'))) return undefined
+    if (e && (isPrivate(e) || e.closest(KEEP_OUT))) return undefined
+  }
+  // Ends in public text can still span a private area, or a field, in between: then nothing is sent.
+  const crossed = doc.querySelectorAll(`${PRIVATE_SELECTOR}, ${KEEP_OUT}`)
+  for (let i = 0; i < selection.rangeCount; i++) {
+    const range = selection.getRangeAt(i)
+    for (const e of crossed) if (range.intersectsNode(e)) return undefined
   }
   return cleanPageText(selection.toString(), PAGE_TEXT.selection) || undefined
 }

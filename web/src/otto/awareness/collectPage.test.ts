@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-import { collectPageContext, isSensitiveField, watchPageContext } from './collectPage'
+import { collectPageContext, isSensitiveField, watchPageContext, withoutValue } from './collectPage'
 import { cleanPageText, fitPageSnapshot, routeHash, type PageSnapshot } from './page'
 import { listGuideTargets } from '../guidance/targets'
 
@@ -69,6 +69,39 @@ describe('collectPageContext: privacy', () => {
     expect(collectPageContext({ includeSelection: true }).selection).toBe('Shipping takes three days.')
     select('b')
     expect(collectPageContext({ includeSelection: true }).selection).toBeUndefined()
+  })
+
+  it('a selection whose ends are public but which spans a private area or a field is not sent', () => {
+    page('<p id="a">Public start.</p><div data-otto-private><p>Secret diagnosis</p></div><p id="b">Public end.</p>'
+      + '<p id="c">Before</p><input value="typed secret"><p id="d">After</p>')
+    const span = (from: string, to: string) => {
+      const range = document.createRange()
+      range.setStart(document.getElementById(from)!.firstChild!, 0)
+      range.setEnd(document.getElementById(to)!.firstChild!, 3)
+      document.getSelection()!.removeAllRanges()
+      document.getSelection()!.addRange(range)
+    }
+    span('a', 'b')
+    expect(collectPageContext({ includeSelection: true }).selection).toBeUndefined()
+    span('c', 'd')
+    expect(collectPageContext({ includeSelection: true }).selection).toBeUndefined()
+  })
+
+  it('error text that quotes what was typed has the value taken out', () => {
+    page(`<input aria-label="Email" value="ada.lovelace" aria-invalid="true" aria-errormessage="m">
+      <p id="m">'ada.lovelace' is missing an '@'.</p>
+      <input aria-label="Age" value="12" aria-invalid="true" aria-describedby="n"><p id="n">Age 12 is too young; 120 is the cap.</p>`)
+    const out = JSON.stringify(collectPageContext())
+    expect(out).not.toContain('ada.lovelace')
+    expect(out).toContain("'(what was entered)' is missing an '@'.")
+    expect(out).toContain('Age (what was entered) is too young; 120 is the cap.')
+  })
+
+  it('withoutValue: the whole value and its longer words, case-insensitive; a field with no value is untouched', () => {
+    expect(withoutValue('Ada Lovelace is not allowed; LOVELACE is taken', { value: 'Ada Lovelace' }))
+      .toBe('(what was entered) is not allowed; (what was entered) is taken')
+    expect(withoutValue('Enter a name.', { value: '' })).toBe('Enter a name.')
+    expect(withoutValue('a+b? (a+b)', { value: 'a+b' })).toBe('(what was entered)? ((what was entered))')
   })
 
   it('no query string, and the hash only when it is a route', () => {
