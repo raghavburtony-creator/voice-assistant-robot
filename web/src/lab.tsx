@@ -6,13 +6,20 @@
 //   body       every face, pose and gesture; the mouth from a fake voice or an audio file; each sound cue
 //   voice      a simulated session that drives the lifecycle gestures; or the real Otto (panel, voice pipeline, bubble,
 //              barge-in) against a simulated Gemini server that streams synthetic speech
+//   guidance   guide Otto to a target (look, point, approach, explain), app suggestions at each importance, a missing
+//              target, and a multi-step task; each decision logged with why (no AI backend)
 //   awareness  app events (success, failure, a task, attention...) at any importance and place, floods of them, and
 //              each decision Otto makes with why; what he knows right now; and the theme presets
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createOttoEvents, OTTO_EVENT_TYPES, type Importance, type OttoEvent, type OttoEventType } from './otto/awareness/events'
 import type { Awareness, Reaction } from './otto/awareness/reactions'
-import { defineOttoConfig, OttoConfigProvider, THEME_NAMES, type ThemeName } from './otto/config'
+import { defineOttoConfig, THEME_NAMES, type ThemeName } from './otto/config'
+import { OttoConfigProvider, useOttoConfig } from './otto/useOttoConfig'
+import { createOttoGuide, planGuide, type GuideMode, type GuideRequest, type GuideTaskHandle } from './otto/guidance/guide'
+import type { GuideTaskSpec } from './otto/guidance/task'
+import { attachGuide } from './otto/guidance/runner'
+import { findGuideTarget } from './otto/guidance/targets'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
@@ -22,8 +29,8 @@ import { expressionFor, poseFor } from './otto/OttoDock'
 import OttoStage, { type IdleControls } from './otto/OttoStage'
 import type { IdleState } from './otto/idle'
 import { createGestureChannel, GESTURE_NAMES, type GestureEvent } from './otto/robot/gestures'
-import { FACES, useReducedMotion, type RobotExpression, type RobotPose } from './otto/robot/robot'
-import { useOttoConfig } from './otto/config'
+import { FACES, type RobotExpression, type RobotPose } from './otto/robot/robot'
+import { useReducedMotion } from './otto/robot/environment'
 import { SOUND_CUES } from './otto/sound'
 import { useGestureSounds } from './otto/useGestureSounds'
 import { useGestureTriggers } from './otto/useGestureTriggers'
@@ -37,6 +44,20 @@ const LINE = 'Hi, I am Otto. Ask me anything about this app.'
 /** A short conversation: connect, a reply, listening again, then hang up. Seconds from the start. */
 const SCRIPT: [number, AssistantStatus][] = [[0, 'connecting'], [1, 'listening'], [3.5, 'speaking'], [6, 'listening'], [8.5, 'idle']]
 const SHORT_IDLE = { idleLookAroundMs: 4000, sleepTimeoutMs: 12000 }
+const GUIDE_TARGETS = [
+  { id: 'lab-left', label: 'the far-left card', description: 'This card sits at the far left of the page.', style: { insetInlineStart: 8 } },
+  { id: 'lab-right', label: 'the far-right card', description: 'This card sits at the far right of the page.', style: { insetInlineEnd: 8 } },
+  { id: 'lab-near', label: 'the card next to me', description: 'This card is right beside Otto.', style: { insetInlineStart: '50%' } },
+]
+const GUIDE_MODES: GuideMode[] = ['auto', 'glance', 'point', 'approach', 'explain']
+const GUIDE_TASK: GuideTaskSpec = {
+  id: 'lab-tour', title: 'A three-step tour', intro: "Let's take a quick tour.", doneSay: 'That was the tour!',
+  steps: [
+    { id: 's1', target: 'lab-left', say: 'First, the card on the far left.' },
+    { id: 's2', target: 'lab-right', say: 'Next, the card on the far right.' },
+    { id: 's3', target: 'lab-below', say: 'Last, the card down below the fold.' },
+  ],
+}
 const kHz = (hz: number) => (hz >= 1000 ? `${hz / 1000}k` : `${hz}`)
 const time = () => new Date().toLocaleTimeString()
 
@@ -177,6 +198,70 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
     window.setTimeout(() => (result === 'succeed' ? job.succeed('The lab task finished.') : job.fail('The lab task failed.')), seconds * 1000)
   }
 
+  // Guidance: one channel; the lab attaches the runner itself when it shows the body only (the real Otto does it inside).
+  const guide = useMemo(createOttoGuide, [])
+  const [guides, addGuide] = useLog(10)
+  const [guideTarget, setGuideTarget] = useState('lab-right')
+  const [guideMode, setGuideMode] = useState<GuideMode>('auto')
+  const [guideQuiet, setGuideQuiet] = useState(false)
+  const [taskNow, setTaskNow] = useState('')
+  const [cooldownKey, setCooldownKey] = useState(0)
+  const [offer, setOffer] = useState<GuideRequest | null>(null)
+  const task = useRef<GuideTaskHandle | null>(null)
+  const lastApp = useRef<number | null>(null)
+  const heldFace = useRef<RobotExpression>('happy')
+  heldFace.current = expression
+  const sayTimer = useRef(0)
+  const idleRef = useRef<IdleState>('awake')
+  const attachDeps = useRef({ config, stage })
+  attachDeps.current = { config, stage }
+  useEffect(() => guide.onEvent(e => {
+    addGuide(e.type === 'shown' ? `shown ${e.target}: ${e.size}` : e.type === 'offered' ? `offered ${e.target}: waiting for a yes` : e.type === 'missing' ? `missing target ${e.target}`
+      : e.type === 'step' ? `task step ${e.index + 1}/${e.total} (${e.via}): ${e.step.id} -> ${e.step.target}`
+        : e.type === 'done' ? `task ${e.task} done` : `task ${e.task} cancelled (${e.reason})`)
+    if (e.type === 'offered') setOffer(e.request)
+    else if (e.type === 'shown') setOffer(null)
+    if (e.type === 'step') setTaskNow(`step ${e.index + 1} of ${e.total}: ${e.step.id}`)
+    else if (e.type === 'done' || e.type === 'cancelled') setTaskNow('')
+  }), [guide, addGuide])
+  useEffect(() => () => window.clearTimeout(sayTimer.current), [])
+  // Re-attaching (also what "Reset cooldown" does) gives the runner a fresh cooldown.
+  useEffect(() => {
+    if (full) return
+    return attachGuide(guide, {
+      stage,
+      playGesture: name => channel.play(name),
+      face: () => heldFace.current,
+      setFace: face => setExpression(face ?? heldFace.current),
+      speak: text => {
+        window.clearTimeout(sayTimer.current)
+        setSay(text)
+        return new Promise<void>(resolve => { sayTimer.current = window.setTimeout(() => { setSay(''); resolve() }, 1500 + text.length * 50) })
+      },
+      settings: () => attachDeps.current.config.guidance,
+      situation: () => ({ idle: idleRef.current, conversing: false, movementEnabled: attachDeps.current.config.movement.movementEnabled }),
+      ottoRect: () => { const x = stage.frame.x; return { left: x, right: x, top: 0, bottom: 0 } },
+    })
+  }, [guide, full, stage, channel, cooldownKey])
+  const askGuide = (request: GuideRequest) => {
+    const full_ = { ...request, say: guideQuiet ? null : request.say }
+    const found = findGuideTarget(full_.target)
+    const r = found?.element.getBoundingClientRect()
+    const dx = r ? (r.left + r.right) / 2 - stage.frame.x : 0
+    const now = performance.now()
+    // A preview of the runner's decision: same inputs, read from the page now.
+    const plan = planGuide(full_, found?.info ?? null, {
+      side: dx > 48 ? 'right' : dx < -48 ? 'left' : 'center', distance: Math.min(1, Math.abs(dx) / window.innerWidth),
+      visible: !r || (r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth),
+      tabVisible: document.visibilityState !== 'hidden', idle: idleRef.current, conversing: false,
+      movementEnabled: config.movement.movementEnabled, now, lastAppGuideAt: lastApp.current,
+    }, config.guidance)
+    if ((full_.reason ?? 'app') === 'app' && found && plan.size !== 'skip') lastApp.current = now
+    addGuide(`${full_.target}: ${plan.size}. Why: ${plan.why.join('; ')}`)
+    guide.show(full_)
+  }
+  const startTask = () => { task.current = guide.startTask(GUIDE_TASK) }
+
   // Idle controls.
   const [shortIdle, setShortIdle] = useState(true)
   const [idleState, setIdleState] = useState<IdleState>('awake')
@@ -290,6 +375,33 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
           <p className="lab-hint" role="status">{known}</p>
         </fieldset>
 
+        <fieldset><legend>Guidance: showing the visitor something</legend>
+          <p className="lab-hint">Otto guides to the demo cards (far left, far right, beside him, and one below the fold, which makes him scroll). Without the AI backend. The decision log is on the right; its first line per request is a preview of the plan, and "shown" / "missing" / task lines are what the runner reported. Suggestions respect a cooldown.</p>
+          <div className="lab-row">
+            <label className="lab-inline">Target <select value={guideTarget} onChange={e => setGuideTarget(e.target.value)}>
+              {[...GUIDE_TARGETS.map(t => t.id), 'lab-below', 'missing-target'].map(id => <option key={id} value={id}>{id}</option>)}</select></label>
+            <label className="lab-inline"><input type="checkbox" checked={guideQuiet} onChange={e => setGuideQuiet(e.target.checked)} /> Say nothing (the voice speaks)</label>
+          </div>
+          <div className="lab-row"><span className="lab-hint">Asked:</span>{GUIDE_MODES.map(mode =>
+            <button key={mode} type="button" className={btn} aria-pressed={guideMode === mode} onClick={() => { setGuideMode(mode); askGuide({ target: guideTarget, mode, reason: 'asked' }) }}>{mode}</button>)}
+          </div>
+          <div className="lab-row"><span className="lab-hint">App suggests:</span>{(['minor', 'normal', 'major'] as const).map(level =>
+            <button key={level} type="button" className={btn} onClick={() => askGuide({ target: guideTarget, mode: 'auto', reason: 'app', importance: level })}>{level}</button>)}
+            <button type="button" className={btn} onClick={() => { lastApp.current = null; setCooldownKey(k => k + 1); addGuide('cooldown reset') }}>Reset cooldown</button>
+            <button type="button" className={btn} onClick={() => guide.stop()}>Stop guiding</button>
+          </div>
+          <div className="lab-row">
+            <button type="button" className={btn} onClick={startTask}>Start task</button>
+            <button type="button" className={btn} onClick={() => task.current?.complete()}>Complete step</button>
+            <button type="button" className={btn} onClick={() => task.current?.complete('s2')}>Skip ahead (past step 2)</button>
+            <button type="button" className={btn} onClick={() => task.current?.back()}>Back</button>
+            <button type="button" className={btn} onClick={() => task.current?.cancel()}>Cancel</button>
+          </div>
+          {offer && <div className="lab-row"><span className="lab-hint" role="status">Otto offered to show {offer.target}.</span>
+            <button type="button" className={btn} onClick={() => { guide.show({ ...offer, reason: 'asked' }); setOffer(null) }}>Show me</button></div>}
+          <p className="lab-hint" role="status">{taskNow ? `Task: ${taskNow}` : 'No task running.'}</p>
+        </fieldset>
+
         <fieldset><legend>Theme</legend>
           <label className="lab-inline">Preset <select value={theme} onChange={e => setTheme(e.target.value as ThemeName)}>
             {THEME_NAMES.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -376,6 +488,7 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
       </div>
       <aside className="lab-side">
         <Log id="lab-reactions" title="Reactions" lines={reactions} />
+        <Log id="lab-guides" title="Guidance" lines={guides} />
         <Log id="lab-moves" title="Movement" lines={moves} />
         <Log id="lab-events" title="Gesture events" lines={log} />
         {full && <Log id="lab-server" title="Simulated server" lines={serverLines} />}
@@ -383,16 +496,20 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
     </main>
 
     <div className={following ? 'lab-mover is-moving' : 'lab-mover'} aria-hidden="true" />
+    {GUIDE_TARGETS.map(t => <div key={t.id} className="otto-btn otto-btn--tonal" role="group" data-otto-target={t.id} data-otto-label={t.label} data-otto-description={t.description}
+      style={{ position: 'fixed', insetBlockEnd: t.id === 'lab-near' ? 140 : 90, padding: '0.5rem 0.75rem', ...t.style }}>{t.label}</div>)}
+    <div className="otto-btn otto-btn--tonal" role="group" data-otto-target="lab-below" data-otto-label="the card below the fold" data-otto-description="This card is far down the page."
+      style={{ position: 'absolute', insetBlockStart: '180vh', insetInlineStart: '40%', padding: '0.5rem 0.75rem' }}>the card below the fold</div>
     <div className="lab-spot-left" aria-hidden="true" />
     <div className="lab-spot-top" aria-hidden="true" />
     {panel && <div className="lab-panel" role="region" aria-label="Simulated panel">A simulated panel: Otto keeps clear of it.</div>}
 
     {full
       ? <Otto page="home" onAction={action => addServer(`action: ${JSON.stringify(action)}`)} gestures={channel} stage={stage}
-          createSocket={server.createSocket} idleControls={idle} events={events} config={config} />
+          createSocket={server.createSocket} idleControls={idle} events={events} config={config} guide={guide} />
       : <OttoStage className="otto-dock" stage={stage} pose={shownPose} expression={shownExpression} say={shownSay}
           mouth={shownMouth} gestures={channel} busy={busy} obstacles={panel ? ['.lab-panel'] : undefined} obstaclesKey={panel}
-          idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={setIdleState} idleControls={idle}
+          idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={s => { idleRef.current = s; setIdleState(s) }} idleControls={idle}
           events={events} onReaction={(e, r) => addReaction(describeReaction(e, r))} awarenessRef={knows} />}
   </>
 }

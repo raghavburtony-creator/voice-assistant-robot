@@ -7,11 +7,13 @@
 // Attributes (reactive): state, face, theme, sound-enabled, movement-enabled, hotkey, and placement ("dock" or "inline"; read
 // when it connects). The `config` property takes a full override object. Methods mirror createOtto's controller. Events
 // (otto:ready, otto:statechange, otto:gesturestart, otto:gestureend, otto:interrupt, otto:error, otto:activate,
-// otto:reaction, otto:move) bubble and cross the shadow boundary. Removing the element disposes everything; adding it
+// otto:reaction, otto:move, otto:guide) bubble and cross the shadow boundary. Removing the element disposes everything; adding it
 // back starts again.
 
 import type { OttoEvent, TaskHandle } from '../awareness/events'
 import { isThemeName, type DeepPartial, type OttoConfig } from '../config'
+import type { GuideRequest, GuideTaskHandle, OttoGuide } from '../guidance/guide'
+import type { GuideTaskSpec } from '../guidance/task'
 import type { StagePlace } from '../movement/stage'
 import { isGestureName, type GestureName } from '../robot/gestures'
 import { FACES, type RobotExpression } from '../robot/robot'
@@ -95,6 +97,14 @@ export class OttoMascotElement extends HTMLElement {
   notify(event: OttoEvent) { this.otto?.notify(event) }
   task(id: string, details?: Omit<OttoEvent, 'type' | 'task'>): TaskHandle {
     return this.otto?.task(id, details) ?? { succeed() {}, fail() {}, done() {} }
+  }
+  /** The guide channel while connected (null otherwise). */
+  get guide(): OttoGuide | null { return this.otto?.guide ?? null }
+  showTarget(target: string | GuideRequest) { this.otto?.showTarget(target) }
+  /** Throws before the element is connected: a task cannot be walked through by an Otto who is not there. */
+  startGuide(spec: GuideTaskSpec): GuideTaskHandle {
+    if (!this.otto) throw new Error('otto-mascot is not connected yet')
+    return this.otto.startGuide(spec)
   }
 }
 

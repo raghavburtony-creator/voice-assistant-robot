@@ -4,7 +4,7 @@
 // task on his face while it runs (searching, then thinking hard).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { useOttoConfig } from '../config'
+import { useOttoConfig } from '../useOttoConfig'
 import type { IdleState } from '../idle'
 import type { StageController } from '../movement/stage'
 import type { GestureChannel } from '../robot/gestures'

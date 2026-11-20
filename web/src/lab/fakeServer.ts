@@ -97,7 +97,14 @@ export class FakeVoiceServer {
     const message = JSON.parse(data) as { type: string; text?: string }
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
-    else if (message.type === 'text') this.later(() => this.reply(), 400)
+    else if (message.type === 'text') {
+      const text = (message.text ?? '').trim()
+      const ask = /^(show me|where is) /i.exec(text)
+      if (ask) {
+        const target = text.slice(ask[0].length).trim().toLowerCase().replace(/\s+/g, '-')
+        this.later(() => { this.send({ type: 'action', action: 'guide', target }); this.reply(`Here is ${target.replace(/-/g, ' ')}.`) }, 400)
+      } else this.later(() => this.reply(), 400)
+    }
     else if (message.type === 'stop') socket.close()
   }
 

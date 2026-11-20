@@ -13,11 +13,12 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import ClayRobot, { type ClayControl } from '../../components/originkit/ui/clay-robot'
-import { useOttoConfig } from '../config'
+import { useOttoConfig } from '../useOttoConfig'
 import { MOUTH_BARS, type MouthSource } from '../mouth'
 import type { StageFrame } from '../movement/stage'
 import { createGestureController, type GestureChannel } from './gestures'
-import { FACES, useReducedMotion, type FaceShape, type RobotExpression, type RobotPose } from './robot'
+import { useReducedMotion } from './environment'
+import { FACES, type FaceShape, type RobotExpression, type RobotPose } from './robot'
 
 type Props = {
   pose: RobotPose

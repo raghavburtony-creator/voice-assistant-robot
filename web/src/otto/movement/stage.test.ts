@@ -216,3 +216,57 @@ describe('stage locomotion', () => {
     expect(stage.frame.gaze).toBeNull()
   })
 })
+
+describe('stage reduced motion and supersession', () => {
+  it('reduced motion: no intermediate positions, never turning or walking, at any frame', async () => {
+    const { stage } = make({ reducedMotion: true })
+    const arrived = stage.moveToX(0)
+    expect(stage.frame.x).toBe(LO) // already there, before a single update
+    const { xs, headings, phases } = run(stage, 1)
+    expect(new Set(xs)).toEqual(new Set([LO]))
+    expect(new Set(headings)).toEqual(new Set([0]))
+    expect(new Set(phases)).toEqual(new Set(['idle']))
+    expect(stage.frame.v).toBe(0)
+    expect(stage.frame.speed).toBe(0)
+    expect(await arrived).toBe(true)
+  })
+
+  it('switching reduced motion on mid-walk stops the walk without breaking the next move', async () => {
+    const { stage } = make()
+    const going = stage.moveToX(0)
+    run(stage, 0.8)
+    stage.setReducedMotion(true)
+    run(stage, 0.5)
+    expect(stage.busy()).toBe(false)
+    expect(await going).toBe(true)
+    expect(await stage.moveToX(0.5)).toBe(true)
+    expect(stage.frame.x).toBe((LO + HI) / 2)
+    expect(stage.frame.heading).toBe(0)
+  })
+
+  it('a new destination mid-walk supersedes the old one, and he arrives at the new spot, facing the viewer', async () => {
+    const { stage, events } = make()
+    const first = stage.moveToX(0)
+    run(stage, 1)
+    const midX = stage.frame.x
+    expect(midX).toBeLessThan(HI)
+    expect(midX).toBeGreaterThan(LO)
+    const second = stage.moveToPx(700)
+    expect(await first).toBe(false)
+    run(stage, 8)
+    expect(await second).toBe(true)
+    expect(stage.frame.x).toBe(700)
+    expect(stage.frame.phase).toBe('idle')
+    expect(stage.frame.heading).toBe(0)
+    expect(stage.busy()).toBe(false)
+    expect(events.map(e => e.type)).toEqual(['depart', 'cancel', 'depart', 'arrive'])
+    expect(events.at(-1)).toEqual({ type: 'arrive', x: 700 })
+  })
+
+  it('every promise from a chain of rapid commands settles: only the last is true', async () => {
+    const { stage } = make()
+    const results = [stage.moveToX(0), stage.moveToX(0.3), stage.moveToX(0.6), stage.moveToX(0.2)]
+    run(stage, 10)
+    expect(await Promise.all(results)).toEqual([false, false, false, true])
+  })
+})

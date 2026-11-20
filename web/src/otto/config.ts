@@ -4,12 +4,11 @@
 //   const config = defineOttoConfig({ theme: 'midnight', colors: { eyes: '#ffd27a' }, sound: { soundVolume: 0.3 } })
 //
 // Every value has a default here; an override names only what it changes. Arrays (avoid, idle gestures, rules) are
-// replaced, not merged. React code reads the active config with useOttoConfig() (OttoConfigProvider sets it).
+// replaced, not merged. React code reads the active config with useOttoConfig() (useOttoConfig.ts).
 
-import { createContext, createElement, useContext, type ReactNode } from 'react'
 import type { ReactionRule } from './awareness/reactions'
 import type { GestureName } from './robot/gestures'
-import type { SoundCue } from './sound'
+import type { SoundCue } from './soundCues'
 
 export type ThemeName = 'default' | 'midnight' | 'cyber' | 'minimal'
 
@@ -97,6 +96,17 @@ export type OttoConfig = {
     /** Your own rules, asked first: return a reaction (or 'none') to override the built-in one, undefined to defer. */
     rules: readonly ReactionRule[]
   }
+  /** Showing the user where something is (point, look, walk toward it). */
+  guidance: {
+    /** Minimum ms between app-initiated (unrequested) guidance. */
+    cooldownMs: number
+    /** Offer before showing, for normal-importance app suggestions. */
+    offerFirst: boolean
+    /** Share of the viewport width beyond which Otto walks toward the target. */
+    approachMinDistance: number
+    /** Seconds Otto looks at the target. */
+    lookSeconds: number
+  }
 }
 
 const BASE: OttoConfig = {
@@ -116,7 +126,7 @@ const BASE: OttoConfig = {
     soundVolume: 0.5,
     gestureCues: {
       welcomeWave: 'chirpConnect', nod: 'chirpAcknowledge', thinkingHand: 'chirpThinking', headShake: 'chirpNegative',
-      celebrate: 'chirpCelebration', goodbyeWave: 'chirpGoodbye', lookAround: null, stretch: null,
+      celebrate: 'chirpCelebration', goodbyeWave: 'chirpGoodbye', lookAround: null, stretch: null, pointLeft: null, pointRight: null,
     },
   },
   movement: {
@@ -138,6 +148,7 @@ const BASE: OttoConfig = {
     awayMs: 60_000,
     rules: [],
   },
+  guidance: { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 },
 }
 
 export type DeepPartial<T> = T extends readonly unknown[] ? T : T extends (...args: never[]) => unknown ? T
@@ -195,14 +206,3 @@ export function defineOttoConfig(overrides: DeepPartial<OttoConfig> = {}): OttoC
 }
 
 export const DEFAULT_OTTO_CONFIG = BASE
-
-const ConfigContext = createContext<OttoConfig>(BASE)
-
-/** The active mascot config (the nearest OttoConfigProvider's, or the defaults). */
-export function useOttoConfig(): OttoConfig {
-  return useContext(ConfigContext)
-}
-
-export function OttoConfigProvider({ config, children }: { config: OttoConfig; children?: ReactNode }) {
-  return createElement(ConfigContext.Provider, { value: config }, children)
-}

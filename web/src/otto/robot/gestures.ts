@@ -9,7 +9,7 @@
 //         swing  forward (+) / back at the shoulder (rad)      ext  stretch the clay arm, 0..1
 //   face  joy  happy arc eyes, 0..1          lookX / lookY  shift the gaze on the screen
 
-export const GESTURE_NAMES = ['welcomeWave', 'celebrate', 'nod', 'headShake', 'thinkingHand', 'goodbyeWave', 'lookAround', 'stretch'] as const
+export const GESTURE_NAMES = ['welcomeWave', 'celebrate', 'nod', 'headShake', 'thinkingHand', 'goodbyeWave', 'lookAround', 'stretch', 'pointLeft', 'pointRight'] as const
 export type GestureName = (typeof GESTURE_NAMES)[number]
 
 export const isGestureName = (value: unknown): value is GestureName =>
@@ -51,6 +51,14 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
 
 // A wave with the right arm: raised and stretched so the hand clears the helmet, swaying at the shoulder.
 const wave = (t: number, hz: number, sway: number) => ({ raise: 1.72 + sway * Math.sin(TAU * hz * t), swing: 0, ext: 1 })
+
+// Showing a spot on the viewer's side: the arm out roughly level and stretched, a small settle, the head turned and tilted that way.
+const point = (arm: 'handL' | 'handR', side: -1 | 1): GestureDef => ({
+  duration: 1.6, attack: 0.25, release: 0.4, parts: [arm, 'head', 'face'], look: 0.3, priority: 2,
+  sample: u => {
+    const settle = 0.06 * Math.sin(TAU * 1.5 * u)
+    return { [arm]: { raise: 1.3 + settle, swing: 0.15, ext: 1 }, head: { ry: 0.3 * side, rz: -0.08 * side, rx: -0.04 }, face: { lookX: 0.25 * side } }
+  } })
 
 /** Offsets are added to the base pose; the robot's hanging arm is raise 0. */
 export const GESTURES: Readonly<Record<GestureName, GestureDef>> = {
@@ -99,6 +107,8 @@ export const GESTURES: Readonly<Record<GestureName, GestureDef>> = {
         face: { joy: 0.6 * up },
       }
     } },
+  pointLeft: point('handL', -1),
+  pointRight: point('handR', 1),
 }
 
 export type GestureFrame = Channels & {

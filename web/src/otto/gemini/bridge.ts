@@ -1,0 +1,207 @@
+// Wires a live voice session into Otto: the model's audio to his lip-sync, its words to his bubble, the session's life to
+// his face, gestures and sounds. No React, no element code, no SDK: it drives any object shaped like VoiceBridgeTarget
+// (<otto-mascot>, createOtto()'s controller, the React handle).
+
+import type { OttoController, OttoState } from '../element/createOtto'
+import type { GestureName } from '../robot/gestures'
+import type { RobotExpression } from '../robot/robot'
+import type { SoundCue } from '../soundCues'
+import { SpeechPlayer, startRecorder, type Recorder } from '../audio'
+import { openTransport, parseLiveMessage, assertNoApiKey, assertSecureProxyUrl, type BridgeEvent, type Transport, type TransportOptions } from './transports'
+
+/** The part of Otto the bridge drives. */
+export type VoiceBridgeTarget = Pick<OttoController, 'connectAudioNode' | 'speakText' | 'interrupt' | 'playGesture' | 'playSound' | 'setFace' | 'setState'>
+
+export type BridgeState = 'idle' | 'connecting' | 'open' | 'closed'
+
+export type GeminiVoiceBridgeOptions = {
+  /** Omit for transport-less mode: you run the session (e.g. @google/genai's ai.live.connect) and call feed(message). */
+  transport?: TransportOptions
+  /** Open the microphone on connect() (call connect from a click). Default false. */
+  microphone?: boolean
+  /** Sent to the proxy in its start message. Default 'en'. */
+  language?: string
+  /** Sent to the proxy in its start message; the server falls back to its first page. */
+  page?: string
+  /** Show the model's words in Otto's bubble. Default true. */
+  showText?: boolean
+  onError?: (error: Error) => void
+  onState?: (state: BridgeState) => void
+}
+
+export type GeminiVoiceBridge = {
+  /** Call from a click: audio and the microphone need a user gesture. Resolves once the session is ready. */
+  connect(): Promise<void>
+  /** Hand the bridge one Gemini Live server message (transport-less mode). */
+  feed(message: unknown): void
+  sendText(text: string): void
+  startMic(): Promise<void>
+  stopMic(): void
+  /** Releases everything: socket, audio context and nodes, recorder, Otto's audio tap. Safe to call twice. */
+  close(): void
+  readonly state: BridgeState
+}
+
+export type OttoAction =
+  | { do: 'gesture'; name: GestureName }
+  | { do: 'face'; face: RobotExpression }
+  | { do: 'sound'; cue: SoundCue }
+  | { do: 'state'; state: OttoState }
+  | { do: 'interrupt' }
+  | { do: 'stopAudio' }
+
+/**
+ * What Otto does for each event. `audible`: his voice is sounding right now. The mic is held back then (D-05), so user
+ * speech arriving while he is audible is a late transcript of earlier words, not a barge-in: barge-in is 'interrupted'.
+ */
+export function mapEvent(event: BridgeEvent, audible: boolean): OttoAction[] {
+  switch (event.type) {
+    case 'ready': return [{ do: 'gesture', name: 'welcomeWave' }, { do: 'face', face: 'happy' }, { do: 'state', state: 'listening' }]
+    case 'userSpeech':
+      return audible ? [] : [{ do: 'state', state: 'listening' }]
+    case 'interrupted': return [{ do: 'interrupt' }, { do: 'stopAudio' }, { do: 'state', state: 'listening' }]
+    case 'thinking': return [{ do: 'state', state: 'thinking' }, { do: 'gesture', name: 'thinkingHand' }]
+    case 'audio': return [{ do: 'state', state: 'talking' }]
+    case 'turnComplete': return [{ do: 'state', state: 'listening' }]
+    case 'error': return [{ do: 'face', face: 'alert' }, { do: 'sound', cue: 'chirpNegative' }]
+    case 'closed': return [{ do: 'gesture', name: 'goodbyeWave' }, { do: 'face', face: 'resting' }, { do: 'state', state: 'idle' }]
+    case 'text': return []
+  }
+}
+
+export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: GeminiVoiceBridgeOptions = {}): GeminiVoiceBridge {
+  assertNoApiKey(options)
+  if (options.transport) assertNoApiKey(options.transport)
+  if (options.transport?.type === 'proxy') assertSecureProxyUrl(options.transport.url)
+  let state: BridgeState = 'idle'
+  let transport: Transport | null = null
+  let player: SpeechPlayer | null = null
+  let disconnectAudio: (() => void) | null = null
+  let recorder: Recorder | null = null
+  let micAttempt = 0
+  let said = ''
+  let settle: { resolve: () => void; reject: (e: Error) => void } | null = null
+
+  const setState = (next: BridgeState) => { if (state !== next) { state = next; options.onState?.(next) } }
+
+  const ensureAudio = () => {
+    if (player) return player
+    player = new SpeechPlayer()
+    void player.resume()
+    disconnectAudio = otto.connectAudioNode(player.output)
+    return player
+  }
+
+  const apply = (a: OttoAction) => {
+    switch (a.do) {
+      case 'gesture': otto.playGesture(a.name); break
+      case 'face': otto.setFace(a.face); break
+      case 'sound': otto.playSound(a.cue); break
+      case 'state': otto.setState(a.state); break
+      case 'interrupt': otto.interrupt(); break
+      case 'stopAudio': player?.interrupt(); said = ''; break
+    }
+  }
+
+  const release = () => {
+    micAttempt++
+    recorder?.stop(); recorder = null
+    const t = transport; transport = null; t?.close()
+    disconnectAudio?.(); disconnectAudio = null
+    player?.close(); player = null
+  }
+
+  const handle = (event: BridgeEvent) => {
+    if (state === 'closed') return
+    // Otto's actions first: a barge-in's stopAudio must come before the endTurn that lets the next turn's audio in.
+    mapEvent(event, !!player?.playing).forEach(apply)
+    switch (event.type) {
+      case 'ready':
+        setState('open'); settle?.resolve(); settle = null; break
+      case 'audio':
+        ensureAudio().play(event.pcm); break
+      case 'text':
+        if (options.showText === false) break
+        said += event.text
+        // speakText has no bubble-only mode, so its procedural mouth briefly leads; the duration tracks the audio still to play.
+        void otto.speakText(said, { durationMs: remainingMs(), mouth: false })
+        break
+      case 'turnComplete': case 'interrupted':
+        player?.endTurn(); said = ''; break
+      case 'error':
+        options.onError?.(new Error(event.message))
+        settle?.reject(new Error(event.message)); settle = null
+        break
+      case 'closed':
+        settle?.reject(new Error(`The voice session closed (${event.reason}).`)); settle = null
+        release(); setState('closed')
+        break
+    }
+  }
+
+  const remainingMs = () => {
+    const p = player?.progress()
+    return p ? Math.max(800, (p.received - p.played) * 1000) : undefined
+  }
+
+  const bridge: GeminiVoiceBridge = {
+    get state() { return state },
+
+    connect() {
+      if (state !== 'idle') return Promise.reject(new Error(`connect() was already called (state: ${state}).`))
+      setState('connecting')
+      ensureAudio() // inside the click, before any await
+      if (!options.transport) { handle({ type: 'ready' }); return Promise.resolve() }
+      const done = new Promise<void>((resolve, reject) => { settle = { resolve, reject } })
+      try {
+        transport = openTransport(options.transport, { language: options.language, page: options.page }, handle)
+      } catch (cause) {
+        settle = null
+        release(); setState('closed')
+        return Promise.reject(cause)
+      }
+      if (options.microphone) bridge.startMic().catch(e => options.onError?.(e instanceof Error ? e : new Error(String(e))))
+      return done
+    },
+
+    feed(message) {
+      if (state === 'idle') { setState('connecting'); ensureAudio() }
+      parseLiveMessage(message).forEach(handle)
+    },
+
+    sendText(text) {
+      const clean = text.trim()
+      if (!clean || !transport) return
+      transport.sendText(clean)
+      handle({ type: 'thinking' })
+    },
+
+    async startMic() {
+      if (!transport) throw new Error('The microphone needs a transport (proxy or live).')
+      if (recorder) return
+      const attempt = ++micAttempt
+      const created = await startRecorder(frame => {
+        // D-05: echo cancellation misses Web Audio playback, so nothing is sent while Otto is audible.
+        // shortcut: no local barge-in by voice while he talks; the server's own VAD and 'interrupted' handle the rest.
+        if (!player?.busy) transport?.sendAudio(frame)
+      })
+      if (attempt !== micAttempt || state === 'closed') { created.stop(); return }
+      recorder = created
+    },
+
+    stopMic() {
+      micAttempt++
+      recorder?.stop(); recorder = null
+    },
+
+    close() {
+      if (state === 'closed') return
+      const wasLive = state !== 'idle'
+      settle?.reject(new Error('Closed.')); settle = null
+      release()
+      setState('closed')
+      if (wasLive) mapEvent({ type: 'closed', reason: 'client' }, false).forEach(apply)
+    },
+  }
+  return bridge
+}

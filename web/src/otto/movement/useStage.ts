@@ -3,8 +3,9 @@
 // Nothing runs while Otto stands still: a frame loop only while he walks, observers otherwise.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
-import { DEFAULT_OTTO_CONFIG, useOttoConfig, type OttoConfig } from '../config'
-import { useReducedMotion } from '../robot/robot'
+import { DEFAULT_OTTO_CONFIG, type OttoConfig } from '../config'
+import { useOttoConfig } from '../useOttoConfig'
+import { useReducedMotion } from '../robot/environment'
 import { createStage, type Rect, type StageController } from './stage'
 
 /** Something to keep clear of: a selector (every match), an element, or a function returning rects. */

@@ -12,6 +12,7 @@ import {
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
 import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES } from '../otto.config'
+import { findGuideTarget } from './guidance/targets'
 import { parseServerMessage, toAssistantAction, type AssistantAction } from './messages'
 
 export type { AssistantAction } from './messages'
@@ -28,6 +29,7 @@ function describeAction(action: AssistantAction, before: string): { label: strin
     const back = PAGES.find(item => item.id === before)
     return { label: `Opened ${title}`, inverse: back && back.id !== action.page ? { action: 'navigate', page: back.id } : null }
   }
+  if (action.action === 'guide') return { label: `Showed you: ${findGuideTarget(action.target)?.info.label ?? action.target}`, inverse: null }
   return { label: COMMAND_LABELS[action.name], inverse: null }
 }
 
@@ -414,7 +416,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
           break
         case 'action':
           {
-            const action = toAssistantAction(message)
+            const action = toAssistantAction(message, id => findGuideTarget(id) !== null)
             if (action) {
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)

@@ -133,6 +133,8 @@ export class SpeechPlayer {
   private readonly unlock = () => { void this.resume(); };
   /** The five mouth bars from the voice's speech bands (mouth.ts), or null once quiet and settled. */
   readonly mouth: MouthSource;
+  /** The node Otto's voice passes through on its way out, for connecting another analyser (e.g. a mascot's lip-sync). */
+  get output(): AudioNode { return this.analyser; }
   /** Seconds of this turn played and received, for the speech bubble. */
   readonly clock: SpeechClock = () => this.progress();
   onIdle: (() => void) | null = null;
