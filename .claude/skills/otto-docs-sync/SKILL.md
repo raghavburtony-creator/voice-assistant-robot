@@ -1,6 +1,6 @@
 ---
 name: otto-docs-sync
-description: Bring the Otto voice kit's docs in line with a change (README sections, docs/README.md routing table, docs/decisions.md, CLAUDE.md) with otto-docs-keeper, and check every link and cited path.
+description: Bring the Otto voice kit's docs in line with a change (README sections, docs/README.md routing table, docs/decisions.md, AGENTS.md) with otto-docs-keeper, and check every link and cited path.
 argument-hint: "[what changed]"
 ---
 

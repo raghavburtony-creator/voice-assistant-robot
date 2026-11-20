@@ -8,7 +8,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 
 | Task | Decisions | README sections | Files |
 |---|---|---|---|
-| Get oriented | all (one page) | "How it works", "Using it in a new project" | `CLAUDE.md` |
+| Get oriented | all (one page) | "How it works", "Using it in a new project" | `AGENTS.md` |
 | Add a page or a command | D-02, D-03 | "Using it in a new project" | `web/src/otto.config.ts`, `server/app/voice/app_config.py`, `server/app/voice/tools.py`, `server/tests/test_voice.py` |
 | Add a tool | D-02, D-03 | "Adding a tool" | `server/app/voice/tools.py`, `sink.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `App.tsx` `onAction` |
 | Change the wire protocol (a message type) | D-02, D-04 | "How it works" | `server/app/voice/bridge.py`, `route.py`, `web/src/otto/messages.ts`, `web/src/otto/useVoiceAssistant.ts`, `web/src/lab/fakeServer.ts` |
@@ -25,7 +25,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Guidance rules (what Otto does for a request, tasks, observed progress, when to offer help) | D-13, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/guide.ts`, `task.ts`, `help.ts` and their tests, `guidance` in `web/src/otto/config.ts` |
 | Guidance runtime (targets, offered tasks, the runner, the observer, the highlight, Show me / Not now) | D-06, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/runner.ts`, `targets.ts`, `observe.ts`, `web/e2e/guidance.spec.ts`, `web/src/otto/Otto.tsx`, `web/src/otto/element/createOtto.tsx`, `voice.css` |
 | Guidance by voice (`show_target`, `start_guided_task`) | D-02, D-14, D-16 | "Interactive guidance", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `server/tests/test_voice.py`, `web/src/otto/messages.ts`, `useVoiceAssistant.ts` |
-| Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `CLAUDE.md` ("Rules for code") |
+| Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `AGENTS.md` ("Rules for code") |
 | `<otto-mascot>`, `createOtto`, the library build | D-12 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/element/`, `vite.lib.config.ts`, `tsconfig.lib.json`, `web/preview/` |
 | React adapter (`otto-mascot/react`) | D-15 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/react/` |
 | Gemini voice bridge (`otto-mascot/gemini`) | D-01, D-05, D-15, Q-01 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/gemini/` |
