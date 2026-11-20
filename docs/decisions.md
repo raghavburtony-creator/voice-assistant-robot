@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-17**, **Q-02**. Before using one, check `main` and the open PRs (`gh pr list`) for the same number.
+- Take the next free number. Next free: **D-19**, **Q-02**. Before using one, check `main` and the open PRs (`gh pr list`) for the same number.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - An open question is a row in the table at the end: ID, question, owner, status (`open`, `answered by D-xx`, `dropped`).
 - When a decision changes behaviour, update the root `README.md` and the routing table in [README.md](README.md) in the same commit.
@@ -86,7 +86,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 ## D-13 The web kit has two layers, and the dependency points inward
 
 **Decision:** In `web/src/otto/`:
-- **Core:** pure rules and data. No React, no packages, no browser globals, no app config, and imports only other core files. Today that is `movement/stage.ts`, `mouth.ts`, `robot/gestures.ts`, `robot/robot.ts`, `awareness/events.ts`, `awareness/reactions.ts`, `guidance/guide.ts`, `guidance/task.ts`, `guidance/help.ts`, `idle.ts`, `config.ts` and `soundCues.ts`.
+- **Core:** pure rules and data. No React, no packages, no browser globals, no app config, and imports only other core files. Today that is `movement/stage.ts`, `mouth.ts`, `robot/gestures.ts`, `robot/robot.ts`, `awareness/events.ts`, `awareness/reactions.ts`, `awareness/page.ts`, `guidance/guide.ts`, `guidance/task.ts`, `guidance/help.ts`, `guidance/friction.ts`, `gemini/channels.ts`, `gemini/prompt.ts`, `idle.ts`, `config.ts` and `soundCues.ts`.
 - **Shell:** everything else in the kit. The adapters (Web Audio, the WebSocket and `messages.ts`, storage, speech recognition) and the React hooks and components. It may read `otto.config.ts`, the app's one composition root.
 - **App:** `otto.config.ts`, `App.tsx`, `main.tsx` and the lab. It may import the kit; the kit never imports it, except shell reading `otto.config.ts`. `<otto-mascot>` (`element/`) never reaches `otto.config.ts`, so it stays standalone.
 
@@ -116,6 +116,29 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 
 **Why:** Guiding means seeing that the visitor did the step, not waiting for the host to say so. Telling "something happened" apart from "something happened they need help with" needs a rule, and repetition is the cheapest honest signal. The model can't start a task the page never offered.
 **Where:** `web/src/otto/guidance/task.ts`, `help.ts`, `observe.ts`, `targets.ts` (`registerGuideTask`) and their tests; `web/e2e/guidance.spec.ts`; `start_guided_task` in `server/app/voice/tools.py`, test `test_start_guided_task_only_allows_reported_tasks`; `toAssistantAction` in `web/src/otto/messages.ts`; README, "Interactive guidance".
+
+## D-17 The page snapshot is privacy-filtered, budgeted and sent only while talking
+
+**Decision:**
+- While a conversation is open, `<Otto>` sends the model a snapshot of the page under the context key `page` (`collectPageContext`): path, title, headings, named landmarks, open dialogs and expanded panels, form errors. Nothing is read or sent outside a conversation, or with `pageContext.enabled: false`.
+- Never read, with no option to change it: anything under `[data-otto-private]` or Otto's own panel; password, hidden and payment (`autocomplete="cc-*"`) fields, label and error included; any typed value; the query string and non-route hashes.
+- The selected text only with `pageContext.includeSelection` (default off).
+- The snapshot is cut to `pageContext.maxChars` and `maxNodes`, errors kept first. The shape and the budget are core (`awareness/page.ts`), the DOM reading shell (`awareness/collectPage.ts`).
+- Page text is data, not instructions: the prompt says so, and `show_target` still accepts only reported target ids (D-14).
+
+**Why:** The model answers better when it knows what is on screen, and the visitor has agreed to send their voice to Google, not their password, card number or medical notes. A fixed list of exclusions a host can't switch off is safer than one it must remember to switch on. The budget keeps each turn small and fast.
+**Where:** `web/src/otto/awareness/page.ts`, `collectPage.ts` and `collectPage.test.ts`; `web/src/otto/guidance/hidden.ts` (`PRIVATE_SELECTOR`); `pageContext` in `web/src/otto/config.ts`; `web/src/otto/Otto.tsx`; `web/e2e/embodied.spec.ts`; README, "Embodied assistance".
+
+## D-18 Two channels: the voice speaks plainly, cards carry what must be read
+
+**Decision:**
+- The model is told never to say URLs, code or markdown aloud. What must be read goes on a card through the `show_card` tool.
+- A card is plain text in the panel: a title, a body, optional code, up to three follow-up questions. Both ends check and cap it (`tools.py`, `toAssistantCard` in `messages.ts`). It is rendered as text, never as HTML, and has no links. A follow-up is sent only when the visitor presses it.
+- The bubble shows the spoken channel only (`toSpoken`). `otto-mascot/gemini` splits a streamed reply the same way (`createChannelSplitter`), and hands code and links to the host's `onVisual`, which must check a link before making it clickable.
+- No model tool to celebrate or to scroll: Otto celebrates what he saw finished (D-16), and `show_target` already scrolls.
+
+**Why:** A native-audio model's speech can't be filtered after it is generated; it has to be asked not to say these things, and given somewhere else to put them. A link or HTML from the model would be untrusted output used as a URL or markup (D-02). A model that can't see the screen can't know a step is done.
+**Where:** `show_card` in `server/app/voice/tools.py`, `system_instruction` in `app_config.py`, tests `test_show_card_checks_and_caps_what_the_model_sends` and `test_instruction_keeps_urls_and_code_out_of_speech`; `web/src/otto/messages.ts`, `VoiceAssistant.tsx` (`VoiceCard`), `web/src/otto/gemini/channels.ts`, `prompt.ts`, `bridge.ts`; README, "Embodied assistance".
 
 ## Open questions
 

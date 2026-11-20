@@ -8,6 +8,9 @@
 //              barge-in) against a simulated Gemini server that streams synthetic speech
 //   guidance   guide Otto to a target (look, point, approach, explain), app suggestions at each importance, a missing
 //              target, and a multi-step task; each decision logged with why (no AI backend)
+//   embodied   a sample form, the model's tool calls simulated (show a target with the spotlight, a card, a finished step,
+//              missing, hidden and disabled targets), what the page snapshot sends the model, the spoken / visual split
+//              of a reply, and form friction (proactive help)
 //   awareness  app events (success, failure, a task, attention...) at any importance and place, floods of them, and
 //              each decision Otto makes with why; what he knows right now; and the theme presets
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,6 +24,8 @@ import type { GuideTaskSpec } from './otto/guidance/task'
 import { attachGuide } from './otto/guidance/runner'
 import { findGuideTarget, registerGuideTask } from './otto/guidance/targets'
 import { observeGuidance } from './otto/guidance/observe'
+import { createSpotlight } from './otto/guidance/spotlight'
+import { EmbodiedSandbox } from './lab/EmbodiedSandbox'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
@@ -135,11 +140,15 @@ const describeReaction = (e: OttoEvent, r: Reaction) => {
 
 function Lab() {
   const [theme, setTheme] = useState<ThemeName>('default')
-  const config = useMemo(() => defineOttoConfig({ theme }), [theme])
-  return <OttoConfigProvider config={config}><LabInner theme={theme} setTheme={setTheme} /></OttoConfigProvider>
+  // Proactive help is off by default in the kit; on here, with short waits, so friction can be tried at once.
+  const [proactive, setProactive] = useState(true)
+  const config = useMemo(() => defineOttoConfig({ theme, guidance: { proactiveHelpEnabled: proactive, frictionCooldownMs: 5000, stallMs: 6000 } }), [theme, proactive])
+  return <OttoConfigProvider config={config}><LabInner theme={theme} setTheme={setTheme} proactive={proactive} setProactive={setProactive} /></OttoConfigProvider>
 }
 
-function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeName) => void }) {
+type LabProps = { theme: ThemeName; setTheme: (t: ThemeName) => void; proactive: boolean; setProactive: (on: boolean) => void }
+
+function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
   const config = useOttoConfig()
   const SOUND_SETTINGS = config.sound
   const [pose, setPose] = useState<RobotPose>('idle')
@@ -228,7 +237,7 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
   const attachDeps = useRef({ config, stage })
   attachDeps.current = { config, stage }
   useEffect(() => guide.onEvent(e => {
-    addGuide(e.type === 'shown' ? `shown ${e.target}: ${e.size}` : e.type === 'offered' ? `offered ${e.target}: waiting for a yes` : e.type === 'missing' ? `missing target ${e.target}`
+    addGuide(e.type === 'shown' ? `shown ${e.target}: ${e.size}` : e.type === 'offered' ? `offered ${e.target}: waiting for a yes` : e.type === 'missing' ? `missing target ${e.target} (${e.reason ?? 'not_found'})`
       : e.type === 'step' ? `task step ${e.index + 1}/${e.total} (${e.via}): ${e.step.id} -> ${e.step.target}`
         : e.type === 'done' ? `task ${e.task} done` : `task ${e.task} cancelled (${e.reason})`)
     if (e.type === 'offered') setOffer(e.request)
@@ -238,9 +247,14 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
   }), [guide, addGuide])
   useEffect(() => () => window.clearTimeout(sayTimer.current), [])
   // Re-attaching (also what "Reset cooldown" does) gives the runner a fresh cooldown.
+  const snapRef = useRef(false)
+  snapRef.current = snap || reduced
   useEffect(() => {
     if (full) return
-    return attachGuide(guide, {
+    const spotlight = createSpotlight({ reducedMotion: () => snapRef.current, onDismiss: () => addGuide('spotlight dismissed') })
+    const detach = attachGuide(guide, {
+      highlight: element => spotlight.show(element),
+      reducedMotion: () => snapRef.current,
       stage,
       playGesture: name => channel.play(name),
       face: () => heldFace.current,
@@ -254,7 +268,13 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
       situation: () => ({ idle: idleRef.current, conversing: false, movementEnabled: attachDeps.current.config.movement.movementEnabled }),
       ottoRect: () => { const x = stage.frame.x; return { left: x, right: x, top: 0, bottom: 0 } },
     })
-  }, [guide, full, stage, channel, cooldownKey])
+    return () => { detach(); spotlight.dispose() }
+  }, [guide, full, stage, channel, cooldownKey, addGuide])
+  const labSay = useCallback((text: string) => {
+    window.clearTimeout(sayTimer.current)
+    setSay(text)
+    sayTimer.current = window.setTimeout(() => setSay(''), 1500 + text.length * 50)
+  }, [])
   const askGuide = (request: GuideRequest) => {
     const full_ = { ...request, say: guideQuiet ? null : request.say }
     const found = findGuideTarget(full_.target)
@@ -432,6 +452,9 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
             <button type="button" className={btn} onClick={() => { guide.show({ ...offer, reason: 'asked' }); setOffer(null) }}>Show me</button></div>}
           <p className="lab-hint" role="status">{taskNow ? `Task: ${taskNow}` : 'No task running.'}</p>
         </fieldset>
+
+        <EmbodiedSandbox guide={guide} full={full} server={server} config={config} proactive={proactive} setProactive={setProactive}
+          say={labSay} log={addGuide} />
 
         <fieldset><legend>Theme</legend>
           <label className="lab-inline">Preset <select value={theme} onChange={e => setTheme(e.target.value as ThemeName)}>

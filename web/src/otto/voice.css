@@ -93,6 +93,14 @@
 .voice-assistant__line { padding: 0.5rem 0.75rem; border-radius: 14px; max-inline-size: 88%; line-height: 1.4; }
 .voice-assistant__line--user { align-self: flex-end; background: var(--otto-accent); color: var(--otto-on-accent); }
 .voice-assistant__line--assistant { align-self: flex-start; background: var(--otto-surface-2); }
+.voice-assistant__line--card { align-self: stretch; max-inline-size: none; padding: 0; }
+.voice-assistant__card { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem 0.8rem; border-radius: 14px;
+  border: 1px solid var(--otto-line); background: var(--otto-surface); }
+.voice-assistant__card-title { margin: 0; font-size: 0.95rem; }
+.voice-assistant__card-body { margin: 0; }
+.voice-assistant__card-code { display: flex; align-items: flex-start; gap: 0.25rem; }
+.voice-assistant__card-code pre { flex: 1; min-inline-size: 0; margin: 0; padding: 0.5rem 0.6rem; border-radius: 8px; overflow-x: auto;
+  background: var(--otto-surface-2); font-size: 0.85rem; white-space: pre; }
 .voice-assistant__did { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; color: var(--otto-muted); }
 .voice-assistant__did li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .voice-assistant__chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }

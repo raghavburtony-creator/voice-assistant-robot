@@ -22,6 +22,11 @@ export type { OttoGuide, GuideRequest, GuideEvent, GuideCommand, GuidePlan, Guid
 export type { GuideTaskSpec, GuideTaskStep, GuideTaskEvent, GuideTaskStatus, GuideSignal, GuideObservation } from '../guidance/task'
 export { createHelpJudge, type HelpJudge } from '../guidance/help'
 export { observeGuidance, type GuidanceObserverOptions } from '../guidance/observe'
+export { collectPageContext, watchPageContext } from '../awareness/collectPage'
+export type { CollectPageOptions } from '../awareness/collectPage'
+export type { PageSnapshot, PageError, PageTarget } from '../awareness/page'
+export { createSpotlight } from '../guidance/spotlight'
+export type { Spotlight, SpotlightOptions } from '../guidance/spotlight'
 export { registerGuideTarget, findGuideTarget, listGuideTargets, onGuideTargetsChange, guideTargetsAt, registerGuideTask, findGuideTask, listGuideTasks, onGuideTasksChange } from '../guidance/targets'
 export { attachGuide, type GuideRunnerDeps } from '../guidance/runner'
 

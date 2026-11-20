@@ -4,10 +4,14 @@
 //
 //   const detach = observeGuidance(guide, { events, settings: () => config.guidance })
 //
+// With `proactiveHelpEnabled`, it also watches forms for friction (frictionObserver.ts): repeated refused submits, or sitting
+// on an invalid field, get a quiet offer of help.
+//
 // Listens only while attached; nothing runs between events.
 
 import type { OttoEvents } from '../awareness/events'
 import type { GuideSettings, OttoGuide } from './guide'
+import { observeFriction } from './frictionObserver'
 import { createHelpJudge } from './help'
 import { guideTargetsAt } from './targets'
 
@@ -45,7 +49,10 @@ export function observeGuidance(guide: OttoGuide, options: GuidanceObserverOptio
     guide.show(request)
   })
 
+  const offFriction = observeFriction(guide, { settings: options.settings, now, onHelp: options.onHelp })
+
   return () => {
+    offFriction()
     document.removeEventListener('click', onClick, true)
     document.removeEventListener('input', onInput, true)
     document.removeEventListener('change', onInput, true)

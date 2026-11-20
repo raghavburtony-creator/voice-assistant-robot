@@ -220,7 +220,7 @@ guide.show({ target: 'save', mode: 'point', reason: 'app', importance: 'normal',
 guide.onEvent(e => console.log(e.type))           // shown, offered, missing, step, done, cancelled
 ```
 
-A request can carry `mode` (`auto`, `glance`, `point`, `approach`, `explain`), `reason` (`asked`: the visitor asked; `task`: a task step; `app`, the default: your app suggests), `importance` (`minor`, `normal`, `major`) and `say` (his words; `null` says nothing, for when the voice speaks).
+A request can carry `mode` (`auto`, `offer`, `glance`, `point`, `approach`, `explain`; `offer` asks first whatever the importance, in the words of `offer` if given), `reason` (`asked`: the visitor asked; `task`: a task step; `app`, the default: your app suggests), `importance` (`minor`, `normal`, `major`) and `say` (his words; `null` says nothing, for when the voice speaks).
 
 **What Otto decides** (`web/src/otto/guidance/guide.ts`, pure and tested; every plan says why):
 - **Glance:** a curious look toward it.
@@ -238,7 +238,7 @@ A target off screen is scrolled into view first. Asked or a task step, he points
 - Unasked, a minor one is a glance and a normal one an offer (`offerFirst`). An explicit `mode` is capped at point unless it's major.
 - In a voice conversation, a glance at most.
 
-Settings are `guidance` in the config: `cooldownMs`, `offerFirst`, `approachMinDistance`, `lookSeconds`, `helpAfterFailures`, `helpWindowMs`.
+Settings are `guidance` in the config: `cooldownMs`, `offerFirst`, `approachMinDistance`, `lookSeconds`, `helpAfterFailures`, `helpWindowMs`, and for friction (below) `proactiveHelpEnabled`, `frictionCooldownMs`, `stallMs`.
 
 **Tasks** walk the visitor through steps:
 
@@ -286,7 +286,9 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 
 **Events:** `guide.onEvent`, or `otto:guide` on `<otto-mascot>`. An `offered` event carries the request: answer yes with `guide.show({ ...request, reason: 'asked' })`. `<Otto>` shows the Show me and Not now buttons itself.
 
-**Highlight:** while Otto shows something, it carries `data-otto-guiding`. The voice kit outlines it; style `[data-otto-guiding]` in your CSS to change that.
+**Highlight:** while Otto shows something, it carries `data-otto-guiding`. The voice kit outlines it; style `[data-otto-guiding]` in your CSS to change that. A point, approach or explain also rings it with the spotlight (`guidance/spotlight.ts`): a fixed-position ring in viewport pixels that follows the target while it scrolls. It never takes focus or the pointer, Escape or any press dismisses it, it is `aria-hidden` (the words are in the panel), and with reduced motion it appears in place. An offer or a glance never rings anything.
+
+**Missing, hidden or disabled targets:** a target that isn't on the page, or is there but not drawn (`display: none`, a collapsed panel), gets the fallback: a sad face, a head shake (its cue is `chirpNegative`) and "I can't find that on this page." The `missing` event says which (`reason: 'not_found' | 'hidden'`). The voice is told before it acts: `<Otto>` reports each target's state, `show_target` refuses a hidden one with a structured error, and accepts a disabled one with `disabled: true` so the model says it can't be used yet.
 
 **Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change.
 
@@ -299,6 +301,51 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 - with the real Otto against the simulated server, have the "voice" start an offered task, or one the page never offered.
 
 Every plan and offer is logged with why.
+
+### Embodied assistance: page context, cards, friction
+
+Otto can read what the page shows, put what reads better than it sounds in his panel, and notice when the visitor is stuck. All of it builds on the guidance above; none of it adds a new way to move or gesture.
+
+**Page context** (`awareness/collectPage.ts`; the shape and budget are core, `awareness/page.ts`). While a conversation is open, `<Otto>` sends the model a snapshot under the context key `page`, refreshed as the visitor works (clicks, focus, typing, submits, dialogs, scrolling; debounced):
+
+```json
+{ "path": "/#features", "title": "Features", "headings": ["h1: Features"], "landmarks": ["navigation: Pages", "main"],
+  "open": ["dialog: Settings"], "errors": [{ "field": "Email", "message": "Enter an email.", "target": "email" }] }
+```
+
+What it never reads, whatever the options:
+- anything under `[data-otto-private]`, or Otto's own panel (the conversation is the visitor's words);
+- password, hidden and payment (`autocomplete="cc-*"`) fields: not their value, label or error;
+- any typed value: a field is only its label and its error text;
+- the query string, or a hash that isn't route-shaped (`#access_token=...`).
+
+The visitor's selected text is left out unless `pageContext.includeSelection` (off by default: it can be anything, and it goes to Google). The snapshot is cut to `pageContext.maxChars` (3000) and `pageContext.maxNodes` (60), keeping errors first, then open dialogs, targets, headings and landmarks; a cut one says `truncated`. `pageContext.enabled: false` sends nothing. Outside `<Otto>`, call `collectPageContext(options)` or `watchPageContext(onSnapshot, options)` yourself.
+
+**Two channels.** Otto's voice is the model's own audio, so it can't be filtered after the fact. Instead:
+- The model is told that speech is heard, not read: short sentences, and never a URL, code or markdown aloud (`system_instruction` in `app_config.py`).
+- What must be read goes on a card: the `show_card` tool (`title`, `body`, optional `code`, up to three `follow_ups`). The server checks and caps it, the browser checks it again (`toAssistantCard` in `messages.ts`), and the panel renders it as text: no HTML, no links. A follow-up is sent only when the visitor presses it. A copy button copies the code.
+- The bubble shows the spoken channel only (`toSpoken`, `gemini/channels.ts`): no URLs, code or markdown symbols.
+
+**Friction** (`guidance/friction.ts`, core; `guidance/frictionObserver.ts`, shell). Off by default (`guidance.proactiveHelpEnabled`). When on, Otto watches forms without the host wiring anything:
+- a refused submit (the browser's own validation, or fields the app marks `aria-invalid="true"` after submit), `helpAfterFailures` times within `helpWindowMs`;
+- sitting on a field marked invalid without typing for `guidance.stallMs` (20 s).
+
+Either gets a quiet offer on the first invalid field's target: a curious look and "Need a hand with this?" with Show me and Not now. Never speech, never focus, no sound of its own. At most one per `guidance.frictionCooldownMs` (60 s), none in a private form or while a task runs, and the guide's own judgement still applies (in a conversation it is a glance). Show me points at the field and says the app's own error text (`aria-errormessage`), else the browser's.
+
+**What was left out, on purpose:**
+- No `scrollToSection` tool: a section is a target, and `show_target` already scrolls to it.
+- No `celebrate` tool: Otto celebrates a finished task himself (excited face, `celebrate`, `chirpCelebration`), because he saw it (D-16). The model can't see the screen, so it can't know a step is done.
+- No sound on a friction offer: cues follow gestures (D-11), and an unasked chirp is the interruption this is meant to avoid.
+
+**Lab:** the Embodied Assistant sandbox in `/lab.html` has a sample form, with a password, a card number, private notes and a hidden field the snapshot must never read. It can:
+- show the snapshot the model would see (with the real Otto, what the simulated server received);
+- simulate `show_target` (with the spotlight) and `show_card`;
+- finish a step, so Otto celebrates;
+- try a missing, hidden or disabled target;
+- split a model reply into its spoken and visual channels, or stream it;
+- trigger form friction, with proactive help on or off.
+
+**For your own Gemini session** (`otto-mascot/gemini`): `buildOttoSystemPrompt({ appName, description, page: collectPageContext() })` writes a prompt with the same rules, the page fenced as data. The bridge's bubble gets the spoken channel, and `onVisual(parts)` gets the code blocks and links. Links are model output: check one against your own allow-list before making it clickable.
 
 ### Themes and per-instance config
 
@@ -318,9 +365,9 @@ cd web && npm run build:lib
 ```
 
 The build writes these to `dist-lib/`, then runs `scripts/check-dist.mjs` to prove the three entry points stay separate (D-15):
-- `otto-mascot.js`, the main module (the package root), about 340 kB raw;
+- `otto-mascot.js`, the main module (the package root), about 355 kB raw;
 - a separate chunk for the robot's WebGL scene, loaded later;
-- `react.js` (`./react`), about 3 kB, and `gemini.js` (`./gemini`), about 16 kB: optional adapters, below;
+- `react.js` (`./react`), about 3 kB, and `gemini.js` (`./gemini`), about 21 kB: optional adapters, below;
 - type declarations, wired through `package.json` `exports`.
 
 ```html

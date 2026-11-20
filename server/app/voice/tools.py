@@ -7,6 +7,7 @@ web/src/otto.config.ts `isAllowedAction` and in App's `onAction`.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Literal
 
 from google.adk.tools import FunctionTool, ToolContext
@@ -70,9 +71,17 @@ def show_target(target_id: str, tool_context: ToolContext) -> dict:
     targets = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
     if not isinstance(target_id, str) or not target_id or len(target_id) > 64 or target_id not in targets:
         return {"ok": False, "error": "Unknown target. Use one of the known ids.", "known": list(targets)}
-    _send(tool_context, {"action": "guide", "target": target_id})
     found = targets[target_id]
-    return {"ok": True, "label": found.get("label"), "description": found.get("description")}
+    # The page reports a target it has but is not drawing (collapsed, display: none): Otto can't point at it. Say so, don't pretend.
+    if found.get("hidden") is True:
+        return {"ok": False, "error": "That target is on this page but hidden right now. Tell the user how to reveal it, "
+                "or offer another target.", "target": target_id}
+    _send(tool_context, {"action": "guide", "target": target_id})
+    out = {"ok": True, "label": found.get("label"), "description": found.get("description")}
+    if found.get("disabled") is True:
+        out["disabled"] = True
+        out["note"] = "It is disabled right now: say so, and what usually enables it if the page says."
+    return out
 
 
 def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
@@ -90,5 +99,46 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
     return {"ok": True, "title": found.get("title"), "steps": found.get("steps")}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task)]
+#: Caps for show_card. The card is text in the panel (never HTML, never a link: D-02, D-18), so these only bound its size.
+CARD_TITLE_CHARS = 80
+CARD_BODY_CHARS = 600
+CARD_CODE_CHARS = 2000
+CARD_FOLLOW_UPS = 3
+CARD_FOLLOW_UP_CHARS = 80
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def _card_text(value: object, cap: int, keep_lines: bool = False) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = _CONTROL.sub(" ", value)
+    if not keep_lines:
+        text = re.sub(r"\s+", " ", text)
+    return text.strip()[:cap]
+
+
+# `follow_ups: list[str] = []`, not `list[str] | None`: the Optional form becomes an anyOf in the function schema, which the
+# Live API's function declarations may not accept (ASSUMPTION, unverified: Q-01). The default is never mutated.
+def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", follow_ups: list[str] = []) -> dict:  # noqa: B006
+    """Put a card in the user's voice panel, for what is better read than heard: exact steps, a value to copy, code.
+    title: a few words. body: plain text, at most a short paragraph (no markdown, no links). code: optional text to copy,
+    shown as-is. follow_ups: up to 3 short questions the user can tap to ask next. Don't read the card out: say in one
+    sentence that it's in the panel."""
+    clean_title = _card_text(title, CARD_TITLE_CHARS)
+    clean_body = _card_text(body, CARD_BODY_CHARS)
+    if not clean_title or not clean_body:
+        return {"ok": False, "error": "A card needs a title and a body."}
+    card: dict = {"title": clean_title, "body": clean_body}
+    clean_code = _card_text(code, CARD_CODE_CHARS, keep_lines=True)
+    if clean_code:
+        card["code"] = clean_code
+    if isinstance(follow_ups, list):
+        chips = [c for c in (_card_text(f, CARD_FOLLOW_UP_CHARS) for f in follow_ups) if c][:CARD_FOLLOW_UPS]
+        if chips:
+            card["follow_ups"] = chips
+    _send(tool_context, {"action": "card", "card": card})
+    return {"ok": True, "shown": "in the voice panel"}
+
+
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)

@@ -110,6 +110,25 @@ export type OttoConfig = {
     helpAfterFailures: number
     /** ...within this many ms. */
     helpWindowMs: number
+    /** Off by default. On: Otto watches forms for friction (failed submits, sitting on an error) and offers help himself:
+     *  a curious look and a "Need a hand with this?" chip, never speech, never focus (guidance/friction.ts). */
+    proactiveHelpEnabled: boolean
+    /** At least this long between two friction offers (ms). */
+    frictionCooldownMs: number
+    /** Focused on a field the page marks invalid, with no typing for this long, counts as friction (ms). */
+    stallMs: number
+  }
+  /** What Otto may read of the page for the voice model (awareness/page.ts, collectPage.ts). Passwords, hidden and payment
+   *  fields, and anything under [data-otto-private] are always left out, and typed values are never read. */
+  pageContext: {
+    /** Send the snapshot to the voice model while a conversation is open. */
+    enabled: boolean
+    /** The snapshot, as JSON, is cut to at most this many characters... */
+    maxChars: number
+    /** ...and this many items (headings, landmarks, errors, targets) in all. */
+    maxNodes: number
+    /** Include the text the visitor has selected. Off by default: it can be anything, and it goes to the model. */
+    includeSelection: boolean
   }
 }
 
@@ -152,7 +171,11 @@ const BASE: OttoConfig = {
     awayMs: 60_000,
     rules: [],
   },
-  guidance: { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000 },
+  guidance: {
+    cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000,
+    proactiveHelpEnabled: false, frictionCooldownMs: 60_000, stallMs: 20_000,
+  },
+  pageContext: { enabled: true, maxChars: 3000, maxNodes: 60, includeSelection: false },
 }
 
 export type DeepPartial<T> = T extends readonly unknown[] ? T : T extends (...args: never[]) => unknown ? T

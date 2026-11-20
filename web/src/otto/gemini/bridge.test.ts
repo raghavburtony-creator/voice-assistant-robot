@@ -155,7 +155,8 @@ describe('createGeminiVoiceBridge', () => {
     expect(FakeContext.made).toHaveLength(1)
     expect(FakeContext.made[0].sources).toHaveLength(1)
     expect(calls).toContainEqual(['setState', 'talking'])
-    expect(calls.filter(c => c[0] === 'speakText').map(c => c[1])).toEqual(['Hello ', 'Hello there'])
+    // The bubble gets the spoken channel, a piece at a time (channels.ts).
+    expect(calls.filter(c => c[0] === 'speakText').map(c => c[1])).toEqual(['Hello', 'Hello there'])
     ws.receive('{"type":"turn_complete"}')
     expect(calls.at(-1)).toEqual(['setState', 'listening'])
     bridge.sendText('  where is it? ')
@@ -274,6 +275,31 @@ describe('createGeminiVoiceBridge', () => {
     await bridge.startMic()
     recorders[0].onFrame(new Int16Array([1, 2]).buffer)
     expect(JSON.parse(ws.sent.at(-1) as string).realtimeInput.audio).toEqual({ data: b64(new Int16Array([1, 2]).buffer), mimeType: 'audio/pcm;rate=16000' })
+    bridge.close()
+  })
+
+  it('two channels: the bubble never shows code or URLs; they come to onVisual', async () => {
+    const { otto, calls } = fakeOtto()
+    const visual: unknown[] = []
+    const bridge = createGeminiVoiceBridge(otto, { onVisual: parts => visual.push(...parts) })
+    await bridge.connect()
+    const say = (text: string) => bridge.feed({ serverContent: { outputTranscription: { text } } })
+    say('Run this: ```sh\nnpm ci\n``` and see https://example.com/docs ')
+    say('for more.')
+    bridge.feed({ serverContent: { turnComplete: true } })
+    const bubble = calls.filter(c => c[0] === 'speakText').map(c => c[1] as string)
+    expect(bubble.at(-1)).toBe('Run this: and see for more.')
+    for (const line of bubble) expect(line).not.toMatch(/npm ci|https?:|```/)
+    expect(visual).toEqual([{ kind: 'code', lang: 'sh', text: 'npm ci' }, { kind: 'link', url: 'https://example.com/docs' }])
+    bridge.close()
+  })
+
+  it('live: a systemInstruction goes in the setup message', () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'live', token: 'auth_tokens/abc', systemInstruction: 'Be Otto.' } })
+    void bridge.connect().catch(() => {})
+    FakeSocket.made[0].open()
+    expect(JSON.parse(FakeSocket.made[0].sent[0] as string).setup.systemInstruction).toEqual({ parts: [{ text: 'Be Otto.' }] })
     bridge.close()
   })
 
