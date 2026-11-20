@@ -68,6 +68,8 @@ docs/            routing table and decisions
 
 - **The model's output is untrusted.** Every tool argument is checked on the server (`server/app/voice/tools.py`), and every action is checked again in the browser (`toAssistantAction` in `web/src/otto/messages.ts`) (D-02).
 - **The Gemini key never reaches the browser** (D-01). No `VITE_` variable holds a secret. `CORS_ORIGINS` is an explicit list; no wildcard (D-09).
+- **The page snapshot is privacy-filtered (D-17).** It never reads `[data-otto-private]`, Otto's own panel, password, hidden or payment fields, or any typed value, and is sent only while a conversation is open. Don't add an option that turns an exclusion off.
+- **Two channels (D-18).** Speech stays plain; what must be read goes on a `show_card` card, rendered as text: no HTML, no links from the model.
 - **Two configs, one list.** Pages and commands live in `web/src/otto.config.ts` and `server/app/voice/app_config.py`, plus the `PageId` and `Command` literals in `tools.py`. Change all of them together; `server/tests/test_voice.py` checks they match (D-03).
 - **The wire protocol has two ends.** A message type added in `server/app/voice/bridge.py` or `route.py` needs its schema in `messageSchema` in `web/src/otto/messages.ts`, and the reverse. Both ends ship in the same change.
 - **Live audio is billed per minute.** Keep the session caps (`max_session_seconds`, `max_sessions` in `server/app/config.py`) (D-04).
@@ -127,6 +129,11 @@ Report only high-signal problems: bugs, security holes, broken contracts. For ea
   - an action that reaches `onAction` without passing `toAssistantAction`;
   - `show_target` that accepts a free-form selector or URL;
   - a model-supplied string put into the DOM as HTML, or used as a URL or a selector.
+- **Page snapshot (D-17).** Flag:
+  - `collectPageContext` (or anything sent as context) reading a field's value, a password, hidden or `cc-*` field, or a `[data-otto-private]` subtree;
+  - a snapshot sent outside a conversation, or one that skips the `pageContext` budget;
+  - `includeSelection` turned on by default.
+- **Cards and channels (D-18).** Flag a card field rendered as HTML (`dangerouslySetInnerHTML`), made into a link, or used as a selector; a `show_card` argument used without its cap; `onVisual` links made clickable in kit code.
 - **Mic and privacy (D-05, D-08).** Flag:
   - mic audio sent while Otto is audible, other than the held-back barge-in buffer;
   - "Hey Otto" switched on by default, or listening with no banner;

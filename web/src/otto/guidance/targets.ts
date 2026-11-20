@@ -10,6 +10,7 @@
 
 import type { GuideTargetInfo } from './guide'
 import type { GuideTaskSpec } from './task'
+import { isElementHidden, isPrivateElement } from './hidden'
 
 type Entry = { place: Element | string; info?: { label?: string; description?: string } }
 
@@ -53,16 +54,34 @@ export function findGuideTarget(id: string): { element: Element; info: GuideTarg
   return element ? { element, info: infoFor(id, element, entry?.info) } : null
 }
 
-/** Every target: registered first (in order), then marked-up ones, one per id. */
-export function listGuideTargets(): GuideTargetInfo[] {
-  const out = new Map<string, GuideTargetInfo>()
+/** A target as the voice model is told about it: `hidden` (not drawn: Otto can't show it), `disabled` (shown, but it can't be used now). */
+export type ListedGuideTarget = GuideTargetInfo & { hidden?: true; disabled?: true }
+
+const isDisabled = (e: Element) => {
+  try { return e.matches(':disabled') || e.closest('[aria-disabled="true"]') !== null } catch { return false }
+}
+const withState = (info: GuideTargetInfo, e: Element): ListedGuideTarget => {
+  const out: ListedGuideTarget = { ...info }
+  if (isElementHidden(e)) out.hidden = true
+  else if (isDisabled(e)) out.disabled = true
+  return out
+}
+
+/** Every target: registered first (in order), then marked-up ones, one per id, with whether it is hidden or disabled now. */
+export function listGuideTargets(): ListedGuideTarget[] {
+  const out = new Map<string, ListedGuideTarget>()
+  // A target inside a private area is left out: its label would tell the model what is there.
+  const skip = new Set<string>()
   for (const [id, entry] of registry) {
     const element = resolve(entry.place)
-    if (element) out.set(id, infoFor(id, element, entry.info))
+    if (element && isPrivateElement(element)) skip.add(id)
+    else if (element) out.set(id, withState(infoFor(id, element, entry.info), element))
   }
   for (const e of marked()) {
     const id = e.getAttribute(ATTR)
-    if (id && !out.has(id) && e.isConnected) out.set(id, infoFor(id, e))
+    if (!id || out.has(id) || skip.has(id) || !e.isConnected) continue
+    if (isPrivateElement(e)) skip.add(id)
+    else out.set(id, withState(infoFor(id, e), e))
   }
   return [...out.values()]
 }

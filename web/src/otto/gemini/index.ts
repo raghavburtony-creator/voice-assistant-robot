@@ -19,11 +19,18 @@
 // Minting the token server-side ([verify] against your pinned google-genai):
 //   client.auth_tokens.create(config={"uses": 1, "http_options": {"api_version": "v1alpha"}})  ->  token.name
 //
+// Two channels: the bubble gets only what reads well aloud; code blocks and links come to `onVisual` for your panel.
+// Your own session's system prompt: buildOttoSystemPrompt({ appName, description, page: collectPageContext() }).
+//
 // Already using @google/genai's ai.live.connect? Leave out `transport` and pass each message on:
 //   const bridge = createGeminiVoiceBridge(otto); await bridge.connect()
 //   ai.live.connect({ ..., callbacks: { onmessage: m => bridge.feed(m), onclose: () => bridge.close() } })
 
 export { createGeminiVoiceBridge, mapEvent } from './bridge'
 export type { BridgeState, GeminiVoiceBridge, GeminiVoiceBridgeOptions, OttoAction, VoiceBridgeTarget } from './bridge'
+export { createChannelSplitter, splitChannels, toSpoken } from './channels'
+export type { ChannelChunk, ChannelSplitter, VisualPart } from './channels'
+export { buildOttoSystemPrompt } from './prompt'
+export type { OttoPromptContext } from './prompt'
 export { GEMINI_LIVE_DEFAULT_MODEL, GEMINI_LIVE_ENDPOINT, parseLiveMessage, parseProxyMessage } from './transports'
 export type { BridgeEvent, LiveTransportOptions, ProxyTransportOptions, TransportOptions } from './transports'

@@ -7,6 +7,7 @@ import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
 import type { SoundCue } from '../soundCues'
 import { SpeechPlayer, startRecorder, type Recorder } from '../audio'
+import { createChannelSplitter, type VisualPart } from './channels'
 import { openTransport, parseLiveMessage, assertNoApiKey, assertSecureProxyUrl, type BridgeEvent, type Transport, type TransportOptions } from './transports'
 
 /** The part of Otto the bridge drives. */
@@ -23,8 +24,12 @@ export type GeminiVoiceBridgeOptions = {
   language?: string
   /** Sent to the proxy in its start message; the server falls back to its first page. */
   page?: string
-  /** Show the model's words in Otto's bubble. Default true. */
+  /** Show the model's words in Otto's bubble. Default true. The bubble gets the spoken channel only: no URLs, code or
+   *  markdown symbols (channels.ts). */
   showText?: boolean
+  /** The visual channel: code blocks and links taken out of the model's words, for your own panel. Links are untrusted
+   *  model output: check one against your own allow-list before making it clickable (D-02). */
+  onVisual?: (parts: VisualPart[]) => void
   onError?: (error: Error) => void
   onState?: (state: BridgeState) => void
 }
@@ -80,6 +85,9 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   let recorder: Recorder | null = null
   let micAttempt = 0
   let said = ''
+  const split = createChannelSplitter()
+  const spoken = (text: string) => { if (text) said = said ? `${said} ${text}` : text }
+  const visual = (parts: VisualPart[]) => { if (parts.length) options.onVisual?.(parts) }
   let settle: { resolve: () => void; reject: (e: Error) => void } | null = null
 
   const setState = (next: BridgeState) => { if (state !== next) { state = next; options.onState?.(next) } }
@@ -99,7 +107,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
       case 'sound': otto.playSound(a.cue); break
       case 'state': otto.setState(a.state); break
       case 'interrupt': otto.interrupt(); break
-      case 'stopAudio': player?.interrupt(); said = ''; break
+      case 'stopAudio': player?.interrupt(); said = ''; split.reset(); break
     }
   }
 
@@ -120,14 +128,24 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
         setState('open'); settle?.resolve(); settle = null; break
       case 'audio':
         ensureAudio().play(event.pcm); break
-      case 'text':
-        if (options.showText === false) break
-        said += event.text
+      case 'text': {
+        const part = split.push(event.text)
+        visual(part.visual)
+        if (options.showText === false || !part.spoken) break
+        spoken(part.spoken)
         // speakText has no bubble-only mode, so its procedural mouth briefly leads; the duration tracks the audio still to play.
         void otto.speakText(said, { durationMs: remainingMs(), mouth: false })
         break
-      case 'turnComplete': case 'interrupted':
+      }
+      case 'turnComplete': {
+        // What the splitter held back (the last word, an unclosed block) goes out with the end of the turn.
+        const rest = split.flush()
+        visual(rest.visual)
+        if (options.showText !== false && rest.spoken) { spoken(rest.spoken); void otto.speakText(said, { durationMs: remainingMs(), mouth: false }) }
         player?.endTurn(); said = ''; break
+      }
+      case 'interrupted':
+        split.reset(); player?.endTurn(); said = ''; break
       case 'error':
         options.onError?.(new Error(event.message))
         settle?.reject(new Error(event.message)); settle = null

@@ -25,13 +25,16 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Guidance rules (what Otto does for a request, tasks, observed progress, when to offer help) | D-13, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/guide.ts`, `task.ts`, `help.ts` and their tests, `guidance` in `web/src/otto/config.ts` |
 | Guidance runtime (targets, offered tasks, the runner, the observer, the highlight, Show me / Not now) | D-06, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/runner.ts`, `targets.ts`, `observe.ts`, `web/e2e/guidance.spec.ts`, `web/src/otto/Otto.tsx`, `web/src/otto/element/createOtto.tsx`, `voice.css` |
 | Guidance by voice (`show_target`, `start_guided_task`) | D-02, D-14, D-16 | "Interactive guidance", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `server/tests/test_voice.py`, `web/src/otto/messages.ts`, `useVoiceAssistant.ts` |
+| Embodied assistance: page snapshot, privacy and budget | D-02, D-13, D-17 | "Embodied assistance: page context, cards, friction" | `web/src/otto/awareness/page.ts`, `collectPage.ts` and their tests, `pageContext` in `web/src/otto/config.ts`, `web/src/otto/guidance/hidden.ts`, `web/src/otto/Otto.tsx` |
+| Embodied assistance: cards and the two channels (`show_card`, the bubble, `onVisual`) | D-02, D-18 | "Embodied assistance: page context, cards, friction", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `VoiceAssistant.tsx`, `useVoiceAssistant.ts`, `web/src/otto/gemini/channels.ts`, `prompt.ts`, `bridge.ts`, `web/src/lab/fakeServer.ts` |
+| Embodied assistance: friction, the spotlight, missing and hidden targets | D-07, D-11, D-14, D-16 | "Interactive guidance", "Embodied assistance: page context, cards, friction" | `web/src/otto/guidance/friction.ts`, `frictionObserver.ts`, `spotlight.ts`, `runner.ts` and their tests, `web/e2e/embodied.spec.ts`, `web/src/lab/EmbodiedSandbox.tsx` |
 | Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `AGENTS.md` ("Rules for code") |
 | `<otto-mascot>`, `createOtto`, the library build | D-12 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/element/`, `vite.lib.config.ts`, `tsconfig.lib.json`, `web/preview/` |
 | React adapter (`otto-mascot/react`) | D-15 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/react/` |
 | Gemini voice bridge (`otto-mascot/gemini`) | D-01, D-05, D-15, Q-01 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/gemini/` |
 | Packaging: subpaths, `exports`, the dist check | D-12, D-15 | "`<otto-mascot>`: Otto in any page" | `web/package.json`, `vite.lib.config.ts`, `vite.adapters.config.ts`, `tsconfig.lib.json`, `web/scripts/check-dist.mjs` |
 | Voice panel UI, consent, wake word | D-06, D-08 | "How it works" | `web/src/otto/VoiceAssistant.tsx`, `ui.tsx`, `consent.ts`, `wakeWord.ts`, `useWakeWord.ts`, `voice.css` |
-| The lab | | "Run it" | `web/src/lab.tsx`, `web/src/lab/` |
+| The lab | | "Run it", "Embodied assistance: page context, cards, friction" (sandbox) | `web/src/lab.tsx`, `web/src/lab/` |
 | Tests | | "Run it" (checks) | `server/tests/`, `web/src/**/*.test.ts` |
 | Browser tests (Playwright) | | "Run it" (checks) | `web/e2e/`, `web/playwright.config.ts` |
 | Record or change a decision | the one concerned | | [decisions.md](decisions.md) ("Rules for entries") |

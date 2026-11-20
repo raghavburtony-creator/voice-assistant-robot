@@ -5,6 +5,8 @@
 //
 // While a plan runs, its target carries `data-otto-guiding` (removed when it ends or is cancelled), for a subtle highlight
 // in the host's CSS:   [data-otto-guiding] { outline: 2px solid #8ab4ff; outline-offset: 4px }
+// With `highlight` (spotlight.ts), a point, approach or explain also rings the target; an offer or a glance never does.
+// A target that is on the page but not drawn (display: none, a collapsed panel) is treated as missing (reason 'hidden').
 //
 // A new command (show, a task step, stop) cancels the one in flight between steps; the face it set is restored at once.
 
@@ -12,6 +14,7 @@ import type { IdleState } from '../idle'
 import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
 import { planGuide, type GuideCommand, type GuideEvent, type GuideRequest, type GuideSettings, type GuideStep, type OttoGuide } from './guide'
+import { isElementHidden } from './hidden'
 import { findGuideTarget } from './targets'
 
 type RectLike = { left: number; top: number; right: number; bottom: number }
@@ -35,7 +38,12 @@ export type GuideRunnerDeps = {
   viewport?(): { width: number; height: number }
   /** Default: prefers-reduced-motion. */
   reducedMotion?(): boolean
+  /** Rings the target while Otto shows it; returns the function that takes the ring away. */
+  highlight?(element: Element): () => void
+  /** Default: the element has no layout box (Element.checkVisibility, else no client rects). */
+  isHidden?(element: Element): boolean
 }
+
 
 const DEAD_ZONE_PX = 48
 const SETTLE_MS = { smooth: 450, auto: 60 }
@@ -51,12 +59,14 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
   const viewport = deps.viewport ?? (() => (typeof window === 'undefined' ? { width: 1024, height: 768 } : { width: window.innerWidth, height: window.innerHeight }))
   const reduced = deps.reducedMotion ?? (() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
 
-  type Run = { cancelled: boolean; element: Element | null; faceSet: boolean; moving: boolean; before: RobotExpression | null }
+  type Run = { cancelled: boolean; element: Element | null; faceSet: boolean; moving: boolean; before: RobotExpression | null; unring: (() => void) | null }
   let current: Run | null = null
   let lastAppGuideAt: number | null = null
 
   const end = (run: Run) => {
     run.element?.removeAttribute(GUIDING)
+    run.unring?.()
+    run.unring = null
     if (run.faceSet) deps.setFace(run.before)
     if (current === run) current = null
   }
@@ -75,11 +85,12 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
     try { await Promise.race([Promise.resolve(spoken).catch(() => {}), cap]) } finally { clearTimeout(timer) }
   }
 
-  async function execute(steps: GuideStep[], element: Element | null): Promise<boolean> {
+  async function execute(steps: GuideStep[], element: Element | null, ring = false): Promise<boolean> {
     cancel()
-    const run: Run = { cancelled: false, element, faceSet: false, moving: false, before: deps.face?.() ?? null }
+    const run: Run = { cancelled: false, element, faceSet: false, moving: false, before: deps.face?.() ?? null, unring: null }
     current = run
     element?.setAttribute(GUIDING, '')
+    if (element && ring && deps.highlight) run.unring = deps.highlight(element)
     try {
       for (const step of steps) {
         if (run.cancelled) return false
@@ -120,7 +131,9 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
   }
 
   async function show(request: GuideRequest, prefix: GuideStep[] = []) {
-    const found = find(request.target)
+    const any = find(request.target)
+    const hidden = !!any && (deps.isHidden ?? isElementHidden)(any.element)
+    const found = hidden ? null : any
     const s = deps.situation()
     const situation = {
       ...(found ? situationFor(found.element) : { side: 'center' as const, distance: 0, visible: true }),
@@ -130,7 +143,7 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
     }
     const plan = planGuide(request, found?.info ?? null, situation, deps.settings())
     if (!found) {
-      emit({ type: 'missing', target: request.target })
+      emit({ type: 'missing', target: request.target, reason: hidden ? 'hidden' : 'not_found' })
       if (plan.steps.length || prefix.length) await execute([...prefix, ...plan.steps], null)
       return
     }
@@ -138,7 +151,8 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
     if (plan.size === 'skip') { if (prefix.length) await execute(prefix, null); return }
     if ((request.reason ?? 'app') === 'app') lastAppGuideAt = situation.now
     // An offer is a question: 'offered' carries the request so the host can answer yes (reason 'asked').
-    if (await execute([...prefix, ...plan.steps], found.element)) {
+    const ring = plan.size === 'point' || plan.size === 'approach' || plan.size === 'explain'
+    if (await execute([...prefix, ...plan.steps], found.element, ring)) {
       emit(plan.size === 'offer' ? { type: 'offered', target: request.target, request } : { type: 'shown', target: request.target, size: plan.size })
     }
   }
@@ -151,7 +165,8 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
       const intro: GuideStep[] = event.via === 'start' && spec.intro ? [{ do: 'say', text: spec.intro }] : []
       void show({ target: event.step.target, reason: 'task', say: event.step.say }, intro)
     } else if (event.type === 'done') {
-      void execute([{ do: 'face', face: 'happy' }, { do: 'gesture', name: 'celebrate' }, { do: 'say', text: spec.doneSay ?? 'All done!' }], null)
+      // Excited, and the celebrate gesture (its cue is chirpCelebration): the visitor finished.
+      void execute([{ do: 'face', face: 'excited' }, { do: 'gesture', name: 'celebrate' }, { do: 'say', text: spec.doneSay ?? 'All done!' }], null)
     } else {
       cancel()
       deps.stage.stop?.()

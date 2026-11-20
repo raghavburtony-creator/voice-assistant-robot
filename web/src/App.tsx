@@ -43,7 +43,8 @@ export default function App() {
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
   const onAction = useCallback((action: AssistantAction) => {
     if (action.action === 'navigate') goTo(action.page)
-    else if (action.action === 'guide' || action.action === 'task') return // Otto shows it, or walks you through it, himself
+    // Otto shows it, walks you through it, or puts the card in his panel, himself.
+    else if (action.action === 'guide' || action.action === 'task' || action.action === 'card') return
     else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
     else if (action.name === 'toggle_theme') setDark(value => !value)
   }, [])
