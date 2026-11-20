@@ -31,7 +31,19 @@ OUT=$(gh api "repos/$R/pulls/$N/comments?per_page=100" --jq '
 [ -z "$OUT" ] && echo CLEAN || echo "$OUT"
 ```
 
+**Confirm mode.** The caller may also pass `SINCE=<ISO time>` and `C=<comment id>`. Those are the time and id of the `@codex review` comment posted after a fix. In that case, run this first, with all three values filled in:
+
+```bash
+N=<number>; R=raghavburtony-creator/voice-assistant-robot; export BOT='chatgpt-codex-connector[bot]' SINCE=<iso>
+Q='any(.[]; .user.login==env.BOT and .content=="+1" and .created_at>=env.SINCE)'
+{ gh api "repos/$R/issues/$N/reactions?per_page=100" --jq "$Q"; gh api "repos/$R/issues/comments/<C>/reactions?per_page=100" --jq "$Q"; } | grep -c true
+```
+
+If it prints anything other than `0`, answer `APPROVED` and stop. Otherwise run the main command above and answer from it as usual.
+
 Then answer with exactly one of these, and nothing else:
+
+- `APPROVED`: confirm mode only. Codex reacted 👍 after the `@codex review` comment, meaning no new findings.
 
 - `PENDING`: Codex hasn't finished reviewing the PR's current head commit. Stop right away.
 - `CLEAN`: Codex finished, and every comment it left has a reply from the PR author.

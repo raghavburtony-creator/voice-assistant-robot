@@ -200,7 +200,7 @@ Project agents live in `.claude/agents/` and skills in `.claude/skills/`. Agents
 | `/otto-pr-review <n> [--comment]` | otto-pr-reviewer on a GitHub PR; `--comment` posts the review |
 | `/otto-design-review [target] [--fix]` | otto-design-reviewer, with otto-voice-engineer when sound changed |
 | `/otto-docs-sync [change]` | otto-docs-keeper: README sections, the routing table, decisions, links |
-| `/watch-pr [n]` | waits 10 minutes, then has `codex-pr-watcher` (Haiku) check for Codex comments, at most 3 times. Fixes HIGH findings, alerts on SECURITY, replies to LOW ones |
+| `/watch-pr [n]` | waits 10 minutes, then has `codex-pr-watcher` (Haiku) check for Codex comments, at most 3 times. Fixes HIGH findings, then posts `@codex review` and checks once more, 10 minutes later, for Codex's 👍. Alerts on SECURITY, replies to LOW ones |
 
 Project agents: `otto-implementer`, `otto-worker` (one scoped unit, for `/otto-orchestrate`), `otto-code-reviewer`, `otto-pr-reviewer`, `otto-design-reviewer`, `otto-voice-engineer`, `otto-docs-keeper`.
 
