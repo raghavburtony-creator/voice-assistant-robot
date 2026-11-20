@@ -22,9 +22,9 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Idle and sleep | D-13 | "Idle and sleep" | `web/src/otto/idle.ts`, `web/src/otto/useIdleLifecycle.ts`, `IDLE_SETTINGS` |
 | Awareness (app events, reactions) | | "Awareness: Otto reacts to what happens in your app" | `web/src/otto/awareness/` |
 | Themes and per-instance config | D-13 | "Themes and per-instance config" | `web/src/otto/config.ts`, `web/src/otto/useOttoConfig.ts`, `OTTO_CONFIG` in `otto.config.ts` |
-| Guidance rules (what Otto does for a request, tasks) | D-13, D-14 | "Interactive guidance" | `web/src/otto/guidance/guide.ts`, `task.ts` and their tests, `guidance` in `web/src/otto/config.ts` |
-| Guidance runtime (targets, the runner, the highlight, Show me / Not now) | D-06, D-14 | "Interactive guidance" | `web/src/otto/guidance/runner.ts`, `targets.ts`, `web/src/otto/Otto.tsx`, `web/src/otto/element/createOtto.tsx`, `voice.css` |
-| Guidance by voice (`show_target`) | D-02, D-14 | "Interactive guidance", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `server/tests/test_voice.py`, `web/src/otto/messages.ts`, `useVoiceAssistant.ts` |
+| Guidance rules (what Otto does for a request, tasks, observed progress, when to offer help) | D-13, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/guide.ts`, `task.ts`, `help.ts` and their tests, `guidance` in `web/src/otto/config.ts` |
+| Guidance runtime (targets, offered tasks, the runner, the observer, the highlight, Show me / Not now) | D-06, D-14, D-16 | "Interactive guidance" | `web/src/otto/guidance/runner.ts`, `targets.ts`, `observe.ts`, `web/e2e/guidance.spec.ts`, `web/src/otto/Otto.tsx`, `web/src/otto/element/createOtto.tsx`, `voice.css` |
+| Guidance by voice (`show_target`, `start_guided_task`) | D-02, D-14, D-16 | "Interactive guidance", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `server/tests/test_voice.py`, `web/src/otto/messages.ts`, `useVoiceAssistant.ts` |
 | Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `AGENTS.md` ("Rules for code") |
 | `<otto-mascot>`, `createOtto`, the library build | D-12 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/element/`, `vite.lib.config.ts`, `tsconfig.lib.json`, `web/preview/` |
 | React adapter (`otto-mascot/react`) | D-15 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/react/` |

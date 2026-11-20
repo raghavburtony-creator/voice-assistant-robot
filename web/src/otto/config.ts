@@ -106,6 +106,10 @@ export type OttoConfig = {
     approachMinDistance: number
     /** Seconds Otto looks at the target. */
     lookSeconds: number
+    /** An event naming a `help` target: offer help after this many failures of the same thing... */
+    helpAfterFailures: number
+    /** ...within this many ms. */
+    helpWindowMs: number
   }
 }
 
@@ -148,7 +152,7 @@ const BASE: OttoConfig = {
     awayMs: 60_000,
     rules: [],
   },
-  guidance: { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 },
+  guidance: { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000 },
 }
 
 export type DeepPartial<T> = T extends readonly unknown[] ? T : T extends (...args: never[]) => unknown ? T

@@ -56,6 +56,11 @@ export type OttoEvent = {
   task?: string
   /** A few words for screen readers (and the bubble, for a major event). */
   message?: string
+  /**
+   * A guidance target (its id: data-otto-target or registerGuideTarget) that would help with this. With it, Otto may
+   * offer to show the visitor where to go (guidance/help.ts decides when); without it, he only reacts.
+   */
+  help?: string
   /** Anything else your rules want to know. */
   data?: Readonly<Record<string, unknown>>
 }

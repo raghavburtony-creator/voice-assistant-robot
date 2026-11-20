@@ -59,7 +59,7 @@ web/             React 19 + TypeScript + Vite
   src/components/originkit/ui/clay-robot.tsx   vendored WebGL 2 robot (Otto: changes marked)
   src/lab/, lab.html   the lab and its fake voice server
   preview/             the <otto-mascot> playground
-  e2e/                 Playwright browser tests (lab, mascot)
+  e2e/                 Playwright browser tests (lab, mascot, guidance)
   scripts/             check-dist.mjs: proves the library's entry points stay separate
 docs/            routing table and decisions
 ```
@@ -98,6 +98,7 @@ cd server && .venv/bin/python -m pytest
 cd web && npm test && npm run typecheck && npm run build
 cd web && npm run build:lib      # when element/, react/, gemini/ or the public API changes; ends with scripts/check-dist.mjs
 cd web && npm run test:e2e       # Playwright, Chromium; first run: npx playwright install chromium
+# A Chromium already on the machine instead of Playwright's download: PLAYWRIGHT_CHROMIUM=/path/to/chrome npm run test:e2e
 ```
 
 **Lint:** no linter or formatter is configured (no ESLint, Prettier or Ruff). `npm run typecheck` (`tsc -b`) is the strictest static check. Don't claim lint ran.

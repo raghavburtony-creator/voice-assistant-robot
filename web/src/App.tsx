@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
-import { Otto, createOttoGuide, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
+import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
 
 function pageFromHash(): PageId {
   const id = window.location.hash.slice(1)
@@ -15,6 +15,19 @@ export default function App() {
   const [message, setMessage] = useState('')
   const [dark, setDark] = useState(false)
   const guide = useMemo(createOttoGuide, [])
+  const events = useMemo(createOttoEvents, [])
+  // A task Otto can walk you through, and see you do: he notices each step himself (no "next" button). The voice can
+  // start it too ("how do I show a message?"), because it is offered here.
+  useEffect(() => registerGuideTask({
+    id: 'show-message', title: 'Show an example message',
+    intro: "Sure, it takes two steps.", doneSay: 'There it is!',
+    steps: [
+      { id: 'open', target: 'nav', say: 'First, open Features in the Pages menu.', doneWhen: [{ on: 'event', type: 'section', topic: 'features' }] },
+      { id: 'press', target: 'show-message', say: 'Now press Show a message.', doneWhen: [{ on: 'event', type: 'success', topic: 'message' }] },
+    ],
+    // Going back to Home abandons it.
+    cancelWhen: [{ on: 'event', type: 'section', topic: 'home' }],
+  }), [])
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -30,10 +43,13 @@ export default function App() {
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
   const onAction = useCallback((action: AssistantAction) => {
     if (action.action === 'navigate') goTo(action.page)
-    else if (action.action === 'guide') return // Otto shows it himself
+    else if (action.action === 'guide' || action.action === 'task') return // Otto shows it, or walks you through it, himself
     else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
     else if (action.name === 'toggle_theme') setDark(value => !value)
   }, [])
+
+  // Tell Otto when a message appears (by the button or by his own command); he reacts, and a guided task can see it.
+  useEffect(() => { if (message) events.notify({ type: 'success', topic: 'message', where: '.app-message' }) }, [message, events])
 
   // What Otto can read with get_screen_context. The third argument names an event in app_config.py EVENTS: Otto reacts to it once.
   useAssistantContext('demo', { theme: dark ? 'dark' : 'light', message: message || null }, message ? 'message_shown' : undefined)
@@ -98,6 +114,6 @@ export default function App() {
       {page === 'about' && <p>While the voice guide is open, your voice and what you type are sent to Google's Gemini to answer you. This app saves none of it.</p>}
       {message && <p className="app-message" role="status">{message}</p>}
     </main>
-    <Otto page={page} onAction={onAction} guide={guide} />
+    <Otto page={page} onAction={onAction} guide={guide} events={events} />
   </>
 }

@@ -3,7 +3,7 @@ import { createOttoGuide, MISSING_SAY, type GuideEvent, type GuideSettings } fro
 import { attachGuide, type GuideRunnerDeps } from './runner'
 import { findGuideTarget, listGuideTargets, onGuideTargetsChange, registerGuideTarget } from './targets'
 
-const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: false, approachMinDistance: 0.25, lookSeconds: 2.5 }
+const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: false, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000 }
 
 type FakeEl = Element & { attrs: Map<string, string> }
 const el = (left: number, attrs: Record<string, string> = {}, text = ''): FakeEl => {

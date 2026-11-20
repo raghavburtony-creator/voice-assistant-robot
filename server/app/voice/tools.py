@@ -75,5 +75,20 @@ def show_target(target_id: str, tool_context: ToolContext) -> dict:
     return {"ok": True, "label": found.get("label"), "description": found.get("description")}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target)]
+def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
+    """Have Otto walk the user through a task on this page, step by step: he shows each part in turn and notices as the
+    user does each step. Use it when the user asks for help doing something ("how do I...", "help me with...") and a task
+    in get_screen_context under guide_tasks fits. task_id must be one of those ids; never invent one. Otto says each step
+    himself, so only introduce it in one short sentence; don't read the steps out."""
+    screens = tool_context.state.get("screens") or {}
+    reported = (screens.get("guide_tasks") or {}).get("tasks")
+    tasks = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
+    if not isinstance(task_id, str) or not task_id or len(task_id) > 64 or task_id not in tasks:
+        return {"ok": False, "error": "Unknown task. Use one of the known ids.", "known": list(tasks)}
+    _send(tool_context, {"action": "task", "task": task_id})
+    found = tasks[task_id]
+    return {"ok": True, "title": found.get("title"), "steps": found.get("steps")}
+
+
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)

@@ -149,6 +149,14 @@ export class FakeVoiceServer {
   }
 
   /** The server hears the visitor talking over Otto: it stops the turn and says so. */
+  /** The model calls a tool that sends an action (as tools.py does), e.g. start_guided_task: { action: 'task', task }. */
+  action(action: Record<string, unknown>) {
+    if (!this.socket || !this.connected) return false
+    this.send({ type: 'action', ...action })
+    this.log(`action: ${JSON.stringify(action)}`)
+    return true
+  }
+
   bargeIn() {
     if (!this.socket || !this.speaking) return false
     this.stopStreaming()
