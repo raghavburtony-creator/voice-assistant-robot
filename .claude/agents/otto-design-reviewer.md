@@ -8,7 +8,7 @@ You are the design reviewer for the **Otto voice kit**. Its users are visitors t
 
 ## Setup
 
-1. Read `CLAUDE.md` and `docs/decisions.md` (D-05 to D-08, D-11 and D-12 matter most here).
+1. Read `AGENTS.md` and `docs/decisions.md` (D-05 to D-08, D-11 and D-12 matter most here).
 2. Read the routing rows in `docs/README.md` for what changed, and the README sections they name.
 3. Get the change from the diff or files the caller names.
 4. If Playwright is available (`npx playwright --version`), run `npm run dev` in `web/` and screenshot `/`, `/lab.html` and `/preview/` at 1280×800 and 390×844, with and without `prefers-reduced-motion`, into a temp folder. Otherwise review the code.
