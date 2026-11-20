@@ -24,6 +24,12 @@ import type { StageController } from './movement/stage'
 import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
 import type { IdleControls } from './OttoStage'
+import { publishContext } from './context'
+import type { IdleState } from './idle'
+import type { RobotExpression } from './robot/robot'
+import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
+import { attachGuide } from './guidance/runner'
+import { listGuideTargets, onGuideTargetsChange } from './guidance/targets'
 import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
@@ -47,6 +53,8 @@ type Props = {
   events?: OttoEvents
   /** The mascot's settings (default: OTTO_CONFIG in otto.config.ts). */
   config?: OttoConfig
+  /** Lets your code show things on the page (`guide.show('save')`, `guide.startTask(...)`). Optional; keep the same object. */
+  guide?: OttoGuide
   /** For tests and the lab: a stand-in for the server's WebSocket. */
   createSocket?: (url: string) => WebSocket
   /** For the lab: set to the idle lifecycle's controls. */
@@ -63,7 +71,7 @@ export default function Otto({ config = OTTO_CONFIG, ...props }: Props) {
   return <OttoConfigProvider config={config}><OttoInner {...props} /></OttoConfigProvider>
 }
 
-function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, createSocket, idleControls }: Omit<Props, 'config'>) {
+function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, guide, createSocket, idleControls }: Omit<Props, 'config'>) {
   const ownChannel = useMemo(createGestureChannel, [])
   const channel = gestures ?? ownChannel
   const ownEvents = useMemo(createOttoEvents, [])
@@ -79,12 +87,82 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   }, [page, otto])
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction, createSocket })
+  const ownGuide = useMemo(createOttoGuide, [])
+  const ottoGuide = guide ?? ownGuide
+  // A voice 'guide' action (already checked against the page's targets) is shown by Otto's body; the model speaks.
+  const handleAction = useCallback((action: AssistantAction) => {
+    if (action.action === 'guide') ottoGuide.show({ target: action.target, reason: 'asked', say: null })
+    onAction(action)
+  }, [ottoGuide, onAction])
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
   // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.
   useGestureTriggers(status, channel, interruptions)
   // Chirps follow the gestures (SOUND_SETTINGS.gestureCues), never the voice state directly.
   useGestureSounds(channel)
+  const conversing = status === 'connecting' || status === 'listening' || status === 'speaking'
+  const conversingRef = useRef(conversing)
+  conversingRef.current = conversing
+  // Guide words shown as text (D-06): one live region, always mounted, only its text changes. A line stays until replaced or cleared.
+  const [guideSay, setGuideSay] = useState('')
+  const [guideFace, setGuideFace] = useState<RobotExpression | null>(null)
+  const faceRef = useRef<RobotExpression | null>(null)
+  const idleRef = useRef<IdleState>('awake')
+  const [offer, setOffer] = useState<{ request: GuideRequest } | null>(null)
+  const offerRef = useRef(offer)
+  offerRef.current = offer
+  const sayTimer = useRef<{ timer: number; done: (v: boolean) => void } | null>(null)
+  const configRef = useRef(config)
+  configRef.current = config
+  useEffect(() => {
+    const endSay = (finished: boolean) => {
+      if (!sayTimer.current) return
+      window.clearTimeout(sayTimer.current.timer)
+      sayTimer.current.done(finished)
+    }
+    const clear = () => { endSay(false); setGuideSay(''); setOffer(null) }
+    const speak = (text: string) => new Promise<boolean>(resolve => {
+      endSay(false)
+      setGuideSay(text)
+      const done = (v: boolean) => { sayTimer.current = null; resolve(v) }
+      // Read time: 5 s and then the reading speed. The line goes after that unless an offer waits.
+      sayTimer.current = { timer: window.setTimeout(() => {
+        done(true)
+        if (!offerRef.current) setGuideSay('') // read time is over: the line goes (a newer line would have cancelled this timer)
+      }, 5000 + (text.length / 15) * 1000), done }
+    })
+    const detach = attachGuide(ottoGuide, {
+      stage: ottoStage,
+      playGesture: name => channel.play(name),
+      face: () => faceRef.current,
+      setFace: face => { faceRef.current = face; setGuideFace(face) },
+      speak,
+      settings: () => configRef.current.guidance,
+      situation: () => ({ idle: idleRef.current, conversing: conversingRef.current, movementEnabled: configRef.current.movement.movementEnabled }),
+      ottoRect: () => { const x = ottoStage.frame.x; return { left: x, right: x, top: 0, bottom: 0 } },
+    })
+    const offFeed = ottoGuide.onEvent(event => {
+      const e = event as GuideEvent | { type: 'offered'; target: string; request: GuideRequest }
+      if (e.type === 'offered') setOffer({ request: e.request })
+      else if (e.type === 'cancelled') clear()
+      else if (e.type === 'shown' || e.type === 'step') setOffer(null)
+    })
+    const offStop = ottoGuide.subscribe(command => { if (command.type === 'stop') clear() })
+    return () => { detach(); offFeed(); offStop(); endSay(false) }
+  }, [ottoGuide, ottoStage, channel])
+  const answerOffer = (yes: boolean) => {
+    if (yes && offer) ottoGuide.show({ ...offer.request, reason: 'asked' })
+    else setGuideSay('')
+    setOffer(null)
+  }
+  // Tell the server which targets exist (it only lets the model show these).
+  useEffect(() => {
+    const publish = () => publishContext('guide_targets', { targets: listGuideTargets() })
+    const frame = requestAnimationFrame(publish) // after the page has rendered
+    const off = onGuideTargetsChange(publish)
+    return () => { cancelAnimationFrame(frame); off() }
+  }, [page])
+  useEffect(() => () => publishContext('guide_targets', null), [])
   /** What Otto is saying now, for the robot to mouth. */
   const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
@@ -137,13 +215,20 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const wakeText = busy ? undefined : WAKE_TEXT[wake.state]
 
   return <>
-    {wakeText && <div className="otto-wake" role="status">
-      <span>{wakeText}</span>
-      <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
-    </div>}
+    <div className="otto-notices">
+      {wakeText && <div className="otto-wake" role="status">
+        <span>{wakeText}</span>
+        <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>
+      </div>}
+      <div className="otto-guide-say" role="status" aria-live="polite">{guideSay}</div>
+      {offer && <div className="otto-guide-offer">
+        <button type="button" className="otto-btn otto-btn--filled" onClick={() => answerOffer(true)}>Show me</button>
+        <button type="button" className="otto-btn otto-btn--text" onClick={() => answerOffer(false)}>Not now</button>
+      </div>}
+    </div>
     {showRobot
       ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
-          events={otto} idleControls={idleControls} onTalk={open ? () => {} : openPanel} />
+          events={otto} idleControls={idleControls} face={guideFace} onIdleState={state => { idleRef.current = state }} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
     {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
   </>

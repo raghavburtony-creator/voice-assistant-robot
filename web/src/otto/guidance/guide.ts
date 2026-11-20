@@ -3,19 +3,21 @@
 //
 // A guide has a size, and an unrequested one gets the smallest that says enough:
 //   skip      nothing (tab hidden, asleep, too soon after the last unrequested one)
-//   offer     a curious look and "Want me to show you X?" (the runner waits for a yes; no movement)
+//   offer     a curious look and "Want me to show you X?" (no movement); the runner emits 'offered', and the host's
+//             yes is guide.show({ ...request, reason: 'asked' })
 //   glance    a look toward it
 //   point     look and point (nod when it is straight ahead)
 //   approach  walk over, look and point
 //   explain   look and say what it is
 //
-// The visitor asking (or a task step) gets point or approach; the app suggesting ('app') respects attention first.
+// The visitor asking (or a task step) gets point or approach; the app suggesting ('app') respects attention first, and
+// its explicit mode is capped at point unless it is major.
 // Each decision says so in `why`.
 //
 //   const guide = createOttoGuide()
 //   guide.show('save')                          // or { target: 'save', mode: 'point', say: 'Press here.' }
 //   const t = guide.startTask({ id: 'theme', title: 'Change the theme', steps: [...] })
-//   guide.onEvent(e => ...)                     // shown / missing / step / done / cancelled
+//   guide.onEvent(e => ...)                     // shown / offered / missing / step / done / cancelled
 
 import type { OttoConfig } from '../config'
 import type { Importance } from '../awareness/events'
@@ -78,7 +80,7 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
 
   if (!situation.tabVisible) return skip('nobody watching')
   if (!target) {
-    if (reason !== 'asked') return skip('target not on this page')
+    if (reason === 'app') return skip('target not on this page')
     why.push('target not on this page: explain')
     const steps: GuideStep[] = [{ do: 'face', face: 'sad' }]
     if (request.say !== null) steps.push({ do: 'say', text: MISSING_SAY })
@@ -97,7 +99,10 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
     const since = situation.lastAppGuideAt === null ? Infinity : situation.now - situation.lastAppGuideAt
     if (since < settings.cooldownMs) return skip('too soon after the last suggestion')
     if (situation.idle === 'asleep' && importance !== 'major') return skip('asleep')
-    if (mode !== 'auto') size = mode
+    if (mode !== 'auto') {
+      size = mode
+      if (importance !== 'major' && (size === 'approach' || size === 'explain')) { size = 'point'; why.push('unrequested and not major: at most point') }
+    }
     else if (importance === 'minor') size = 'glance'
     else if (importance === 'normal') size = settings.offerFirst ? 'offer' : 'point'
     else size = auto()
@@ -126,7 +131,12 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
 }
 
 export type GuideCommand = { type: 'show'; request: GuideRequest } | { type: 'task'; event: GuideTaskEvent; spec: GuideTaskSpec } | { type: 'stop' }
-export type GuideEvent = { type: 'shown'; target: string; size: GuideSize } | { type: 'missing'; target: string } | GuideTaskEvent
+/** shown: a plan ran to its end (an offer emits 'offered' instead: answer yes with guide.show({ ...request, reason: 'asked' })). */
+export type GuideEvent =
+  | { type: 'shown'; target: string; size: GuideSize }
+  | { type: 'offered'; target: string; request: GuideRequest }
+  | { type: 'missing'; target: string }
+  | GuideTaskEvent
 export type GuideTaskHandle = {
   readonly status: GuideTaskStatus
   readonly step: GuideTaskStep | null

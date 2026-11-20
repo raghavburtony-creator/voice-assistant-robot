@@ -18,9 +18,12 @@ describe('planGuide: a missing target', () => {
     expect(plan(asked, {}, {}, null)).toMatchObject({ size: 'explain', steps: [{ do: 'face', face: 'sad' }, { do: 'say', text: MISSING_SAY }] })
     expect(plan({ ...asked, say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }])
   })
-  it('the app or a task suggested it: nothing', () => {
+  it('a task step: like asking', () => {
+    expect(plan({ reason: 'task' }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }, { do: 'say', text: MISSING_SAY }])
+    expect(plan({ reason: 'task', say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }])
+  })
+  it('the app suggested it: nothing', () => {
     expect(plan({}, {}, {}, null).size).toBe('skip')
-    expect(plan({ reason: 'task' }, {}, {}, null).size).toBe('skip')
   })
 })
 
@@ -88,6 +91,13 @@ describe('planGuide: explicit modes', () => {
     expect(plan({ mode: 'point' }, { lastAppGuideAt: SIT.now - 1 }).size).toBe('skip')
     expect(plan({ mode: 'point' }, { idle: 'asleep' }).size).toBe('skip')
     expect(plan({ mode: 'point' }).size).toBe('point')
+  })
+  it('an app guide with a mode is capped at point unless major', () => {
+    expect(plan({ mode: 'approach' }).size).toBe('point')
+    expect(plan({ mode: 'explain', importance: 'minor' }).size).toBe('point')
+    expect(plan({ mode: 'approach', importance: 'major' }).size).toBe('approach')
+    expect(plan({ mode: 'explain', importance: 'major' }).size).toBe('explain')
+    expect(plan({ mode: 'approach', importance: 'major' }, { lastAppGuideAt: SIT.now - 1 }).size).toBe('skip')
   })
 })
 

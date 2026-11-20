@@ -34,7 +34,7 @@ To try the robot without a key or a server, open http://localhost:5173/lab.html.
 - **A simulated voice session**: "Run a conversation" plays the lifecycle gestures through the same rules as the app.
 - **The real Otto against a simulated Gemini server**: the panel, streamed synthetic speech through the real speech player, the bubble in step with the audio, and barge-in from either side.
 
-Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`.
+Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`. Browser tests: `cd web && npm run test:e2e` (Playwright, Chromium, against the lab and the mascot; the first time, run `npx playwright install chromium`).
 
 ## Using it in a new project
 
@@ -112,7 +112,7 @@ Colours (clay, visor, eyes) and the backdrop are `ROBOT_COLORS` and `ROBOT_BACKG
 
 ### Gestures
 
-Otto has eight short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake`, `thinkingHand` (held while thinking), and two idle ones, `lookAround` and `stretch`, which anything else cuts into. They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
+Otto has ten short gestures: `welcomeWave`, `goodbyeWave`, `celebrate`, `nod`, `headShake`, `thinkingHand` (held while thinking), `pointLeft` and `pointRight` (the arm out toward a spot on that side, for guidance), and two idle ones, `lookAround` and `stretch`, which anything else cuts into. They are defined in [`web/src/otto/robot/gestures.ts`](web/src/otto/robot/gestures.ts) as offsets on the clay robot's rig (head turn, nod and tilt, a hop, each arm's raise, swing and stretch, happy eyes and gaze), blended over its own motion. The lifecycle mapping (which gesture plays on connect, disconnect, turn end and error), the intensity, the cooldown and reduced motion are in the `GESTURE_SETTINGS` block of [`web/src/otto.config.ts`](web/src/otto.config.ts). With `enabled: false`, Otto stays still.
 
 To play one from your own code, make a channel once and pass it to `<Otto>`. The same channel tells you when gestures start and end:
 
@@ -201,6 +201,67 @@ job.succeed('Your image is ready')                                              
 
 **Your own rules:** `awareness.rules` in the config are functions of the event and what Otto knows. Return a reaction to react differently, for example by `topic`; the limits above still apply. The lab logs every decision with its reasons.
 
+### Interactive guidance
+
+Your app says what to show; Otto decides how. First mark the things he may show, in markup or in code:
+
+```tsx
+<button data-otto-target="save" data-otto-label="the Save button" data-otto-description="Saves your draft.">Save</button>
+const off = registerGuideTarget('save', '#save', { label: 'the Save button' })   // code wins over markup with the same id
+```
+
+Without `data-otto-label`, the label is the `aria-label`, then the element's text. Then make a guide channel once and ask:
+
+```tsx
+const guide = useMemo(createOttoGuide, [])
+<Otto guide={guide} /* ... */ />                  // <otto-mascot>: otto.guide, otto.showTarget(...), otto.startGuide(...)
+guide.show('save')
+guide.show({ target: 'save', mode: 'point', reason: 'app', importance: 'normal', say: 'Press here.' })
+guide.onEvent(e => console.log(e.type))           // shown, offered, missing, step, done, cancelled
+```
+
+A request can carry `mode` (`auto`, `glance`, `point`, `approach`, `explain`), `reason` (`asked`: the visitor asked; `task`: a task step; `app`, the default: your app suggests), `importance` (`minor`, `normal`, `major`) and `say` (his words; `null` says nothing, for when the voice speaks).
+
+**What Otto decides** (`web/src/otto/guidance/guide.ts`, pure and tested; every plan says why):
+- **Glance:** a curious look toward it.
+- **Offer:** a curious look and "Want me to show you the Save button?", with **Show me** and **Not now**. Nothing moves until the visitor says yes.
+- **Point:** he looks and points toward its side (`pointLeft`, `pointRight`, or a nod when it is straight ahead).
+- **Approach:** he walks over, looks and points.
+- **Explain:** he looks and says what it is.
+
+A target off screen is scrolled into view first. Asked or a task step, he points, or walks over when it is far (`approachMinDistance`). When the target is not on the page, a suggestion is dropped; asked, he looks sad and says "I can't find that on this page."
+
+**How he respects attention** (for `reason: 'app'`):
+- With the tab hidden, nothing happens.
+- One suggestion per `cooldownMs`.
+- Asleep, he lets all but a major one pass.
+- Unasked, a minor one is a glance and a normal one an offer (`offerFirst`). An explicit `mode` is capped at point unless it's major.
+- In a voice conversation, a glance at most.
+
+Settings are `guidance` in the config: `cooldownMs`, `offerFirst`, `approachMinDistance`, `lookSeconds`.
+
+**Tasks** walk the visitor through steps:
+
+```tsx
+const task = guide.startTask({ id: 'theme', title: 'Change the theme', steps: [
+  { id: 'open', target: 'settings', say: 'First open Settings.' },
+  { id: 'pick', target: 'theme', say: 'Then pick a theme.' },
+] })
+task.complete()          // this step is done: Otto shows the next, or celebrates at the end
+task.complete('pick')    // the visitor already did 'pick': skip past it
+task.back(); task.goTo('open'); task.cancel()
+```
+
+Your app reports progress with `complete`, and Otto moves on from there. Starting a task cancels the one before, and `guide.stop()` ends it.
+
+**Events:** `guide.onEvent`, or `otto:guide` on `<otto-mascot>`. An `offered` event carries the request: answer yes with `guide.show({ ...request, reason: 'asked' })`. `<Otto>` shows the Show me and Not now buttons itself.
+
+**Highlight:** while Otto shows something, it carries `data-otto-guiding`. The voice kit outlines it; style `[data-otto-guiding]` in your CSS to change that.
+
+**Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. `<Otto>` reports the page's targets to the server, and the tool accepts only those ids. The browser checks the id again before Otto shows it (D-02, D-14).
+
+**Lab:** the Guidance panel in `/lab.html` asks for each mode, sends app suggestions at each importance, resets the cooldown, runs a task, and logs every plan and why.
+
 ### Themes and per-instance config
 
 Every mascot setting has a default in `web/src/otto/config.ts`. `defineOttoConfig(overrides)` layers three things, merging deeply (arrays are replaced):
@@ -218,9 +279,10 @@ The mascot works without React in the host page. It includes the robot, stage, g
 cd web && npm run build:lib
 ```
 
-The build writes three things to `dist-lib/`:
-- `otto-mascot.js`, the main module;
+The build writes these to `dist-lib/`, then runs `scripts/check-dist.mjs` to prove the three entry points stay separate (D-15):
+- `otto-mascot.js`, the main module (the package root), about 340 kB raw;
 - a separate chunk for the robot's WebGL scene, loaded later;
+- `react.js` (`./react`), about 3 kB, and `gemini.js` (`./gemini`), about 16 kB: optional adapters, below;
 - type declarations, wired through `package.json` `exports`.
 
 ```html
@@ -240,9 +302,10 @@ The build writes three things to `dist-lib/`:
 - movement: `moveToX`, `moveToElement`, `goHome`, `lookAt`;
 - voice: `connectAudioNode`, which lip-syncs to any Web Audio node of yours, and `speakText`, which shows the bubble and screen-reader text with a procedural mouth, optionally spoken aloud by the browser;
 - `interrupt`;
-- awareness: `notify` and `task`.
+- awareness: `notify` and `task`;
+- guidance: `showTarget` and `startGuide`, and the `guide` channel (see "Interactive guidance").
 
-**Events:** `otto:ready`, `otto:statechange`, `otto:gesturestart`, `otto:gestureend`, `otto:interrupt`, `otto:error`, `otto:activate`, `otto:reaction` and `otto:move`. All bubble and cross the shadow boundary, and they're typed for `addEventListener`. Without the element, `createOtto(container, options)` returns the same controller.
+**Events:** `otto:ready`, `otto:statechange`, `otto:gesturestart`, `otto:gestureend`, `otto:interrupt`, `otto:error`, `otto:activate`, `otto:reaction`, `otto:move` and `otto:guide`. All bubble and cross the shadow boundary, and they're typed for `addEventListener`. Without the element, `createOtto(container, options)` returns the same controller.
 
 **Isolation:** Otto lives in a shadow root, so page styles don't reach him. Only the `--otto-*` custom properties do, on purpose: they are the theming hook.
 
@@ -252,7 +315,21 @@ The build writes three things to `dist-lib/`:
 - **Leak test:** 20 mount and unmount cycles left no WebGL contexts or listeners behind.
 - **Fallbacks:** without WebGL 2 the robot isn't drawn, and `otto:error` says so. Text and ARIA output still work. With reduced motion he snaps instead of walking.
 
-**Dependencies:** React is bundled inside the element, so a page needs nothing else; a React app gets a second, isolated copy. There is no Three.js to share: the robot is one WebGL 2 shader. Before publishing, give `web/package.json` a public name and remove `private`.
+**React (`./react`):** `<OttoMascot>` and `useOtto()` wrap the element for React and Next.js. It is safe to render on the server (the Next.js App Router included, as the module is `'use client'`): the server writes a plain `<otto-mascot>` tag, and the element code loads in the browser after mount. React is the app's own, an optional peer dependency.
+
+```tsx
+import { OttoMascot, useOtto } from 'otto-mascot/react'
+const { ref, otto, ready } = useOtto()
+<OttoMascot ref={ref} theme="midnight" onActivate={() => otto.playGesture('welcomeWave')} />
+```
+
+**Gemini voice (`./gemini`):** `createGeminiVoiceBridge(otto, options)` wires a live voice session into Otto: the audio to his lip-sync, the words to his bubble, the session to his face and gestures. Call `connect()` from a click. It connects either way, and never with a raw API key (D-01), which it refuses:
+- `transport: { type: 'proxy', url: 'wss://…/ws/voice' }`: this repo's server, which holds the key (recommended);
+- `transport: { type: 'live', token }`: Gemini Live directly, with an ephemeral token your server mints per session.
+
+The Live protocol details (the endpoint, the model id, message field names, audio formats) are marked `[verify]` in `web/src/otto/gemini/transports.ts`, and haven't been checked against a real endpoint yet (Q-01).
+
+**Dependencies:** React is bundled inside the element, so a page needs nothing else; a React app gets a second, isolated copy (`./react` itself bundles none, but the element it loads still has its own). There is no Three.js to share: the robot is one WebGL 2 shader. Before publishing, give `web/package.json` a public name and remove `private`.
 
 **Playground:** with `npm run dev`, open http://localhost:5173/preview/. It has a live theme picker, every method, an `otto:*` event log, an inline Otto, a 20-cycle mount test, and copy-paste snippets. The page's own styles are deliberately hostile, to show that none of them reach Otto.
 

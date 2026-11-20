@@ -75,7 +75,7 @@ describe('mapEvent', () => {
   it('maps every lifecycle event', () => {
     expect(m({ type: 'ready' })).toEqual([{ do: 'gesture', name: 'welcomeWave' }, { do: 'face', face: 'happy' }, { do: 'state', state: 'listening' }])
     expect(m({ type: 'interrupted' })).toEqual([{ do: 'interrupt' }, { do: 'stopAudio' }, { do: 'state', state: 'listening' }])
-    expect(m({ type: 'userSpeech' }, true)).toEqual([{ do: 'interrupt' }, { do: 'stopAudio' }, { do: 'state', state: 'listening' }])
+    expect(m({ type: 'userSpeech' }, true)).toEqual([]) // late transcript while he talks: not a barge-in
     expect(m({ type: 'userSpeech' }, false)).toEqual([{ do: 'state', state: 'listening' }])
     expect(m({ type: 'thinking' })).toEqual([{ do: 'state', state: 'thinking' }, { do: 'gesture', name: 'thinkingHand' }])
     expect(m({ type: 'audio', pcm: pcm() })).toEqual([{ do: 'state', state: 'talking' }])
@@ -137,7 +137,7 @@ describe('createGeminiVoiceBridge', () => {
   it('proxy: starts the session, plays audio through one tap, streams text, and maps the lifecycle', async () => {
     const { otto, calls, names } = fakeOtto()
     const states: string[] = []
-    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://h/ws' }, language: 'de', onState: s => states.push(s) })
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' }, language: 'de', onState: s => states.push(s) })
     const done = bridge.connect()
     const ws = FakeSocket.made[0]
     expect(ws.binaryType).toBe('arraybuffer')
@@ -170,7 +170,7 @@ describe('createGeminiVoiceBridge', () => {
 
   it('barge-in stops queued audio and interrupts Otto', async () => {
     const { otto, calls } = fakeOtto()
-    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://h/ws' } })
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
     void bridge.connect()
     const ws = FakeSocket.made[0]
     ws.open(); ws.receive('{"type":"ready"}')
@@ -181,23 +181,44 @@ describe('createGeminiVoiceBridge', () => {
     expect(sources.every(s => s.stopped && !s.connected)).toBe(true)
     expect(calls).toContainEqual(['interrupt'])
     expect(calls.at(-1)).toEqual(['setState', 'listening'])
-    // The next turn plays again; user speech while Otto is audible is a barge-in too.
+    // The next turn plays again.
     ws.receive(pcm())
-    const next = FakeContext.made[0].sources.at(-1)!
-    expect(next.stopped).toBe(false)
-    const interrupts = calls.filter(c => c[0] === 'interrupt').length
-    ws.receive('{"type":"transcript","role":"user","text":"wait"}')
-    expect(next.stopped).toBe(true)
-    expect(calls.filter(c => c[0] === 'interrupt')).toHaveLength(interrupts + 1)
-    // Quiet Otto: user speech only means listening.
-    ws.receive('{"type":"transcript","role":"user","text":"more"}')
-    expect(calls.filter(c => c[0] === 'interrupt')).toHaveLength(interrupts + 1)
+    expect(FakeContext.made[0].sources.at(-1)!.stopped).toBe(false)
     bridge.close()
+  })
+
+  it('a late user transcript while Otto is audible does not cut him off', async () => {
+    const { otto, calls } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    void bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}')
+    ws.receive(pcm())
+    const playing = FakeContext.made[0].sources[0]
+    const before = calls.length
+    ws.receive('{"type":"transcript","role":"user","text":"what I said earlier"}')
+    expect(playing.stopped).toBe(false)
+    expect(calls.slice(before)).toEqual([])
+    // Once he is quiet, user speech means listening.
+    playing.stopped = true; playing.onended?.()
+    ws.receive('{"type":"transcript","role":"user","text":"next question"}')
+    expect(calls.at(-1)).toEqual(['setState', 'listening'])
+    expect(calls.filter(c => c[0] === 'interrupt')).toHaveLength(0)
+    bridge.close()
+  })
+
+  it('the proxy url must be wss:, or ws: to localhost', () => {
+    const { otto } = fakeOtto()
+    for (const url of ['ws://example.com/ws', 'http://localhost/ws', '/ws/voice', 'not a url'])
+      expect(() => createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url } }).connect()).toThrow(/wss:/)
+    for (const url of ['wss://example.com/ws', 'ws://localhost:8000/ws', 'ws://127.0.0.1/ws', 'ws://[::1]:8000/ws'])
+      expect(() => { void createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url } }).connect() }).not.toThrow()
+    expect(FakeSocket.made).toHaveLength(4)
   })
 
   it('close() releases socket, audio, recorder and the tap, once', async () => {
     const { otto, calls, disconnect } = fakeOtto()
-    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://h/ws' }, microphone: true })
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' }, microphone: true })
     const done = bridge.connect().catch(e => e)
     const ws = FakeSocket.made[0]
     ws.open(); ws.receive('{"type":"ready"}')
@@ -223,7 +244,7 @@ describe('createGeminiVoiceBridge', () => {
 
   it('a recorder that resolves after close() is stopped at once', async () => {
     const { otto } = fakeOtto()
-    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://h/ws' } })
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
     void bridge.connect().catch(() => {})
     const mic = bridge.startMic()
     bridge.close()
@@ -258,7 +279,7 @@ describe('createGeminiVoiceBridge', () => {
 
   it('a connection that closes before ready rejects connect()', async () => {
     const { otto } = fakeOtto()
-    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://h/ws' } })
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
     const done = bridge.connect()
     FakeSocket.made[0].onclose?.()
     await expect(done).rejects.toThrow(/closed/)

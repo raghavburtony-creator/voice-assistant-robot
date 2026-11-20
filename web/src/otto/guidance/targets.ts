@@ -24,11 +24,14 @@ const resolve = (place: Element | string): Element | null => {
   try { return document.querySelector(place) } catch { return null } // a bad selector finds nothing
 }
 
+// Page text reaches the voice model: no control characters, one space at a time, capped.
+// eslint-disable-next-line no-control-regex
+const clean = (text: string | null | undefined, max: number) => (text ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
+
 const infoFor = (id: string, element: Element | null, given?: Entry['info']): GuideTargetInfo => {
-  const text = (element?.textContent ?? '').replace(/\s+/g, ' ').trim()
-  const label = given?.label ?? element?.getAttribute('data-otto-label') ?? element?.getAttribute('aria-label')
-    ?? (text ? text.slice(0, 60) : id)
-  const description = given?.description ?? element?.getAttribute('data-otto-description') ?? undefined
+  const label = clean(given?.label, 60) || clean(element?.getAttribute('data-otto-label'), 60) || clean(element?.getAttribute('aria-label'), 60)
+    || clean(element?.textContent, 60) || clean(id, 60)
+  const description = clean(given?.description ?? element?.getAttribute('data-otto-description'), 200)
   return description ? { id, label, description } : { id, label }
 }
 

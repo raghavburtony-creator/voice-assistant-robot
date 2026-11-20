@@ -51,7 +51,7 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
   const viewport = deps.viewport ?? (() => (typeof window === 'undefined' ? { width: 1024, height: 768 } : { width: window.innerWidth, height: window.innerHeight }))
   const reduced = deps.reducedMotion ?? (() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
 
-  type Run = { cancelled: boolean; element: Element | null; faceSet: boolean; before: RobotExpression | null }
+  type Run = { cancelled: boolean; element: Element | null; faceSet: boolean; moving: boolean; before: RobotExpression | null }
   let current: Run | null = null
   let lastAppGuideAt: number | null = null
 
@@ -63,6 +63,7 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
   const cancel = () => {
     if (!current) return
     current.cancelled = true
+    if (current.moving) deps.stage.stop?.() // a walk toward the old target would carry on
     end(current)
   }
 
@@ -76,7 +77,7 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
 
   async function execute(steps: GuideStep[], element: Element | null): Promise<boolean> {
     cancel()
-    const run: Run = { cancelled: false, element, faceSet: false, before: deps.face?.() ?? null }
+    const run: Run = { cancelled: false, element, faceSet: false, moving: false, before: deps.face?.() ?? null }
     current = run
     element?.setAttribute(GUIDING, '')
     try {
@@ -91,7 +92,11 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
           const behavior = reduced() ? 'auto' : 'smooth'
           element.scrollIntoView({ block: 'center', behavior })
           await sleep(SETTLE_MS[behavior])
-        } else if (step.do === 'move') await deps.stage.moveToElement(element)
+        } else if (step.do === 'move') {
+          run.moving = true
+          await deps.stage.moveToElement(element)
+          run.moving = false
+        }
         else if (step.do === 'look') deps.stage.lookAt(element, step.seconds)
       }
       return !run.cancelled
@@ -132,7 +137,10 @@ export function attachGuide(guide: OttoGuide, deps: GuideRunnerDeps): () => void
     // A skipped suggestion leaves whatever is in flight alone.
     if (plan.size === 'skip') { if (prefix.length) await execute(prefix, null); return }
     if ((request.reason ?? 'app') === 'app') lastAppGuideAt = situation.now
-    if (await execute([...prefix, ...plan.steps], found.element)) emit({ type: 'shown', target: request.target, size: plan.size })
+    // An offer is a question: 'offered' carries the request so the host can answer yes (reason 'asked').
+    if (await execute([...prefix, ...plan.steps], found.element)) {
+      emit(plan.size === 'offer' ? { type: 'offered', target: request.target, request } : { type: 'shown', target: request.target, size: plan.size })
+    }
   }
 
   function onCommand(command: GuideCommand) {

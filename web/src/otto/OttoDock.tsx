@@ -8,6 +8,7 @@ import { useOttoConfig } from './useOttoConfig'
 import type { MouthSource } from './mouth'
 import type { StageController } from './movement/stage'
 import OttoStage, { type IdleControls } from './OttoStage'
+import type { IdleState } from './idle'
 import type { GestureChannel } from './robot/gestures'
 import type { RobotExpression, RobotPose } from './robot/robot'
 import { Button } from './ui'
@@ -26,6 +27,9 @@ type Props = {
   stage: StageController
   events?: OttoEvents
   idleControls?: { current: IdleControls | null }
+  /** A face that wins over the voice status's while set (a guide's). */
+  face?: RobotExpression | null
+  onIdleState?: (state: IdleState) => void
 }
 
 /** How each voice status looks on the robot (the lab reuses these). */
@@ -38,11 +42,11 @@ export const expressionFor = (status: AssistantStatus): RobotExpression =>
 /** The voice panel, which Otto steps aside for. */
 const PANEL: readonly string[] = ['.voice-assistant']
 
-export default function OttoDock({ status, voiceOpen, line, mouth, speech, onTalk, gestures, stage, events, idleControls }: Props) {
+export default function OttoDock({ status, voiceOpen, line, mouth, speech, onTalk, gestures, stage, events, idleControls, face, onIdleState }: Props) {
   const { name } = useOttoConfig()
   const session = status === 'connecting' || status === 'listening' || status === 'speaking'
   return (
-    <OttoStage className="otto-dock" stage={stage} pose={poseFor(status)} expression={expressionFor(status)}
+    <OttoStage className="otto-dock" stage={stage} pose={poseFor(status)} expression={face ?? expressionFor(status)} onIdleState={onIdleState}
       say={voiceOpen ? line : ''} mouth={mouth} speech={speech} gestures={gestures} events={events} onActivate={onTalk}
       busy={voiceOpen || session} conversing={session} obstacles={voiceOpen ? PANEL : undefined} obstaclesKey={voiceOpen} idleControls={idleControls}>
       {!voiceOpen && <Button variant="tonal" className="otto-dock__button" onClick={onTalk}>Talk to {name}</Button>}

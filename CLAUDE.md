@@ -34,7 +34,8 @@ If two docs disagree and `docs/decisions.md` is silent, follow the order above, 
 ```bash
 cd server && .venv/bin/python -m pytest
 cd web && npm test && npm run typecheck && npm run build
-cd web && npm run build:lib   # when web/src/otto/element/ or the public API changes
+cd web && npm run build:lib   # when element/, react/, gemini/ or the public API changes; ends with scripts/check-dist.mjs
+cd web && npm run test:e2e    # Playwright in Chromium; first run: npx playwright install chromium
 ```
 
 To try the robot without a key, use `npm run dev` and open `/lab.html` (every part, plus a simulated Gemini server) or `/preview/` (the `<otto-mascot>` playground).
@@ -77,9 +78,14 @@ web/             React 19 + TypeScript + Vite
     robot/             scene, wrapper, faces, gestures
     movement/          the stage Otto walks on
     awareness/         app events -> reactions
+    guidance/          showing the visitor things: rules and tasks (core), targets and the runner (shell)
     element/           the <otto-mascot> web component
+    react/             otto-mascot/react: <OttoMascot>, useOtto
+    gemini/            otto-mascot/gemini: the Gemini Live voice bridge
   src/components/originkit/ui/clay-robot.tsx   vendored WebGL 2 robot (Otto: changes marked)
   src/lab/, lab.html   the lab and its fake voice server
   preview/             the <otto-mascot> playground
+  e2e/                 Playwright browser tests (lab, mascot)
+  scripts/             check-dist.mjs: proves the library's entry points stay separate
 docs/            routing table and decisions
 ```

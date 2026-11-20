@@ -29,7 +29,7 @@ function describeAction(action: AssistantAction, before: string): { label: strin
     const back = PAGES.find(item => item.id === before)
     return { label: `Opened ${title}`, inverse: back && back.id !== action.page ? { action: 'navigate', page: back.id } : null }
   }
-  if (action.action === 'guide') return { label: `Showed you ${findGuideTarget(action.target)?.info.label ?? action.target}`, inverse: null }
+  if (action.action === 'guide') return { label: `Showed you: ${findGuideTarget(action.target)?.info.label ?? action.target}`, inverse: null }
   return { label: COMMAND_LABELS[action.name], inverse: null }
 }
 

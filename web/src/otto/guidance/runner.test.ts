@@ -88,6 +88,35 @@ describe('attachGuide', () => {
     expect(faces).toEqual(['happy', null, 'happy', null])
   })
 
+  it('cancelling a run mid-walk stops the walk; a run past its walk does not', async () => {
+    const a = el(800), b = el(10)
+    let release!: () => void
+    const stop = vi.fn()
+    const { guide } = setup({ a, b }, {
+      stage: { moveToElement: e => (e === a ? new Promise<void>(r => { release = r }) : Promise.resolve()), lookAt: () => {}, stop },
+    })
+    guide.show({ target: 'a', reason: 'asked' })
+    guide.show({ target: 'b', reason: 'asked', mode: 'point' })
+    expect(stop).toHaveBeenCalledTimes(1)
+    release()
+    await tick()
+    guide.show({ target: 'b', reason: 'asked', mode: 'point' })
+    expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('an offer emits offered with the request, and a yes shows it', async () => {
+    const save = el(800)
+    const { guide, calls, events } = setup({ save }, { settings: () => ({ ...SETTINGS, offerFirst: true }) })
+    guide.show('save')
+    await tick()
+    expect(calls).toContain('say:Want me to show you save?')
+    expect(events).toEqual([{ type: 'offered', target: 'save', request: { target: 'save' } }])
+    const offer = events[0] as Extract<GuideEvent, { type: 'offered' }>
+    guide.show({ ...offer.request, reason: 'asked' })
+    await tick()
+    expect(events[1]).toEqual({ type: 'shown', target: 'save', size: 'approach' })
+  })
+
   it('a missing target emits missing; asked says so', async () => {
     const { guide, calls, events } = setup({})
     guide.show({ target: 'nope', reason: 'app' })
@@ -180,6 +209,18 @@ describe('guide targets', () => {
     unregister()
     expect(findGuideTarget('save')?.element).toBe(marked)
     expect(changes).toHaveBeenCalledTimes(2)
+    off()
+  })
+
+  it('cleans page text: no control characters, collapsed spaces, capped', () => {
+    const long = 'x'.repeat(300)
+    const marked = el(0, { 'data-otto-target': 'a', 'data-otto-label': 'Save\u0000\n\t now\u007F', 'data-otto-description': long }, '')
+    vi.stubGlobal('document', { querySelectorAll: () => [marked], querySelector: () => null })
+    const info = findGuideTarget('a')!.info
+    expect(info.label).toBe('Save now')
+    expect(info.description).toHaveLength(200)
+    const off = registerGuideTarget('b', el(0), { label: `  ${'y'.repeat(100)}\u0007`, description: 'a\r\nb' })
+    expect(findGuideTarget('b')!.info).toEqual({ id: 'b', label: 'y'.repeat(60), description: 'a b' })
     off()
   })
 

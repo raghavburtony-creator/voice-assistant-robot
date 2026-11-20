@@ -117,10 +117,20 @@
 .otto-stage[data-stage-side='left'] .otto-dock__button { right: auto; left: calc(100% + 0.5rem); }
 .otto-dock__button:not(:focus) { inline-size: 1px; block-size: 1px; min-block-size: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
 
-/* Shown whenever the page may be listening for "Hey Otto", so listening is never hidden. */
-.otto-wake { position: fixed; z-index: 35; inset-block-start: 0.5rem; inset-inline: 0; margin-inline: auto; inline-size: fit-content;
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 1rem; border-radius: 999px;
-  background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line); font-size: 0.9rem; }
+/* Notices at the top: the "Hey Otto" listening banner and what Otto says while guiding, stacked so neither covers the other. */
+.otto-notices { position: fixed; z-index: 35; inset-block-start: 0.5rem; inset-inline: 0; display: flex; flex-direction: column;
+  align-items: center; gap: 0.5rem; pointer-events: none; }
+.otto-notices > * { pointer-events: auto; }
+.otto-wake, .otto-guide-say, .otto-guide-offer { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.25rem 0.25rem 1rem;
+  border-radius: 999px; background: var(--otto-surface); color: var(--otto-ink); border: 1px solid var(--otto-line); font-size: 0.9rem;
+  max-inline-size: min(36rem, calc(100vw - 2rem)); }
+.otto-guide-say { padding-inline: 1rem; border-radius: 1rem; }
+.otto-guide-say { pointer-events: none; }
+/* Empty: stays in the accessibility tree (so the first line is announced) but takes no room. */
+.otto-guide-say:empty { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.otto-guide-offer { padding-inline-end: 0.25rem; }
+/* The element Otto is showing. Static on purpose: reduced motion still gets a cue. Hosts can override. */
+[data-otto-guiding] { outline: 2px solid var(--otto-accent, #3b5bdb); outline-offset: 4px; }
 .otto-open { position: fixed; z-index: 30; inset-inline-end: 1rem; inset-block-end: 1rem; }
 
 /* The robot and its speech bubble. */

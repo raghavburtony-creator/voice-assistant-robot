@@ -7,7 +7,7 @@ import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
 import type { SoundCue } from '../soundCues'
 import { SpeechPlayer, startRecorder, type Recorder } from '../audio'
-import { openTransport, parseLiveMessage, assertNoApiKey, type BridgeEvent, type Transport, type TransportOptions } from './transports'
+import { openTransport, parseLiveMessage, assertNoApiKey, assertSecureProxyUrl, type BridgeEvent, type Transport, type TransportOptions } from './transports'
 
 /** The part of Otto the bridge drives. */
 export type VoiceBridgeTarget = Pick<OttoController, 'connectAudioNode' | 'speakText' | 'interrupt' | 'playGesture' | 'playSound' | 'setFace' | 'setState'>
@@ -50,12 +50,15 @@ export type OttoAction =
   | { do: 'interrupt' }
   | { do: 'stopAudio' }
 
-/** What Otto does for each event. `audible`: his voice is sounding right now (so user speech is a barge-in). */
+/**
+ * What Otto does for each event. `audible`: his voice is sounding right now. The mic is held back then (D-05), so user
+ * speech arriving while he is audible is a late transcript of earlier words, not a barge-in: barge-in is 'interrupted'.
+ */
 export function mapEvent(event: BridgeEvent, audible: boolean): OttoAction[] {
   switch (event.type) {
     case 'ready': return [{ do: 'gesture', name: 'welcomeWave' }, { do: 'face', face: 'happy' }, { do: 'state', state: 'listening' }]
     case 'userSpeech':
-      return audible ? [{ do: 'interrupt' }, { do: 'stopAudio' }, { do: 'state', state: 'listening' }] : [{ do: 'state', state: 'listening' }]
+      return audible ? [] : [{ do: 'state', state: 'listening' }]
     case 'interrupted': return [{ do: 'interrupt' }, { do: 'stopAudio' }, { do: 'state', state: 'listening' }]
     case 'thinking': return [{ do: 'state', state: 'thinking' }, { do: 'gesture', name: 'thinkingHand' }]
     case 'audio': return [{ do: 'state', state: 'talking' }]
@@ -69,6 +72,7 @@ export function mapEvent(event: BridgeEvent, audible: boolean): OttoAction[] {
 export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: GeminiVoiceBridgeOptions = {}): GeminiVoiceBridge {
   assertNoApiKey(options)
   if (options.transport) assertNoApiKey(options.transport)
+  if (options.transport?.type === 'proxy') assertSecureProxyUrl(options.transport.url)
   let state: BridgeState = 'idle'
   let transport: Transport | null = null
   let player: SpeechPlayer | null = null

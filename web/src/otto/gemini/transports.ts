@@ -120,6 +120,16 @@ export function parseLiveMessage(m: unknown): BridgeEvent[] {
   return events
 }
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/** Mic audio must not go out in cleartext: wss: only, except ws: to this machine. */
+export function assertSecureProxyUrl(raw: string): void {
+  let url: URL
+  try { url = new URL(raw) } catch { throw new Error(`The proxy url must be an absolute wss:// url (got "${raw}").`) }
+  if (url.protocol === 'wss:' || (url.protocol === 'ws:' && LOCAL_HOSTS.has(url.hostname))) return
+  throw new Error(`The proxy url must use wss:// (ws:// is allowed only for localhost); got "${url.protocol}//${url.host}".`)
+}
+
 type Socket = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
   binaryType: BinaryType
   onopen: ((e: Event) => void) | null
@@ -134,6 +144,7 @@ export function openTransport(options: TransportOptions, start: StartDetails, on
   const live = options.type === 'live'
   if (live && !options.token) throw new Error('Gemini Live needs an ephemeral token from your server.')
   if (!live && !options.url) throw new Error('The proxy transport needs a WebSocket url.')
+  if (!live) assertSecureProxyUrl(options.url)
   const url = live ? `${GEMINI_LIVE_ENDPOINT}?access_token=${encodeURIComponent(options.token)}` : options.url
   const ws = new WebSocket(url) as unknown as Socket
   ws.binaryType = 'arraybuffer'

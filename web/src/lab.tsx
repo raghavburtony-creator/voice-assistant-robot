@@ -206,6 +206,7 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
   const [guideQuiet, setGuideQuiet] = useState(false)
   const [taskNow, setTaskNow] = useState('')
   const [cooldownKey, setCooldownKey] = useState(0)
+  const [offer, setOffer] = useState<GuideRequest | null>(null)
   const task = useRef<GuideTaskHandle | null>(null)
   const lastApp = useRef<number | null>(null)
   const heldFace = useRef<RobotExpression>('happy')
@@ -215,9 +216,11 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
   const attachDeps = useRef({ config, stage })
   attachDeps.current = { config, stage }
   useEffect(() => guide.onEvent(e => {
-    addGuide(e.type === 'shown' ? `shown ${e.target}: ${e.size}` : e.type === 'missing' ? `missing target ${e.target}`
+    addGuide(e.type === 'shown' ? `shown ${e.target}: ${e.size}` : e.type === 'offered' ? `offered ${e.target}: waiting for a yes` : e.type === 'missing' ? `missing target ${e.target}`
       : e.type === 'step' ? `task step ${e.index + 1}/${e.total} (${e.via}): ${e.step.id} -> ${e.step.target}`
         : e.type === 'done' ? `task ${e.task} done` : `task ${e.task} cancelled (${e.reason})`)
+    if (e.type === 'offered') setOffer(e.request)
+    else if (e.type === 'shown') setOffer(null)
     if (e.type === 'step') setTaskNow(`step ${e.index + 1} of ${e.total}: ${e.step.id}`)
     else if (e.type === 'done' || e.type === 'cancelled') setTaskNow('')
   }), [guide, addGuide])
@@ -394,6 +397,8 @@ function LabInner({ theme, setTheme }: { theme: ThemeName; setTheme: (t: ThemeNa
             <button type="button" className={btn} onClick={() => task.current?.back()}>Back</button>
             <button type="button" className={btn} onClick={() => task.current?.cancel()}>Cancel</button>
           </div>
+          {offer && <div className="lab-row"><span className="lab-hint" role="status">Otto offered to show {offer.target}.</span>
+            <button type="button" className={btn} onClick={() => { guide.show({ ...offer, reason: 'asked' }); setOffer(null) }}>Show me</button></div>}
           <p className="lab-hint" role="status">{taskNow ? `Task: ${taskNow}` : 'No task running.'}</p>
         </fieldset>
 
