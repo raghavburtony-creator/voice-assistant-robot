@@ -5,8 +5,9 @@
 // AudioContext is made and cues are dropped (a chirp seconds late is worse than none); after it, one context is made
 // lazily and reused, resumed if the browser suspended it. dispose() closes it.
 
-export const SOUND_CUES = ['chirpConnect', 'chirpAcknowledge', 'chirpThinking', 'chirpNegative', 'chirpCelebration', 'chirpGoodbye'] as const
-export type SoundCue = (typeof SOUND_CUES)[number]
+import type { SoundCue } from './soundCues'
+
+export { SOUND_CUES, type SoundCue } from './soundCues'
 
 /** One note: when it starts (s after the cue), how long it lasts, its pitch gliding from f0 to f1 (Hz), its shape and level. */
 type Note = { at: number; dur: number; f0: number; f1: number; wave: OscillatorType; level: number }

@@ -11,7 +11,8 @@
 // "live" means the session reached listening. A start that ends or fails before that says goodbye to nobody (error still shakes).
 
 import { useEffect, useRef } from 'react'
-import { DEFAULT_OTTO_CONFIG, useOttoConfig } from './config'
+import { DEFAULT_OTTO_CONFIG } from './config'
+import { useOttoConfig } from './useOttoConfig'
 import type { GestureChannel, GestureName } from './robot/gestures'
 import type { AssistantStatus } from './useVoiceAssistant'
 

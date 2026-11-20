@@ -4,6 +4,7 @@
 //
 //   const otto = createOtto(document.body, { config: { theme: 'midnight' } })
 //   otto.playGesture('celebrate'); await otto.moveToElement('#cart'); otto.notify({ type: 'success', where: '#cart' })
+//   otto.showTarget('save')                     // Otto shows the visitor <button data-otto-target="save">
 //   otto.dispose()
 //
 // Loading: nothing heavy runs at mount. The React tree mounts when the browser is idle (or after 1.5 s at most), and the
@@ -15,7 +16,12 @@ import { StrictMode, useEffect, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { createOttoEvents, type OttoEvent, type OttoEvents, type TaskHandle } from '../awareness/events'
 import type { Reaction } from '../awareness/reactions'
-import { defineOttoConfig, OttoConfigProvider, useOttoConfig, type DeepPartial, type OttoConfig, type ThemeName } from '../config'
+import { defineOttoConfig, type DeepPartial, type OttoConfig, type ThemeName } from '../config'
+import { OttoConfigProvider, useOttoConfig } from '../useOttoConfig'
+import { attachGuide } from '../guidance/runner'
+import { createOttoGuide, type GuideEvent, type GuideRequest, type GuideTaskHandle, type OttoGuide } from '../guidance/guide'
+import type { GuideTaskSpec } from '../guidance/task'
+import type { IdleState } from '../idle'
 import { analyserMouth, fakeMouth, type MouthSource } from '../mouth'
 import type { StageController, StagePlace } from '../movement/stage'
 import { createOttoStage } from '../movement/useStage'
@@ -41,6 +47,8 @@ export type OttoEventMap = {
   /** Otto decided how to react to an event (size 'none' when he let it pass), and why. */
   'otto:reaction': { event: OttoEvent; reaction: Reaction }
   'otto:move': { type: 'depart' | 'arrive' | 'cancel'; x: number }
+  /** What Otto did with a guide request or task (shown, missing, step, done, cancelled). */
+  'otto:guide': GuideEvent
 }
 
 export type CreateOttoOptions = {
@@ -50,6 +58,8 @@ export type CreateOttoOptions = {
   placement?: 'dock' | 'inline'
   /** Mount at once instead of when the browser is idle. */
   eager?: boolean
+  /** The guide channel to follow (share one with your own code); default: a new one, on `controller.guide`. */
+  guide?: OttoGuide
 }
 
 export type SpeakOptions = {
@@ -57,6 +67,9 @@ export type SpeakOptions = {
   durationMs?: number
   /** Also say it aloud with the browser's own speech synthesis (the mouth is then procedural: the browser gives no audio to read). */
   voice?: boolean
+  /** Run the procedural mouth (default true). false: only the bubble and screen-reader text, so an audio node connected
+   *  with connectAudioNode keeps driving the mouth (a live voice whose words arrive as text). */
+  mouth?: boolean
 }
 
 export type OttoController = {
@@ -92,6 +105,12 @@ export type OttoController = {
   /** Tell Otto something happened in the app (see awareness/events.ts). */
   notify(event: OttoEvent): void
   task(id: string, details?: Omit<OttoEvent, 'type' | 'task'>): TaskHandle
+  /** Interactive guidance: Otto shows the visitor things on the page (guidance/guide.ts, targets.ts). */
+  readonly guide: OttoGuide
+  /** Show a target (its id, from data-otto-target or registerGuideTarget). Same as guide.show. */
+  showTarget(target: string | GuideRequest): void
+  /** Walk the visitor through a task, step by step. Same as guide.startTask. */
+  startGuide(spec: GuideTaskSpec): GuideTaskHandle
   dispose(): void
   readonly disposed: boolean
 }
@@ -112,13 +131,14 @@ type ViewProps = {
   onActivate: (via: 'click' | 'button') => void
   onError: (reason: 'no-webgl' | 'failed') => void
   onReaction: (event: OttoEvent, reaction: Reaction) => void
+  onIdleState: (state: IdleState) => void
 }
 
 function View(props: ViewProps) {
   return <OttoConfigProvider config={props.config}><Inner {...props} /></OttoConfigProvider>
 }
 
-function Inner({ stage, gestures, events, placement, pose, face, say, mouth, speech, onSound, onReady, onActivate, onError, onReaction }: ViewProps) {
+function Inner({ stage, gestures, events, placement, pose, face, say, mouth, speech, onSound, onReady, onActivate, onError, onReaction, onIdleState }: ViewProps) {
   const { name } = useOttoConfig()
   const sound = useGestureSounds(gestures)
   const box = useRef<HTMLDivElement>(null)
@@ -130,7 +150,7 @@ function Inner({ stage, gestures, events, placement, pose, face, say, mouth, spe
         stage={stage} pose={pose} expression={face ?? (pose === 'thinking' ? 'searching' : pose === 'talking' ? 'excited' : 'happy')}
         say={say} mouth={mouth} speech={speech} gestures={gestures} events={events} busy={pose !== 'idle'}
         conversing={pose === 'listening' || pose === 'talking'}
-        onActivate={() => onActivate('click')} onRobotError={onError} onReaction={onReaction}>
+        onActivate={() => onActivate('click')} onRobotError={onError} onReaction={onReaction} onIdleState={onIdleState}>
         <button type="button" className="otto-trigger" onClick={() => onActivate('button')}>{name}</button>
       </OttoStage>
     </div>
@@ -189,12 +209,14 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
   const onError = (reason: 'no-webgl' | 'failed') =>
     dispatch('otto:error', { reason, message: reason === 'no-webgl' ? 'WebGL 2 is not available: Otto is not drawn, his words still are.' : 'The robot could not be drawn.' })
   const onReaction = (event: OttoEvent, reaction: Reaction) => dispatch('otto:reaction', { event, reaction })
+  let idleState: IdleState = 'awake'
+  const onIdleState = (state: IdleState) => { idleState = state }
 
   function render() {
     if (!root || disposed) return
     root.render(<StrictMode><View config={config} stage={stage} gestures={gestures} events={events} placement={placement}
       pose={shownPose()} face={held} say={say} mouth={mouth} speech={speechClock} onSound={onSound} onReady={ready}
-      onActivate={onActivate} onError={onError} onReaction={onReaction} /></StrictMode>)
+      onActivate={onActivate} onError={onError} onReaction={onReaction} onIdleState={onIdleState} /></StrictMode>)
   }
 
   const start = () => {
@@ -225,6 +247,26 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
   }
   window.addEventListener('keydown', onKey)
   cleanups.push(() => window.removeEventListener('keydown', onKey))
+
+  // Guidance: the host says what to show; the runner has Otto do it with his own stage, gestures, face and voice.
+  const guide = options.guide ?? createOttoGuide()
+  cleanups.push(guide.onEvent(e => dispatch('otto:guide', e)))
+  cleanups.push(attachGuide(guide, {
+    stage,
+    playGesture: name => gestures.play(name),
+    face: () => held,
+    setFace: face => controller.setFace(face),
+    speak: text => controller.speakText(text),
+    settings: () => config.guidance,
+    // In a conversation while the host holds him listening or talking (as OttoStage reads it).
+    situation: () => ({ idle: idleState, conversing: pose === 'listening' || pose === 'talking', movementEnabled: config.movement.movementEnabled }),
+    ottoRect: () => {
+      // The stage's x is the viewport's for the dock, the container's own box when inline.
+      const left = placement === 'inline' ? container.getBoundingClientRect().left : 0
+      const x = left + stage.frame.x
+      return { left: x, right: x, top: 0, bottom: 0 }
+    },
+  }))
 
   function setState(next: RobotPose) {
     if (next === pose) return
@@ -320,7 +362,7 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
           speechSynthesis.speak(utterance)
         } else timer = window.setTimeout(() => finish(true), ms)
         speaking = handle
-        fake = fakeMouth()
+        fake = opts.mouth === false ? null : fakeMouth()
         say = clean
         speechClock = () => {
           const played = (performance.now() - began) / 1000
@@ -342,6 +384,9 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
 
     notify: event => events.notify(event),
     task: (id, details) => events.task(id, details),
+    guide,
+    showTarget: target => guide.show(target),
+    startGuide: spec => guide.startTask(spec),
 
     dispose() {
       if (disposed) return

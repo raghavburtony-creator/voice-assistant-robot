@@ -4,7 +4,7 @@
 
 import type { SpeechClock } from './audio'
 import type { OttoEvents } from './awareness/events'
-import { useOttoConfig } from './config'
+import { useOttoConfig } from './useOttoConfig'
 import type { MouthSource } from './mouth'
 import type { StageController } from './movement/stage'
 import OttoStage, { type IdleControls } from './OttoStage'

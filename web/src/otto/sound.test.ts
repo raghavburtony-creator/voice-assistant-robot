@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CUE_NOTES, SOUND_CUES, SoundController } from './sound'
 
 /** A stand-in for Web Audio that records what the controller builds. */
@@ -154,5 +154,133 @@ describe('SoundController', () => {
     sound.dispose()
     expect(contexts).toHaveLength(0)
     expect(target.listeners.size).toBe(0)
+  })
+})
+
+describe('SoundController cue envelopes', () => {
+  it.each([...SOUND_CUES])('%s: every note starts from ~0, ramps up, and is back at ~0 before it stops', cue => {
+    const { sound, contexts } = make()
+    sound.play(cue)
+    const ctx = contexts[0]
+    const noteGains = ctx.gains.slice(1)
+    expect(noteGains).toHaveLength(CUE_NOTES[cue].length)
+    noteGains.forEach((g, i) => {
+      const osc = ctx.oscillators[i]
+      const calls = g.gain.calls
+      // Starts with an instant set to ~0 at the note's start: nothing audible before the ramp.
+      expect(calls[0][0]).toBe('set')
+      expect(calls[0][1]).toBeLessThan(0.001)
+      expect(calls[0][2]).toBe(osc.started)
+      // The first non-zero level is reached by a ramp, never by a set.
+      const up = calls.find(c => c[1] > 0.001)!
+      expect(up[0]).toBe('exp')
+      expect(up[1]).toBeLessThanOrEqual(1)
+      // Ramp times only move forward, the last one is ~0, and it lands before the oscillator stops.
+      const times = calls.map(c => c[2])
+      expect([...times].sort((a, b) => a - b)).toEqual(times)
+      const last = calls[calls.length - 1]
+      expect(last[0]).toBe('exp')
+      expect(last[1]).toBeLessThan(0.001)
+      expect(last[2]).toBeLessThanOrEqual(osc.stopped)
+      expect(osc.started).toBeGreaterThan(ctx.currentTime) // scheduled ahead, never in the past
+    })
+  })
+
+  it('the master level is never a jump to a loud level before any cue: it starts at volume x headroom', () => {
+    const { sound, contexts } = make({ volume: 1 })
+    sound.play('chirpAcknowledge')
+    expect(contexts[0].gains[0].gain.value).toBeCloseTo(0.35)
+  })
+})
+
+describe('SoundController autoplay and failure paths', () => {
+  it.each(['pointerdown', 'keydown', 'touchstart'])('a %s makes the context; before it, cues are dropped', type => {
+    const { sound, contexts, target } = make({ activated: false })
+    expect(sound.play('chirpConnect')).toBe(false)
+    expect(sound.play('chirpGoodbye')).toBe(false)
+    expect(sound.started).toBe(false)
+    target.fire(type)
+    expect(contexts).toHaveLength(1)
+    expect(sound.started).toBe(true)
+  })
+
+  it('a gesture while sound is off or muted makes no context', () => {
+    for (const opts of [{ enabled: false }, { volume: 0 }]) {
+      const { sound, contexts, target } = make({ activated: false, ...opts })
+      target.fire('pointerdown')
+      expect(contexts).toHaveLength(0)
+      expect(sound.play('chirpConnect')).toBe(false)
+    }
+  })
+
+  it('turning sound off after the context exists stops further cues', () => {
+    const { sound, contexts } = make()
+    sound.play('chirpAcknowledge')
+    const n = contexts[0].oscillators.length
+    sound.setEnabled(false)
+    expect(sound.play('chirpAcknowledge')).toBe(false)
+    expect(contexts[0].oscillators.length).toBe(n)
+    sound.setVolume(0)
+    sound.setEnabled(true)
+    expect(sound.play('chirpAcknowledge')).toBe(false)
+  })
+
+  it('a suspended context is resumed, and a resume that rejects does not throw', async () => {
+    const { sound, contexts } = make()
+    sound.play('chirpAcknowledge')
+    const ctx = contexts[0]
+    ctx.state = 'suspended'
+    ctx.resume = () => { ctx.resumes++; return Promise.reject(new Error('blocked')) }
+    const before = ctx.oscillators.length
+    expect(() => sound.play('chirpConnect')).not.toThrow()
+    await Promise.resolve(); await Promise.resolve()
+    expect(ctx.resumes).toBe(1)
+    expect(ctx.oscillators.length).toBe(before) // nothing scheduled on a context that would not wake
+  })
+
+  it('a cue still waiting for a resume after the controller is disposed is not played', async () => {
+    const { sound, contexts } = make()
+    sound.play('chirpAcknowledge')
+    const ctx = contexts[0]
+    ctx.state = 'suspended'
+    const before = ctx.oscillators.length
+    sound.play('chirpConnect')
+    sound.dispose()
+    await Promise.resolve(); await Promise.resolve()
+    expect(ctx.oscillators.length).toBe(before)
+  })
+
+  it('a cue that waited longer than the stale limit for a resume is dropped', async () => {
+    vi.useFakeTimers()
+    try {
+      const { sound, contexts } = make()
+      sound.play('chirpAcknowledge')
+      const ctx = contexts[0]
+      ctx.state = 'suspended'
+      let wake!: () => void
+      ctx.resume = () => new Promise<void>(r => { wake = () => { ctx.state = 'running'; r() } })
+      const before = ctx.oscillators.length
+      sound.play('chirpConnect')
+      vi.advanceTimersByTime(500)
+      wake()
+      await Promise.resolve(); await Promise.resolve()
+      expect(ctx.oscillators.length).toBe(before)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('no Web Audio (the context constructor throws): cues are dropped, nothing throws', () => {
+    const sound = new SoundController({ activated: true, activationTarget: null, createContext: () => { throw new Error('no audio') } })
+    expect(sound.play('chirpConnect')).toBe(false)
+    expect(sound.started).toBe(false)
+  })
+
+  it('dispose closes the context once, even if closing rejects, and is safe to repeat', async () => {
+    const { sound, contexts } = make()
+    sound.play('chirpConnect')
+    const close = vi.fn(() => Promise.reject(new Error('already closed')))
+    contexts[0].close = close
+    expect(() => { sound.dispose(); sound.dispose() }).not.toThrow()
+    await Promise.resolve()
+    expect(close).toHaveBeenCalledTimes(1)
   })
 })

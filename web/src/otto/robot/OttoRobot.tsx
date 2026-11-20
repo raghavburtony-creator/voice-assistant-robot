@@ -7,7 +7,8 @@ import type { SpeechClock } from '../audio'
 import type { MouthSource } from '../mouth'
 import type { StageFrame } from '../movement/stage'
 import type { GestureChannel } from './gestures'
-import { hasWebGL, SPEAK_CPS, type RobotExpression, type RobotPose } from './robot'
+import { hasWebGL } from './environment'
+import { SPEAK_CPS, type RobotExpression, type RobotPose } from './robot'
 
 const ClayScene = lazy(() => import('./ClayScene'))
 

@@ -61,5 +61,19 @@ def run_command(command: Command, tool_context: ToolContext) -> dict:
     return {"ok": True, "command": command}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command)]
+def show_target(target_id: str, tool_context: ToolContext) -> dict:
+    """Have Otto point at something on the user's current page. Use it when the user asks where something is, what something is,
+    how to do something on this page, or says "show me". target_id must be one of the ids from get_screen_context under
+    guide_targets; never invent one. Then explain it in one or two plain sentences."""
+    screens = tool_context.state.get("screens") or {}
+    reported = (screens.get("guide_targets") or {}).get("targets")
+    targets = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
+    if not isinstance(target_id, str) or not target_id or len(target_id) > 64 or target_id not in targets:
+        return {"ok": False, "error": "Unknown target. Use one of the known ids.", "known": list(targets)}
+    _send(tool_context, {"action": "guide", "target": target_id})
+    found = targets[target_id]
+    return {"ok": True, "label": found.get("label"), "description": found.get("description")}
+
+
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)

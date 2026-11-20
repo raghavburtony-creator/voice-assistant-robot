@@ -119,3 +119,19 @@ def test_web_config_has_the_same_pages_and_commands():
     assert re.findall(r"\{ id: '([a-z0-9-]+)', title:", text) == PAGE_IDS
     commands = re.search(r"COMMANDS = \[([^\]]*)\]", text)
     assert commands and re.findall(r"'([a-z_]+)'", commands.group(1)) == COMMANDS
+
+
+def test_show_target_only_allows_reported_targets():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"guide_targets": {"targets": [{"id": "save", "label": "Save", "description": "Saves it"}]}}
+    out = tools.show_target("nope", ctx)
+    assert out["ok"] is False and out["known"] == ["save"]
+    for bad in ("", "x" * 65, None, 5):
+        assert tools.show_target(bad, ctx)["ok"] is False
+    assert sink.drain("tool-test") == []
+    assert tools.show_target("save", ctx) == {"ok": True, "label": "Save", "description": "Saves it"}
+    assert sink.drain("tool-test") == [{"action": "guide", "target": "save"}]
+    ctx.state["screens"] = {}
+    assert tools.show_target("save", ctx)["ok"] is False
+    sink.close("tool-test")

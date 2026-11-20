@@ -8,6 +8,6 @@
     "outDir": "dist-lib/types",
     "rootDir": "src"
   },
-  "include": ["src/otto/element/index.ts", "src/vite-env.d.ts"],
+  "include": ["src/otto/element/index.ts", "src/otto/react/index.ts", "src/otto/gemini/index.ts", "src/vite-env.d.ts"],
   "files": []
 }

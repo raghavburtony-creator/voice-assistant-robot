@@ -3,6 +3,7 @@ import {
   createGestureChannel, createGestureController, GESTURE_NAMES, GESTURES, isGestureName,
   type GestureCommand, type GestureEvent, type GestureFrame, type GestureName,
 } from './gestures'
+import { DEFAULT_OTTO_CONFIG, defineOttoConfig } from '../config'
 
 const STEP = 1 / 60
 const values = (f: GestureFrame) => [...Object.values(f.head), ...Object.values(f.handL), ...Object.values(f.handR), ...Object.values(f.face)]
@@ -14,8 +15,8 @@ function run(c: ReturnType<typeof createGestureController>, seconds: number, eac
 }
 
 describe('gesture definitions', () => {
-  it('has the six lifecycle gestures and the two idle ones', () => {
-    expect([...GESTURE_NAMES].sort()).toEqual(['celebrate', 'goodbyeWave', 'headShake', 'lookAround', 'nod', 'stretch', 'thinkingHand', 'welcomeWave'])
+  it('has the six lifecycle gestures, the two idle ones and the two pointing ones', () => {
+    expect([...GESTURE_NAMES].sort()).toEqual(['celebrate', 'goodbyeWave', 'headShake', 'lookAround', 'nod', 'pointLeft', 'pointRight', 'stretch', 'thinkingHand', 'welcomeWave'])
     expect(isGestureName('nod')).toBe(true)
     expect(isGestureName('dance')).toBe(false)
   })
@@ -113,6 +114,54 @@ describe('blending and arbitration', () => {
     expect(mid.baseL).toBe(1) // headShake does not touch the arms
     c.play('celebrate', { force: true })
     expect(run(c, 0.6).baseL).toBeLessThan(0.05)
+  })
+})
+
+describe('pointing', () => {
+  const peak = (name: GestureName) => { const c = createGestureController(); c.play(name, { force: true }); return { ...run(c, 0.8) } }
+
+  it("pointLeft raises handL and turns the head to the viewer's left; pointRight mirrors it", () => {
+    const l = peak('pointLeft'), r = peak('pointRight')
+    expect(l.handL.raise).toBeGreaterThan(1); expect(l.handR.raise).toBe(0)
+    expect(l.head.ry).toBeLessThan(0); expect(l.head.rz).toBeGreaterThan(0); expect(l.face.lookX).toBeLessThan(0)
+    expect(r.handR.raise).toBeGreaterThan(1); expect(r.handL.raise).toBe(0)
+    expect(r.head.ry).toBeCloseTo(-l.head.ry, 6); expect(r.head.rz).toBeCloseTo(-l.head.rz, 6); expect(r.face.lookX).toBeCloseTo(-l.face.lookX, 6)
+    expect(r.handR.raise).toBeCloseTo(l.handL.raise, 6)
+  })
+
+  it('an interrupted pointing gesture releases smoothly and the controller returns to rest', () => {
+    const c = createGestureController()
+    c.play('pointLeft', { force: true }); run(c, 0.6)
+    expect(c.play('celebrate')).toBe(true) // higher priority cuts in
+    let prev = values(c.update(0)), maxJump = 0
+    const f = run(c, 3, fr => { const v = values(fr); maxJump = Math.max(maxJump, ...v.map((x, i) => Math.abs(x - prev[i]))); prev = v })
+    expect(maxJump).toBeLessThan(0.3)
+    expect(Math.max(...values(f).map(Math.abs))).toBeLessThan(1e-9)
+    expect(c.busy()).toBe(false)
+  })
+
+  it('an equal-priority gesture interrupts it too, and the arm does not step', () => {
+    const c = createGestureController()
+    c.play('pointLeft', { force: true }); run(c, 0.8)
+    expect(c.play('pointRight')).toBe(true)
+    let prevRaise = c.update(0).handL.raise, maxStep = 0
+    run(c, 0.6, fr => { maxStep = Math.max(maxStep, Math.abs(fr.handL.raise - prevRaise)); prevRaise = fr.handL.raise })
+    expect(maxStep).toBeLessThan(0.1)
+  })
+
+  it('reduced motion skips the one-shot and fades a running one; intensity scales the arm', () => {
+    expect(createGestureController({ reducedMotion: true }).play('pointRight', { force: true })).toBe(false)
+    const full = createGestureController(), half = createGestureController({ intensity: 0.5 })
+    full.play('pointRight', { force: true }); half.play('pointRight', { force: true })
+    expect(run(half, 0.8).handR.raise).toBeCloseTo(run(full, 0.8).handR.raise * 0.5, 6)
+    const c = createGestureController(); c.play('pointRight', { force: true }); run(c, 0.6)
+    c.setReducedMotion(true)
+    expect(Math.max(...values(run(c, 0.6)).map(Math.abs))).toBeLessThan(1e-9)
+  })
+
+  it('config has guidance defaults and merges a partial override', () => {
+    expect(DEFAULT_OTTO_CONFIG.guidance).toEqual({ cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 })
+    expect(defineOttoConfig({ guidance: { offerFirst: false } }).guidance).toEqual({ ...DEFAULT_OTTO_CONFIG.guidance, offerFirst: false })
   })
 })
 

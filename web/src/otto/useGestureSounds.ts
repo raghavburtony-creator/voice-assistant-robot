@@ -2,7 +2,7 @@
 // gesture events only: nothing in the voice state or a render loop plays sound. Returns the controller, for direct cues.
 
 import { useEffect, useRef } from 'react'
-import { useOttoConfig } from './config'
+import { useOttoConfig } from './useOttoConfig'
 import type { GestureChannel, GestureName } from './robot/gestures'
 import { SoundController, type SoundCue } from './sound'
 

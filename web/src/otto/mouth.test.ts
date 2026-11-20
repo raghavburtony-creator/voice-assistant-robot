@@ -111,3 +111,87 @@ describe('the fake voice', () => {
     expect(pausedAt0).toBe(true)
   })
 })
+
+// A grid where every bin is exactly 5 Hz (fftSize 2000 at 10 kHz), so each band edge falls on a bin boundary.
+describe('MouthAnalyzer band edges', () => {
+  const RATE5 = 10000, BINS5 = 1000
+  const lit = (bins: number[], db = -10) => {
+    const out = new Float32Array(BINS5).fill(-200)
+    for (const b of bins) out[b] = db
+    const m = new MouthAnalyzer()
+    for (let t = 0; t < 0.5; t += 1 / 60) m.update(out, RATE5, 1 / 60)
+    return [...m.bars].map(b => b > 0)
+  }
+  const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i)
+
+  it('each band, filled alone, opens only its own bar', () => {
+    MOUTH_BANDS.forEach((band, bar) => {
+      const open = lit(range(band.from / 5, band.to / 5))
+      expect(open.map((o, i) => (o ? i : -1)).filter(i => i >= 0)).toEqual([bar])
+    })
+  })
+
+  it.each([
+    [16, null], [17, 2], [59, 2], [60, 1], [199, 1], [200, 3], [399, 3], [400, 0], [599, 0], [600, 4], [799, 4], [800, null],
+  ])('bin %i (%i x 5 Hz) belongs to bar %s', (bin, bar) => {
+    const open = lit([bin])
+    expect(open.map((o, i) => (o ? i : -1)).filter(i => i >= 0)).toEqual(bar === null ? [] : [bar])
+  })
+
+  it('energy under the gate keeps every bar at exactly 0, just over it opens', () => {
+    const quiet = new Float32Array(BINS5).fill(-80)
+    const m = new MouthAnalyzer()
+    for (let t = 0; t < 0.5; t += 1 / 60) m.update(quiet, RATE5, 1 / 60)
+    expect([...m.bars]).toEqual([0, 0, 0, 0, 0])
+    const loud = new Float32Array(BINS5).fill(-45)
+    for (let t = 0; t < 0.5; t += 1 / 60) m.update(loud, RATE5, 1 / 60)
+    expect(m.bars.every(b => b > 0)).toBe(true)
+  })
+})
+
+describe('MouthAnalyzer attack, release and determinism', () => {
+  const loud = spectrum([[150, -32]])
+  const loudBar = () => { const m = new MouthAnalyzer(); settle(m, loud); return m }
+
+  it('after a loud frame, silent frames only ever lower the bars, and they reach 0', () => {
+    const m = loudBar()
+    let prev = [...m.bars]
+    expect(prev[2]).toBeGreaterThan(0.5)
+    for (let t = 0; t < 1; t += 1 / 60) {
+      m.update(null, RATE, 1 / 60)
+      m.bars.forEach((b, i) => expect(b).toBeLessThanOrEqual(prev[i]))
+      prev = [...m.bars]
+    }
+    expect(prev).toEqual([0, 0, 0, 0, 0])
+  })
+
+  it('is nearly closed one release time (140 ms) after the voice stops', () => {
+    const m = loudBar()
+    const top = m.bars[2]
+    for (let t = 0; t < 0.14 - 1e-9; t += 1 / 60) m.update(null, RATE, 1 / 60)
+    expect(m.bars[2]).toBeLessThan(top * 0.2)
+  })
+
+  it('rises faster than it falls', () => {
+    const rise = new MouthAnalyzer(); rise.update(loud, RATE, 0.03)
+    const top = loudBar().bars[2]
+    const fall = loudBar(); fall.update(null, RATE, 0.03)
+    expect(rise.bars[2] / top).toBeGreaterThan(1 - fall.bars[2] / top)
+  })
+
+  it('same input gives the same output, and reset() starts over', () => {
+    const run = () => { const m = new MouthAnalyzer(); const out: number[] = []; for (let i = 0; i < 30; i++) out.push(...m.update(i % 7 < 4 ? loud : null, RATE, 1 / 60)); return out }
+    expect(run()).toEqual(run())
+    const m = loudBar(); m.reset()
+    expect(m.silent).toBe(true)
+  })
+
+  it('a negative or zero dt moves nothing, and NaN bins do not poison the bars', () => {
+    const m = new MouthAnalyzer()
+    m.update(loud, RATE, -1); m.update(loud, RATE, 0)
+    expect(m.silent).toBe(true)
+    const bad = spectrum([[150, -32]]); bad[3] = NaN
+    settle(m, bad)
+    expect([...m.bars].every(Number.isFinite)).toBe(true)
+  })
+})

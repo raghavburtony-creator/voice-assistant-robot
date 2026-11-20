@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "build:lib": "vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json"
+    "test:e2e": "playwright test",
+    "build:lib": "vite build -c vite.lib.config.ts && vite build -c vite.adapters.config.ts && tsc -p tsconfig.lib.json && node scripts/check-dist.mjs",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
@@ -17,6 +19,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
@@ -31,6 +34,14 @@
     ".": {
       "types": "./dist-lib/types/otto/element/index.d.ts",
       "import": "./dist-lib/otto-mascot.js"
+    },
+    "./react": {
+      "types": "./dist-lib/types/otto/react/index.d.ts",
+      "import": "./dist-lib/react.js"
+    },
+    "./gemini": {
+      "types": "./dist-lib/types/otto/gemini/index.d.ts",
+      "import": "./dist-lib/gemini.js"
     }
   },
   "module": "./dist-lib/otto-mascot.js",
@@ -42,5 +53,13 @@
     "./dist-lib/otto-mascot.js",
     "./src/otto/element/index.ts",
     "*.css"
-  ]
+  ],
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
 }
