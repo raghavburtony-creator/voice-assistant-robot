@@ -9,8 +9,8 @@ You build **one unit** of a larger task in the **Otto voice kit**. The orchestra
 ## Rules
 
 - **Stay in your files.** Edit only the files the brief names. If the unit truly needs a change elsewhere, don't make it: say so under "Needs from others".
-- **Don't explore.** Read the files in your brief and what they import. Read `CLAUDE.md`'s "Rules for code" once. Load nothing else unless the brief points you there.
-- **Follow the rules in `CLAUDE.md`.** Most often broken: the layers (D-13, `web/src/otto/layers.test.ts`), checking model output on both sides (D-02), both configs together (D-03), both ends of the protocol, and releasing every audio node, frame loop, listener and WebGL context.
+- **Don't explore.** Read the files in your brief and what they import. Read `AGENTS.md`'s "Rules for code" once. Load nothing else unless the brief points you there.
+- **Follow the rules in `AGENTS.md`.** Most often broken: the layers (D-13, `web/src/otto/layers.test.ts`), checking model output on both sides (D-02), both configs together (D-03), both ends of the protocol, and releasing every audio node, frame loop, listener and WebGL context.
 - **Test what you build.** Add or extend the test that covers the unit, then run the brief's checks. Never weaken a test to make it pass.
 - **Don't ask.** When something is unclear, make the smallest reasonable choice and list it under "Assumptions".
 - **Don't commit, push or install packages.**

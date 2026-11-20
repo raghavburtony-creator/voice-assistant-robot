@@ -1,0 +1,14 @@
+# Gitignored local files copied into each new worktree under .claude/worktrees/.
+# Same syntax as .gitignore. Only files that exist and are gitignored are copied.
+# Not listed on purpose: server/.venv and web/node_modules. A venv holds absolute
+# paths and breaks when copied; create both fresh in the worktree.
+
+# Server: GEMINI_API_KEY and local overrides (read by server/app/config.py)
+server/.env
+
+# Web: VITE_API_URL and Vite's local variants (never a secret, D-01)
+web/.env
+web/.env.local
+web/.env.development
+web/.env.development.local
+web/.env.production.local
