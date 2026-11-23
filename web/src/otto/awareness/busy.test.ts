@@ -45,4 +45,17 @@ describe('nextBusy', () => {
     expect(t.state.ended[0].message).toHaveLength(BUSY_TEXT_CHARS)
     expect(t.state.ended[0].message!.endsWith('…')).toBe(true)
   })
+
+  it('long task ids that share a start stay separate tasks', () => {
+    const t = tracked()
+    const start = 'x'.repeat(80)
+    const a = t.events.task(`${start}-a`)
+    t.events.task(`${start}-b`)
+    expect(t.state.running).toHaveLength(2)
+    expect(new Set(t.state.running.map(e => e.id)).size).toBe(2)
+    expect(t.state.running.every(e => e.id.length <= 64)).toBe(true)
+    a.succeed('done')
+    expect(t.state.running).toHaveLength(1)
+    expect(t.state.ended).toHaveLength(1)
+  })
 })

@@ -16,14 +16,23 @@ export const BUSY_RUNNING_MAX = 5
 export const BUSY_ENDED_MAX = 5
 export const BUSY_TEXT_CHARS = 160
 const BUSY_ID_CHARS = 64
+const BUSY_ID_KEPT = 50
 
 const cap = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+/** Short ids pass through. A long one keeps its start plus a hash of the whole, so two long ids that share a start stay apart. */
+function capId(id: string): string {
+  if (id.length <= BUSY_ID_CHARS) return id
+  let h = 0x811c9dc5 // FNV-1a
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193)
+  return `${id.slice(0, BUSY_ID_KEPT)}…#${(h >>> 0).toString(16).padStart(8, '0')}`
+}
+
 const ENDS: Partial<Record<OttoEvent['type'], BusyOutcome>> = { success: 'succeeded', failure: 'failed', complete: 'complete' }
 
 /** The state after `event`; the same object when nothing changed, so callers can skip a publish. */
 export function nextBusy(state: BusyState, event: OttoEvent): BusyState {
   if (event.task === undefined) return state
-  const id = cap(event.task, BUSY_ID_CHARS)
+  const id = capId(event.task)
   const entry = (outcome: BusyOutcome): BusyEntry => {
     const e: BusyEntry = { id, outcome }
     if (event.topic !== undefined) e.topic = cap(event.topic, BUSY_TEXT_CHARS)
