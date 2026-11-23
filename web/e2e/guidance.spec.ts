@@ -69,3 +69,28 @@ test('the voice starts only a task the page offered', async ({ page }) => {
   // The panel lists what Otto did, in words (D-06).
   await expect(panel).toContainText('Started: A task Otto follows')
 })
+
+test('the model hears which task is running and which step, only while a conversation is open', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  const ask = page.getByRole('button', { name: 'What the server knows of the running task' })
+  const server = page.locator('#lab-server + ol')
+  // No conversation yet: a running task stays in the browser.
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await ask.click()
+  await expect(server).toContainText('running task: null')
+
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+  // Opening the conversation sends it; each step the visitor takes updates it (sends are debounced, so poll).
+  await expect(async () => { await ask.click(); await expect(server).toContainText('"id":"lab-follow"') }).toPass()
+  await expect(server).toContainText('"step":1,"total":3')
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  await expect(async () => { await ask.click(); await expect(server).toContainText('"step":2,"total":3') }).toPass()
+  // Ended: cleared, so the model never answers from a stale step.
+  await page.getByRole('button', { name: 'App: visitor left' }).click()
+  await expect(async () => { await ask.click(); await expect(server.locator('li').first()).toHaveText(/running task: null/) }).toPass()
+})

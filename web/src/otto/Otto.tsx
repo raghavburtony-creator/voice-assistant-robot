@@ -30,6 +30,7 @@ import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
 import { attachGuide } from './guidance/runner'
+import { taskProgress } from './guidance/task'
 import { createSpotlight } from './guidance/spotlight'
 import { watchPageContext } from './awareness/collectPage'
 import { toSpoken } from './gemini/channels'
@@ -183,6 +184,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     const off = onGuideTasksChange(publish)
     return () => { off(); publishContext('guide_tasks', null) }
   }, [])
+  // And the one running now, with the visitor's step, so "where was I?" gets a real answer; cleared when it ends.
+  useEffect(() => {
+    const off = ottoGuide.subscribe(command => { if (command.type === 'task') publishContext('guide_task_running', taskProgress(command.event, command.spec)) })
+    return () => { off(); publishContext('guide_task_running', null) }
+  }, [ottoGuide])
   // And what the app is busy with (its events.task handles, open and lately ended), so "is my upload done?" gets a real answer.
   useEffect(() => {
     let busy = EMPTY_BUSY

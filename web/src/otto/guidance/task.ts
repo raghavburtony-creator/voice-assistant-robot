@@ -68,6 +68,18 @@ export type GuideTask = {
   observe(seen: GuideObservation): GuideTaskEvent[]
 }
 
+/** What the voice model is told about the running task (context key guide_task_running). `step` is 1-based. */
+export type GuideTaskProgress = { id: string; title: string; step: number; total: number; say: string }
+export const PROGRESS_TITLE_CHARS = 80
+export const PROGRESS_SAY_CHARS = 200
+const cap = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+
+/** The summary after `event`: null once the task is done or cancelled, so the model never sees a stale step. */
+export function taskProgress(event: GuideTaskEvent, spec: GuideTaskSpec): GuideTaskProgress | null {
+  if (event.type !== 'step') return null
+  return { id: spec.id, title: cap(spec.title, PROGRESS_TITLE_CHARS), step: event.index + 1, total: event.total, say: cap(event.step.say, PROGRESS_SAY_CHARS) }
+}
+
 export function createGuideTask(spec: GuideTaskSpec): GuideTask {
   const { steps } = spec
   if (steps.length === 0) throw new Error(`Guide task "${spec.id}" needs at least one step`)
