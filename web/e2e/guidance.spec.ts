@@ -95,6 +95,31 @@ test('the model hears which task is running and which step, only while a convers
   await expect(async () => { await ask.click(); await expect(server.locator('li').first()).toHaveText(/running task: null/) }).toPass()
 })
 
+test('"where am I?" is answered with the current step, from the context the page sent', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  const input = panel.getByRole('textbox', { name: 'Type a question instead' })
+  await expect(input).toBeEnabled()
+  const ask = async (question: string) => { await input.fill(question); await panel.getByRole('button', { name: 'Send' }).click() }
+  const known = page.getByRole('button', { name: 'What the server knows of the running task' })
+  const server = page.locator('#lab-server + ol')
+
+  // Nothing running: said so, not guessed.
+  await ask('Where am I?')
+  await expect(panel).toContainText('No guided task is running right now.')
+
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  // Context sends are debounced: wait until the server has step 2 before asking.
+  await expect(async () => { await known.click(); await expect(server.locator('li').first()).toContainText('"step":2,"total":3') }).toPass()
+  await ask('Where was I?')
+  await expect(panel).toContainText('You\'re on step 2 of 3 of A task Otto follows: Now click the card beside me.')
+})
+
 test('the voice stops the running task, or moves it back or on a step', async ({ page }) => {
   await page.goto('/lab.html')
   await page.getByLabel('Use the real Otto').check()
