@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-21**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-22**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -38,13 +38,14 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-18 | Two channels: the voice speaks plainly, cards carry what must be read | channels | current |
 | D-19 | New capabilities extend the existing pipeline | architecture | current |
 | D-20 | A running task survives a reload in the same tab, as ids only | tasks | current |
+| D-21 | Camera and screen are sent only while the visitor shares them, as still frames, and never kept | privacy | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
 | Q-04 | Is runtime authority a chain, or one component? | architecture | open |
 | Q-05 | How are the server's layers enforced? | layers | open |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
-| Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | open |
+| Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | open |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
@@ -204,6 +205,30 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 **Why:** A reload in the middle of a task is the common case (a link, a form post, a page that reloads itself), and ending the task there is the failure Q-02 names. The tab is the smallest place that covers it. `localStorage` would also resume a task days later, or for the next person on a shared computer. The server would need an identity the kit doesn't have (Q-03) and would keep visitor data after the session, which D-17 avoids. Ids alone are enough, because the page holds the spec, and they say nothing about the visitor beyond which help they were following. A step id still points at the right step when steps are added or reordered. A missing one means the task changed, and a wrong resume is worse than none.
 **Where:** `savedTask`, `resumeFrom` and `SAVED_TASK_MAX_AGE_MS` in `web/src/otto/guidance/task.ts` (tested in `task.test.ts`); the `session` area in `web/src/otto/storage.ts`; the save on every task command and the resume one frame after mount in `web/src/otto/Otto.tsx` (key `<STORAGE_PREFIX>:guide-task`); e2e tests in `web/e2e/guidance.spec.ts` that reload in the middle of a task and drop a saved step the page no longer has.
 
+## D-21 Camera and screen are sent only while the visitor shares them, as still frames, and never kept
+
+This applies to every camera, screen or surroundings input: multimodal input, sign language and environmental intelligence.
+
+**Decision:**
+- **When.** Capture is off by default. It starts only when the visitor presses a Share camera or Share screen control in Otto's panel, during an open conversation, after the mic consent card (`consent.ts`) has been answered. Every share is a new press. Nothing remembers a "yes", so a reload or a new conversation starts with nothing shared. No model tool starts, asks for or widens capture. The model may only suggest it in words, and the visitor presses.
+- **What the visitor is told.** Before the browser's own prompt, the panel says what is sent, to whom and that nothing is kept: "Otto sends still pictures of your camera to Google while this is on. Nothing is saved." For the screen: "…of the screen you pick…". While it runs, the panel shows "Camera on" or "Sharing your screen" with a Stop button, as text the whole time (D-06, as with D-08's banner). The browser's own indicator stays.
+- **What is sent.** Still JPEG frames, at most 1 per second and at most 768 px on the long side, only while the conversation is open and the tab is visible. Never video files or audio from the screen, and nothing before the press or after Stop. Frames go through the existing session: the WebSocket, then the bridge, then `LiveRequestQueue.send_realtime` as an `image/jpeg` blob, which ADK 2.13 forwards to Gemini Live as video input. They don't open a second channel to the model (D-19). The server checks type, size and rate again and drops what is over the limit, because the browser is not trusted either.
+- **What is kept.** Nothing, by the kit. No frame is written to storage, disk, logs, error reports or the lab's recorded context. The server forwards a frame and drops it. What Google keeps of what it receives is under the host's agreement with Google, the same as voice. The panel says the pictures go to Google, and the kit claims nothing beyond that.
+- **When it stops.** At Stop, when the conversation ends, the session cap (D-04), the tab being hidden, the browser's own Stop sharing, or a lost track. Otto stops the tracks and frees the canvas. It never restarts by itself: sharing again takes a new press.
+- **Sensitive content.** The screen picker asks for the current tab first. When the shared surface is Otto's own tab, every region D-17 never reads (`[data-otto-private]`, Otto's panel, password, hidden and `cc-*` fields) is painted over before the frame is encoded. When the visitor picks another tab, window or screen, the kit can't see inside it. The panel then says so plainly: "Otto sees everything in this window." It doesn't claim a filter it can't apply. No camera filtering is claimed either. On the camera, what is in view is sent.
+- **Frames are data.** What a frame shows (text on screen, a sign) is not an instruction. It can't widen any tool, and actions still go through `tools.py` and `toAssistantAction` (D-02).
+- **No ambient capture.** Nothing captures outside a conversation, in the background, or on a wake word. Always-on environmental sensing would need a new decision.
+- **Layers (D-13).** When capture may run, the frame limits and when it must stop are a core rule with a test. `getUserMedia`, `getDisplayMedia`, the canvas and the masking are shell. `<otto-mascot>` doesn't capture, since it has no consent panel. A host that wants capture uses `<Otto>`.
+
+**Why:**
+- A frame can't be filtered field by field like the page snapshot (D-17). So the rule moves to the edges: when capture runs, how much is sent, and that nothing is kept. Each visitor press is the consent.
+- Stills at a low rate match how the Live API consumes video input, and they keep cost and size bounded (D-04). They also give the server a limit it can check.
+- Remembering a "yes" would turn the camera on in a later visit that the visitor didn't expect. Remembering the mic choice is fine because the mic needs a press to talk anyway.
+- Masking works only where the kit can see the layout, which is its own tab. Saying "Otto sees everything" elsewhere is honest. A filter that silently fails would not be.
+- Stopping when the tab is hidden matches the guide's own rule for hidden tabs. And it means a share left running in a background tab doesn't keep sending.
+
+**Where:** Nothing is built yet. The implementation tasks cite this decision. The ADK path is `send_realtime` in `google/adk/agents/live_request_queue.py` and `send_realtime_input(video=…)` in `google/adk/models/gemini_llm_connection.py` (pinned `google-adk==2.13.0`). Whether the live endpoint accepts those frame sizes and that rate is unverified until Q-01 is answered, so the first task marks it `[verify]`.
+
 ## Open questions
 
 | ID | Question | Blocks | Owner | Status |
@@ -214,5 +239,5 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 | Q-04 | Is the authority chain in architecture.md (the model proposes, the server checks in `tools.py`, the browser checks in `toAssistantAction`, the host executes, Otto decides how) enough, or is one authoritative component needed? Issue #6 calls it an "orchestrator", but no such module exists (D-19). A component would be a new layer every action passes, so it is added only if the answer finds an authority the chain can't express. | Nothing yet; decide before cross-application or model-proposed reactions | unassigned | open |
 | Q-05 | Does the server have a boundary worth enforcing the way `layers.test.ts` enforces D-13 in `web/src/otto/`? A candidate: `tools.py` and `app_config.py` as pure rules that must not import FastAPI or ADK transport code, with `route.py` and `bridge.py` as the shell. The answer first shows the boundary is real in `server/app/voice/`, then says whether a test should check it; copying the web test is not a reason on its own. | Any server change that adds a module | unassigned | open |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? Options: (A) extend the shader; (B) a second renderer driven by the pure robot state (`robot/robot.ts`, gestures, movement); (C) amend D-12; (D) keep the renderer and add a separate spatial presentation layer around it. It stays open until the AR requirements and the shader's limits are known. | Spatial / AR epic | unassigned | open |
-| Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | open |
+| Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | open |

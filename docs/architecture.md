@@ -50,9 +50,9 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 | **Task-aware Otto**: the model knows which task is running, which step it is on, and what the app is busy with | Guided tasks (`guidance/task.ts`, D-16), awareness `task` handles (`awareness/events.ts`), the context channel (`publishContext`, D-17 budget), tools with checked ids (D-02) | A second task model, or a second way to send context. Task state stays in the guide; the model reads a summary of it | none (Q-02 answered by D-20) |
 | **Task continuity**: a task survives a reload, then a new session, then another interface | The same task state, saved through `storage.ts` (already guarded): within a tab, as ids only (D-20) | Server-side memory of visitors before Q-03 is answered. Today there is one fixed `USER_ID` and `InMemorySessionService` | Q-03 (a reload is settled by D-20) |
 | **Cross-application**: Otto acts in more than one app | Reported-id allow-lists (the `show_target` pattern, D-14) in place of static `Literal`s | Free-form actions. Each app still reports what may be done (D-02) | Q-08 |
-| **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17) | A capture path that skips consent or the privacy filter | Q-07 |
-| **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | Q-07 |
-| **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | Q-07 |
+| **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17), the existing session (`send_realtime`) | A capture path that skips the visitor's press, keeps a frame, or opens a second channel (D-21) | none (Q-07 answered by D-21) |
+| **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | none (Q-07 answered by D-21) |
+| **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | none (Q-07 answered by D-21) |
 | **Spatial / AR presence** | The robot's state (`robot/robot.ts`, gestures, movement rules), which is already pure | A second robot model with its own states | Q-06 |
 
 ### Rules for new capabilities (D-19)
@@ -73,6 +73,6 @@ All 18 decisions are **current**: each one is enforced by the code or test it ci
 | D-03 static page and command lists | current | Cross-application needs lists that aren't known at build time | Q-08 |
 | D-12 one shader, no 3D library | current | Spatial / AR presence | Q-06 |
 | D-13 layers | current, partly enforced | The server isn't covered by a test | Q-05 |
-| D-17 snapshot only while talking, never stored | current | Continuity stores task state (within a tab, as ids, by D-20), and multimodal input would add camera and screen content | Q-03, Q-07 |
+| D-17 snapshot only while talking, never stored | current | Continuity stores task state (within a tab, as ids, by D-20), and multimodal input adds camera and screen frames, sent while shared and never kept (D-21) | Q-03 |
 
 Issue #6 refers to "D-01 to D-19". At the time of the review the log ended at D-18. D-19 is the first new record from this work.
