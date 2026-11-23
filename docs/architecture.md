@@ -51,8 +51,8 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 | **Task continuity**: a task survives a reload, then a new session, then another interface | The same task state, saved through `storage.ts` (already guarded): within a tab, as ids only (D-20) | Server-side memory of visitors before Q-03 is answered. Today there is one fixed `USER_ID` and `InMemorySessionService` | Q-03 (a reload is settled by D-20) |
 | **Cross-application**: Otto acts in more than one app | Reported-id allow-lists (the `show_target` pattern, D-14) in place of static `Literal`s | Free-form actions. Each app still reports what may be done (D-02) | Q-08 |
 | **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17), the existing session (`send_realtime`) | A capture path that skips the visitor's press, keeps a frame, or opens a second channel (D-21) | none (Q-07 answered by D-21) |
-| **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | Q-07 |
-| **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | Q-07 |
+| **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | none (Q-07 answered by D-21) |
+| **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | none (Q-07 answered by D-21) |
 | **Spatial / AR presence** | The robot's state (`robot/robot.ts`, gestures, movement rules), which is already pure | A second robot model with its own states | Q-06 |
 
 ### Rules for new capabilities (D-19)
