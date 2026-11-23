@@ -14,6 +14,7 @@ class FakeContext {
     this.rec.nodes.push(n)
     return n
   }
+  resume() { return Promise.resolve() }
   close() { this.rec.closed = true; return Promise.resolve() }
 }
 

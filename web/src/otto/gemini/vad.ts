@@ -62,6 +62,7 @@ export class VoiceActivityDetector {
     this.analyser = this.context.createAnalyser()
     this.analyser.fftSize = 1024
     this.source.connect(this.analyser)
+    void this.context.resume().catch(() => {}) // a context made outside a click can start suspended
     this.buffer = new Float32Array(this.analyser.fftSize)
     this.timer = setInterval(this.tick, TICK_MS)
   }

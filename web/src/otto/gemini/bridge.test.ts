@@ -325,6 +325,27 @@ describe('createGeminiVoiceBridge', () => {
     bridge.close()
   })
 
+  it('a reply that lands before the silence timeout restarts the detector; a failed reopen goes back to idle', async () => {
+    const { otto, calls } = fakeOtto()
+    const errors: Error[] = []
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' }, onError: e => errors.push(e) })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    ws.receive('{"type":"turn_complete"}')
+    expect(detectors).toHaveLength(2)
+    expect(detectors[0].disposed).toBe(true)
+    expect(recorders).toHaveLength(1)
+    detectors[1].handlers.onSpeechEnd('silence')
+    const { startRecorder } = await import('../audio')
+    vi.mocked(startRecorder).mockRejectedValueOnce(new Error('denied'))
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve(); await Promise.resolve()
+    expect(errors[0]?.message).toBe('denied')
+    expect(calls.at(-1)).toEqual(['setState', 'idle'])
+    bridge.close()
+  })
+
   it('the detector is muted while Otto is audible', async () => {
     const { otto } = fakeOtto()
     const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
