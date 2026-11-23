@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-20**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-21**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -37,8 +37,9 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-17 | The page snapshot is privacy-filtered, budgeted and sent only while talking | privacy | current |
 | D-18 | Two channels: the voice speaks plainly, cards carry what must be read | channels | current |
 | D-19 | New capabilities extend the existing pipeline | architecture | current |
+| D-20 | A running task survives a reload in the same tab, as ids only | tasks | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
-| Q-02 | Where does task state live, and for how long? | tasks | open |
+| Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
 | Q-04 | Is runtime authority a chain, or one component? | architecture | open |
 | Q-05 | How are the server's layers enforced? | layers | open |
@@ -189,12 +190,26 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 **Why:** The checks in D-02, D-14, D-16 and D-17 hold only if every path goes through them. A parallel system for a new capability would need the same checks again, and would drift from them. The owner set this rule in issue #6.
 **Where:** [architecture.md](architecture.md); enforced by the existing tests for D-02, D-13 and D-17 (`server/tests/test_voice.py`, `web/src/otto/layers.test.ts`, `web/src/otto/messages.test.ts`, `web/src/otto/awareness/collectPage.test.ts`) and by review (AGENTS.md, "Review guidelines").
 
+## D-20 A running task survives a reload in the same tab, as ids only
+
+**Decision:**
+- **Where.** The running guided task is kept in the tab's `sessionStorage`. It survives a reload or a page change in that tab, and goes when the tab closes. It is never kept in `localStorage`, and never sent to the server to keep: the server learns it again from the context channel (`guide_task_running`, D-19) when the next conversation opens, as it learns everything else.
+- **What.** Only `{ task, step, savedAt }`: the task id, the current step's id (not its index), and when it was saved. Never the title, the step's words, a target's text or anything the visitor typed. The spec comes back from the page's own `registerGuideTask`.
+- **How long.** It is written on every step and removed when the task is done or cancelled, whether by the visitor, the voice (`move_guided_task`) or the app. A saved task older than a fixed expiry (30 minutes, set in code, not a config key) is dropped instead of resumed.
+- **How the visitor clears it.** Ending the task (its Stop, or telling Otto to stop) or closing the tab. No setting is added.
+- **When the page changed.** On load, a saved task resumes only if the page registers a task with that id and that task still has that step id. Otherwise the saved entry is removed and nothing resumes: no guess at the nearest step, no restart from step 1.
+- **Layers (D-13).** What to save, and whether a saved entry may resume (expiry, missing task, missing step), are a core rule beside `guidance/task.ts`, with a test. Reading and writing are shell, through `storage.ts`'s guarded access, which gains a session area beside the local one. A refused write keeps the value in memory for this visit, which is the same as not resuming.
+- **`<otto-mascot>`.** It keeps tasks in memory only, since it never reads `otto.config.ts` (D-13), where the storage prefix is. A host that wants a mascot task to survive a reload starts it again itself with `guide.startTask` and `goTo`.
+
+**Why:** A reload in the middle of a task is the common case (a link, a form post, a page that reloads itself), and ending the task there is the failure Q-02 names. The tab is the smallest place that covers it. `localStorage` would also resume a task days later, or for the next person on a shared computer. The server would need an identity the kit doesn't have (Q-03) and would keep visitor data after the session, which D-17 avoids. Ids alone are enough, because the page holds the spec, and they say nothing about the visitor beyond which help they were following. A step id still points at the right step when steps are added or reordered. A missing one means the task changed, and a wrong resume is worse than none.
+**Where:** Not built yet. The resume task (milestone 0.3) adds the core rule and its test, the session area in `web/src/otto/storage.ts`, the save and restore in `web/src/otto/Otto.tsx`, and an e2e test in `web/e2e/guidance.spec.ts` that reloads in the middle of a task. That task updates this section's **Where** with the files and tests.
+
 ## Open questions
 
 | ID | Question | Blocks | Owner | Status |
 |---|---|---|---|---|
 | Q-01 | Is the Gemini Live wire format in `web/src/otto/gemini/transports.ts` right? Every `[verify]` item there (the ephemeral-token endpoint, the model id, message field names, audio formats, the setup message) has to be checked against a real Live endpoint and the pinned `google-genai`. | `otto-mascot/gemini` in production | unassigned | open |
-| Q-02 | Where does task state live, and for how long? Today a guided task lives in the browser's memory (`createOttoGuide`): a reload ends it, and the server keeps nothing after a session (`InMemorySessionService`, deleted on close). Options: memory only; `sessionStorage` (survives a reload in this tab); `localStorage` (survives closing the tab); on the server. Each step out widens what is stored about the visitor (D-17). | Task continuity (reload, new session); investigated in #16 | unassigned | open |
+| Q-02 | Where does task state live, and for how long? Today a guided task lives in the browser's memory (`createOttoGuide`): a reload ends it, and the server keeps nothing after a session (`InMemorySessionService`, deleted on close). Options: memory only; `sessionStorage` (survives a reload in this tab); `localStorage` (survives closing the tab); on the server. Each step out widens what is stored about the visitor (D-17). | Task continuity (reload, new session); investigated in #16 | unassigned | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? The server uses one fixed `USER_ID = "visitor"` (`bridge.py`). Continuity across devices or apps needs an identity the kit doesn't have, supplied by the host and never invented by the kit, along with a consent and retention rule. | Task continuity across interfaces, cross-application | unassigned | open |
 | Q-04 | Issue #6 calls Otto's orchestrator the runtime authority, but no such module exists: authority is the chain in architecture.md (D-19). Keep the chain as the definition, or introduce one component that owns it? A component would be a new layer every action passes, so it needs a reason beyond naming. | Nothing yet; decide before cross-application | unassigned | open |
 | Q-05 | How are the server's layers enforced? D-13 covers `web/src/otto/` only. A test like `layers.test.ts` for `server/app/voice/` (`tools.py` and `app_config.py` must not import FastAPI or ADK transport code) would make D-19 checkable there. | Any server change that adds a module | unassigned | open |
