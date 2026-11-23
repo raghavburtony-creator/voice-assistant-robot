@@ -69,8 +69,8 @@ Copy `web/src/otto/`, `web/src/otto.config.ts`, `web/public/otto/` and `server/a
 
 1. Write the function in `server/app/voice/tools.py` and add it to `TOOLS`. Check every argument: the model's output is untrusted.
 2. If it changes the page, return an action through `_send(...)`, for example `{"action": "command", "name": "open_cart"}`.
-3. Allow that action in the browser: add the command to `COMMANDS` in both config files (and to the `Command` type in `tools.py`), or, for a new kind of action, add a variant to `AssistantAction` in `web/src/otto/messages.ts`.
-4. Handle it in your `onAction`, and describe it in `COMMAND_LABELS` so the panel's "Otto did" list says what happened.
+3. Allow that action in the browser: add the command to `COMMANDS` in both config files (and to the `Command` type in `tools.py`), or, for a new kind of action, add a variant to `AssistantAction` in `web/src/otto/messages.ts`, with its check in `toAssistantAction` and any new field in `messageSchema` (`move_guided_task` and its `task_move` action are a worked example).
+4. Handle it in your `onAction`, and describe it so the panel's "Otto did" list says what happened: in `COMMAND_LABELS` for a command, or in `describeAction` (`useVoiceAssistant.ts`) for a new kind of action.
 5. Tell Otto when to use it in `system_instruction()`.
 
 A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
@@ -297,6 +297,8 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 **Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change.
 
 **What the model sees of a running task:** while a guided task runs, `<Otto>` also reports it under `guide_task_running`: its id and title, the visitor's step (`step` of `total`, 1-based) and that step's words, capped at 80 and 200 characters (`taskProgress` in `guidance/task.ts`). The report is cleared when the task is done or cancelled. Like all context, it reaches the server only while a conversation is open. "Where was I?" or "What's next?" is answered from it, and the model is told not to start that task again or `show_target` the current step.
+
+**Steering a running task by voice:** "Stop the tour", "Go back" or "I've done that, skip it" makes the model call `move_guided_task` with `stop`, `back` or `next`. The server refuses any other move, and refuses when no task is reported as running or when "back" would go before the first step. The browser checks the move again (`toAssistantAction`). Otto then calls the guide's `move`, which cancels the task (reason `user`), goes back a step or completes the current one, and he shows the new step himself. The panel's "Otto did" list says "Stopped the task", "Went back a step" or "Moved on a step" (D-06). Jumping to a named step isn't supported.
 
 **Lab:** the Guidance panel in `/lab.html` can:
 - ask for each mode;

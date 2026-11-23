@@ -44,7 +44,7 @@ export default function App() {
   const onAction = useCallback((action: AssistantAction) => {
     if (action.action === 'navigate') goTo(action.page)
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
-    else if (action.action === 'guide' || action.action === 'task' || action.action === 'card') return
+    else if (action.action === 'guide' || action.action === 'task' || action.action === 'task_move' || action.action === 'card') return
     else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
     else if (action.name === 'toggle_theme') setDark(value => !value)
   }, [])

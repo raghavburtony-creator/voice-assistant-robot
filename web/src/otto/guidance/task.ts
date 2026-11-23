@@ -48,6 +48,9 @@ export function signalMatches(signal: GuideSignal, seen: GuideObservation, stepT
 const any = (signals: readonly GuideSignal[] | undefined, seen: GuideObservation, target: string) =>
   !!signals?.some(s => signalMatches(s, seen, target))
 export type GuideTaskStatus = 'idle' | 'active' | 'done' | 'cancelled'
+/** What the voice may do to the running task (move_guided_task in tools.py): cancel it, or go back or on one step. */
+export const GUIDE_TASK_MOVES = ['stop', 'back', 'next'] as const
+export type GuideTaskMove = (typeof GUIDE_TASK_MOVES)[number]
 export type GuideTaskEvent =
   | { type: 'step'; task: string; step: GuideTaskStep; index: number; total: number; via: 'start' | 'next' | 'skip' | 'back' | 'goto' }
   | { type: 'done'; task: string }

@@ -542,6 +542,8 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.bargeIn()) addServer('Otto is not speaking') }}>Barge in (the server hears you)</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: FOLLOW_TASK.id })) addServer('not connected') }}>Voice: start the followed task</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: 'not-offered' })) addServer('not connected') }}>Voice: start a task the page never offered</button>
+            {(['next', 'back', 'stop'] as const).map(move =>
+              <button key={move} type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task_move', move })) addServer('not connected') }}>Voice: task {move}</button>)}
             <button type="button" className={btn} disabled={!full} onClick={() => addServer(`running task: ${JSON.stringify(server.context('guide_task_running') ?? null)}`)}>What the server knows of the running task</button>
             <button type="button" className={btn} disabled={!full} onClick={() => addServer(`app tasks: ${JSON.stringify(server.context('app_tasks') ?? null)}`)}>What the server knows of the app's tasks</button>
           </div>

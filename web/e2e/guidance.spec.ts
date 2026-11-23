@@ -94,3 +94,27 @@ test('the model hears which task is running and which step, only while a convers
   await page.getByRole('button', { name: 'App: visitor left' }).click()
   await expect(async () => { await ask.click(); await expect(server.locator('li').first()).toHaveText(/running task: null/) }).toPass()
 })
+
+test('the voice stops the running task, or moves it back or on a step', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+  const status = page.getByText(/^(Task: |No task running)/)
+
+  await page.getByRole('button', { name: 'Voice: start the followed task' }).click()
+  await expect(status).toHaveText('Task: step 1 of 3: f1')
+  await page.getByRole('button', { name: 'Voice: task next' }).click()
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  await page.getByRole('button', { name: 'Voice: task back' }).click()
+  await expect(status).toHaveText('Task: step 1 of 3: f1')
+  await page.getByRole('button', { name: 'Voice: task stop' }).click()
+  await expect(status).toHaveText('No task running.')
+  await expect(page.locator('#lab-guides + ol')).toContainText('task lab-follow cancelled (user)')
+  // The panel says each move in words (D-06).
+  for (const words of ['Moved on a step', 'Went back a step', 'Stopped the task']) await expect(panel).toContainText(words)
+})
+

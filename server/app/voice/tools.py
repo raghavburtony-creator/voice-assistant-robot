@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Literal
+from typing import Literal, get_args
 
 from google.adk.tools import FunctionTool, ToolContext
 
@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 #: ADK turns a Literal into an enum the model sees. Written out because a Literal must be static; a test checks it equals PAGE_IDS.
 PageId = Literal["home", "features", "about"]
 Command = Literal["show_message", "toggle_theme"]
+#: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
+TaskMove = Literal["stop", "back", "next"]
 
 
 def _send(tool_context: ToolContext, action: dict) -> None:
@@ -99,6 +101,22 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
     return {"ok": True, "title": found.get("title"), "steps": found.get("steps")}
 
 
+
+def move_guided_task(move: TaskMove, tool_context: ToolContext) -> dict:
+    """Steer the guided task Otto is walking the user through (guide_task_running in get_screen_context): stop ends it,
+    back returns to the previous step, next counts the current step as done and moves on. Use it when the user says
+    "stop the tour", "go back" or "I've done that, skip it", and only while a task is running. Otto then shows the new
+    step himself; say in a few words what you did."""
+    if move not in get_args(TaskMove):
+        return {"ok": False, "error": "Unknown move. Use stop, back or next."}
+    running = (tool_context.state.get("screens") or {}).get("guide_task_running")
+    if not isinstance(running, dict) or not isinstance(running.get("id"), str):
+        return {"ok": False, "error": "No guided task is running."}
+    if move == "back" and running.get("step") == 1:
+        return {"ok": False, "error": "The user is already on the first step."}
+    _send(tool_context, {"action": "task_move", "move": move})
+    return {"ok": True, "move": move, "task": running.get("title")}
+
 #: Caps for show_card. The card is text in the panel (never HTML, never a link: D-02, D-18), so these only bound its size.
 CARD_TITLE_CHARS = 80
 CARD_BODY_CHARS = 600
@@ -140,5 +158,5 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task, show_card)]
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task, move_guided_task, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
