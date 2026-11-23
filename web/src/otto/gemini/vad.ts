@@ -29,17 +29,23 @@ export type VadHandlers = {
   onSpeechEnd: (reason: 'silence' | 'max') => void
   /** Nothing was said in time. Fires at most once per detector. */
   onNoSpeech: () => void
-  /** Every frame, for a meter. */
+  /** Every tick, for a meter. */
   onLevel?: (rms: number) => void
+  /** While true the tick is skipped and the turn's clocks stand still (Otto's own voice must not count as the visitor's). */
+  muted?: () => boolean
 }
+
+/** setInterval, not requestAnimationFrame: frames stop in a background tab, and the cutoffs must still fire there. */
+const TICK_MS = 50
 
 export class VoiceActivityDetector {
   private context: AudioContext | null
   private source: MediaStreamAudioSourceNode | null
   private analyser: AnalyserNode | null
   private buffer: Float32Array<ArrayBuffer>
-  private frame = 0
-  private readonly startedAt = performance.now()
+  private timer: ReturnType<typeof setInterval> | undefined
+  private startedAt = performance.now()
+  private lastTick = this.startedAt
   private loudSince: number | null = null
   private quietSince: number | null = null
   private speaking = false
@@ -57,18 +63,26 @@ export class VoiceActivityDetector {
     this.analyser.fftSize = 1024
     this.source.connect(this.analyser)
     this.buffer = new Float32Array(this.analyser.fftSize)
-    this.frame = requestAnimationFrame(this.tick)
+    this.timer = setInterval(this.tick, TICK_MS)
   }
 
   private tick = () => {
     if (this.done || !this.analyser) return
+    const now = performance.now()
+    const dt = now - this.lastTick
+    this.lastTick = now
+    if (this.handlers.muted?.()) {
+      this.startedAt += dt
+      this.loudSince = this.quietSince = null
+      this.handlers.onLevel?.(0)
+      return
+    }
     this.analyser.getFloatTimeDomainData(this.buffer)
     let sum = 0
     for (const v of this.buffer) sum += v * v
     const rms = Math.sqrt(sum / this.buffer.length)
     this.handlers.onLevel?.(rms)
-    this.step(rms, performance.now())
-    if (!this.done) this.frame = requestAnimationFrame(this.tick)
+    this.step(rms, now)
   }
 
   private step(rms: number, now: number) {
@@ -94,10 +108,10 @@ export class VoiceActivityDetector {
     report()
   }
 
-  /** Cancels the frame loop and disconnects every node. Safe to call twice. The stream's tracks are not touched. */
+  /** Stops the tick timer and disconnects every node. Safe to call twice. The stream's tracks are not touched. */
   dispose() {
     this.done = true
-    cancelAnimationFrame(this.frame)
+    clearInterval(this.timer)
     this.source?.disconnect()
     this.analyser?.disconnect()
     void this.context?.close().catch(() => {})

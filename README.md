@@ -324,10 +324,10 @@ const { ref, otto, ready } = useOtto()
 ```
 
 **Gemini voice (`./gemini`):** `createGeminiVoiceBridge(otto, options)` wires a live voice session into Otto: the audio to his lip-sync, the words to his bubble, the session to his face and gestures. Call `connect()` from a click. It connects either way, and never with a raw API key (D-01), which it refuses:
-
-The bridge also ends the visitor's turn itself: a Web Audio RMS meter on the microphone (`vad` option, defaults and notes under `VAD` in `otto.config.ts`) confirms speech after `speechOnsetMs` above `speechThreshold`, ends the turn after `silenceTimeoutMs` of quiet (it stops the mic, sends `mic_off` to the proxy or `audioStreamEnd` to Gemini Live, and Otto starts thinking), cancels back to idle after `noSpeechTimeoutMs` with no speech, and cuts any turn at `maxTurnDurationMs`. `vad: false` leaves turn-taking to the server. The main panel (`useVoiceAssistant`) does not use it yet. The lab has a meter and a simulated cutoff.
 - `transport: { type: 'proxy', url: 'wss://…/ws/voice' }`: this repo's server, which holds the key (recommended);
 - `transport: { type: 'live', token }`: Gemini Live directly, with an ephemeral token your server mints per session.
+
+The bridge also ends the visitor's turn itself: a Web Audio RMS meter on the microphone (`vad` option, defaults and notes under `VAD` in `otto.config.ts`) confirms speech after `speechOnsetMs` above `speechThreshold`, ends the turn after `silenceTimeoutMs` of quiet (it stops the mic, sends `mic_off` to the proxy or `audioStreamEnd` to Gemini Live, and Otto starts thinking), cancels back to idle after `noSpeechTimeoutMs` with no speech, and cuts any turn at `maxTurnDurationMs`. The meter is muted while Otto is audible (D-05), and it runs on a timer so a background tab still ends the turn. `vad: false` leaves turn-taking to the server. The main panel (`useVoiceAssistant`) does not use it yet. The lab has a meter and a simulated cutoff.
 
 The Live protocol details (the endpoint, the model id, message field names, audio formats) are marked `[verify]` in `web/src/otto/gemini/transports.ts`, and haven't been checked against a real endpoint yet (Q-01).
 

@@ -27,8 +27,6 @@ beforeEach(() => {
   vi.useFakeTimers()
   level = 0; contexts = []
   vi.stubGlobal('AudioContext', FakeContext)
-  vi.stubGlobal('requestAnimationFrame', (cb: () => void) => setTimeout(cb, 16))
-  vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id))
 })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
@@ -77,7 +75,20 @@ describe('VoiceActivityDetector', () => {
     expect(h.onSpeechEnd).toHaveBeenCalledExactlyOnceWith('max')
   })
 
-  it('dispose() stops the frame loop, disconnects nodes and closes the context; twice is safe', () => {
+  it('while muted, nothing counts and the no-speech clock stands still', () => {
+    let muted = true
+    const h = { onSpeechStart: vi.fn(), onSpeechEnd: vi.fn(), onNoSpeech: vi.fn(), muted: () => muted } satisfies VadHandlers
+    new VoiceActivityDetector({} as MediaStream, DEFAULT_VAD, h)
+    level = 0.2; run(10_000)
+    expect(h.onSpeechStart).not.toHaveBeenCalled()
+    expect(h.onNoSpeech).not.toHaveBeenCalled()
+    muted = false; level = 0; run(5900)
+    expect(h.onNoSpeech).not.toHaveBeenCalled()
+    run(200)
+    expect(h.onNoSpeech).toHaveBeenCalledTimes(1)
+  })
+
+  it('dispose() stops the tick timer, disconnects nodes and closes the context; twice is safe', () => {
     const { vad, h } = start()
     vad.dispose(); vad.dispose()
     level = 0.2; run(2000)

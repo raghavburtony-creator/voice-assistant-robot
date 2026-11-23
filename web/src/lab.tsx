@@ -523,11 +523,13 @@ function VadLab() {
   const btn = 'otto-btn otto-btn--tonal'
   const bar = useRef<HTMLSpanElement>(null)
   const stop = useRef<(() => void) | null>(null)
+  const token = useRef(0) // a new run, Stop or unmount bumps it; a getUserMedia that resolves late checks it
   const [lines, setLines] = useState<string[]>([])
   const add = (text: string) => setLines(l => [...l.slice(-7), `${(performance.now() / 1000).toFixed(1)}s ${text}`])
-  useEffect(() => () => stop.current?.(), [])
+  useEffect(() => () => { token.current++; stop.current?.() }, [])
   const run = async (simulated: boolean) => {
     stop.current?.()
+    const mine = ++token.current
     const context = new AudioContext()
     let stream: MediaStream
     let cleanup = () => {}
@@ -540,6 +542,7 @@ function VadLab() {
       cleanup = () => osc.stop()
     } else {
       try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) } catch { add('microphone refused'); void context.close(); return }
+      if (mine !== token.current) { stream.getTracks().forEach(t => t.stop()); void context.close(); return }
       cleanup = () => stream.getTracks().forEach(t => t.stop())
     }
     add(simulated ? 'simulated turn started' : 'listening to the microphone')
@@ -561,7 +564,7 @@ function VadLab() {
       </div>
       <button type="button" className={btn} onClick={() => void run(true)}>Simulate a turn and a silence cutoff</button>
       <button type="button" className={btn} onClick={() => void run(false)}>Meter my microphone</button>
-      <button type="button" className={btn} onClick={() => stop.current?.()}>Stop</button>
+      <button type="button" className={btn} onClick={() => { token.current++; stop.current?.() }}>Stop</button>
       <p role="status" className="lab-hint">{lines.join(' | ')}</p>
     </fieldset>
   )

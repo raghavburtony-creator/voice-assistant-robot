@@ -85,6 +85,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   let recorder: Recorder | null = null
   let detector: VoiceActivityDetector | null = null
   let micAttempt = 0
+  let micWanted = false // set once the mic is open, cleared by stopMic() and a no-speech cancel; gates the reopen after a turn
   let said = ''
   let settle: { resolve: () => void; reject: (e: Error) => void } | null = null
 
@@ -110,12 +111,17 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   }
 
   const release = () => {
-    micAttempt++
-    detector?.dispose(); detector = null
-    recorder?.stop(); recorder = null
+    micWanted = false
+    haltMic()
     const t = transport; transport = null; t?.close()
     disconnectAudio?.(); disconnectAudio = null
     player?.close(); player = null
+  }
+
+  const haltMic = () => {
+    micAttempt++
+    detector?.dispose(); detector = null
+    recorder?.stop(); recorder = null
   }
 
   const handle = (event: BridgeEvent) => {
@@ -135,8 +141,8 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
         break
       case 'turnComplete': case 'interrupted':
         player?.endTurn(); said = ''
-        // The VAD closed the mic at the end of the visitor's turn; reopen it for the next one.
-        if (event.type === 'turnComplete' && options.microphone && !recorder && state === 'open') bridge.startMic().catch(e => options.onError?.(e instanceof Error ? e : new Error(String(e))))
+        // The VAD closed the mic at the end of the visitor's turn; reopen it for the next one, unless the caller muted it.
+        if (event.type === 'turnComplete' && micWanted && !recorder && state === 'open') bridge.startMic().catch(e => options.onError?.(e instanceof Error ? e : new Error(String(e))))
         break
       case 'error':
         options.onError?.(new Error(event.message))
@@ -197,22 +203,24 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
       })
       if (attempt !== micAttempt || state === 'closed') { created.stop(); return }
       recorder = created
+      micWanted = true
       if (options.vad !== false) {
         const settings = { ...DEFAULT_VAD, ...options.vad }
         detector = new VoiceActivityDetector(created.stream, settings, {
           onLevel: options.onLevel,
+          // D-05: Otto's own voice leaks into the mic; it must not read as the visitor speaking.
+          muted: () => !!player?.busy,
           onSpeechStart: () => apply({ do: 'state', state: 'listening' }),
           // Stop the mic first (the browser's recording light goes off), then tell the model; Otto thinks at once.
-          onSpeechEnd: () => { bridge.stopMic(); transport?.endTurn(); handle({ type: 'thinking' }) },
-          onNoSpeech: () => { bridge.stopMic(); apply({ do: 'face', face: 'happy' }); apply({ do: 'state', state: 'idle' }) },
+          onSpeechEnd: () => { haltMic(); transport?.endTurn(); handle({ type: 'thinking' }) },
+          onNoSpeech: () => { micWanted = false; haltMic(); apply({ do: 'face', face: 'happy' }); apply({ do: 'state', state: 'idle' }) },
         })
       }
     },
 
     stopMic() {
-      micAttempt++
-      detector?.dispose(); detector = null
-      recorder?.stop(); recorder = null
+      micWanted = false
+      haltMic()
     },
 
     close() {

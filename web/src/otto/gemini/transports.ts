@@ -191,7 +191,7 @@ export function openTransport(options: TransportOptions, start: StartDetails, on
       else send(JSON.stringify({ type: 'text', text }))
     },
     endTurn() {
-      // [verify] realtimeInput.audioStreamEnd; the proxy's mic_off makes the server send it (bridge.py audio_end).
+      // realtimeInput.audioStreamEnd (checked against the pinned google-genai LiveClientRealtimeInput); the proxy's mic_off makes the server send it (bridge.py audio_end).
       if (live) send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }))
       else send(JSON.stringify({ type: 'mic_off' }))
     },

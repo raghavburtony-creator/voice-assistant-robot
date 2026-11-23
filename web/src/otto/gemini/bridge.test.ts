@@ -305,6 +305,40 @@ describe('createGeminiVoiceBridge', () => {
     bridge.close()
   })
 
+  it('reopens the mic after the reply, but not once the caller muted it or no speech cancelled it', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    detectors[0].handlers.onSpeechEnd('silence')
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve(); await Promise.resolve()
+    expect(recorders).toHaveLength(2)
+    bridge.stopMic()
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve()
+    expect(recorders).toHaveLength(2)
+    await bridge.startMic()
+    detectors.at(-1)!.handlers.onNoSpeech()
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve()
+    expect(recorders).toHaveLength(3)
+    bridge.close()
+  })
+
+  it('the detector is muted while Otto is audible', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    const { muted } = detectors[0].handlers
+    expect(muted?.()).toBe(false)
+    ws.receive(pcm())
+    expect(muted?.()).toBe(true)
+    bridge.close()
+  })
+
   it('live: endTurn sends audioStreamEnd', async () => {
     const { otto } = fakeOtto()
     const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'live', token: 'auth_tokens/abc' } })
