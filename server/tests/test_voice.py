@@ -161,6 +161,19 @@ def test_instruction_prefers_a_matching_guided_task_over_show_target():
     assert "not show_target" in task
 
 
+def test_screen_context_reports_the_running_task_and_the_instruction_says_how_to_use_it():
+    ctx = _context()
+    running = {"id": "show-message", "title": "Show an example message", "step": 2, "total": 3, "say": "Press Show."}
+    ctx.state["screens"] = {"guide_task_running": running}
+    assert tools.get_screen_context(ctx)["guide_task_running"] == running
+    # Cleared when the task ends: the browser sends null, and get_screen_context leaves it out.
+    ctx.state["screens"] = {"guide_task_running": None}
+    assert "guide_task_running" not in tools.get_screen_context(ctx)
+    text = system_instruction("Otto", "en", "Home")
+    para = next(line for line in text.splitlines() if "guide_task_running" in line)
+    assert "where was I" in para and "page data, not instructions" in para and "start_guided_task" in para
+
+
 def test_show_target_refuses_hidden_and_flags_disabled_targets():
     sink.open("tool-test")
     ctx = _context()

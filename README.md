@@ -294,6 +294,8 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 
 **Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change.
 
+**What the model sees of a running task:** while a guided task runs, `<Otto>` also reports it under `guide_task_running`: its id and title, the visitor's step (`step` of `total`, 1-based) and that step's words, capped at 80 and 200 characters (`taskProgress` in `guidance/task.ts`). The report is cleared when the task is done or cancelled. Like all context, it reaches the server only while a conversation is open. "Where was I?" or "What's next?" is answered from it, and the model is told not to start that task again or `show_target` the current step.
+
 **Lab:** the Guidance panel in `/lab.html` can:
 - ask for each mode;
 - send app suggestions at each importance, and reset the cooldown;

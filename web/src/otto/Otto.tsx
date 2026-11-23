@@ -29,6 +29,7 @@ import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
 import { attachGuide } from './guidance/runner'
+import { taskProgress } from './guidance/task'
 import { createSpotlight } from './guidance/spotlight'
 import { watchPageContext } from './awareness/collectPage'
 import { toSpoken } from './gemini/channels'
@@ -182,6 +183,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     const off = onGuideTasksChange(publish)
     return () => { off(); publishContext('guide_tasks', null) }
   }, [])
+  // And the one running now, with the visitor's step, so "where was I?" gets a real answer; cleared when it ends.
+  useEffect(() => {
+    const off = ottoGuide.subscribe(command => { if (command.type === 'task') publishContext('guide_task_running', taskProgress(command.event, command.spec)) })
+    return () => { off(); publishContext('guide_task_running', null) }
+  }, [ottoGuide])
   // While a conversation is open: what the page shows, privacy-filtered and budgeted (awareness/collectPage.ts), and the
   // targets' current state (hidden, disabled), refreshed as the visitor works. Nothing is read or sent otherwise.
   const pageContext = config.pageContext

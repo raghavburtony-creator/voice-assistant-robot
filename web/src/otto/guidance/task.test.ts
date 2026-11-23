@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGuideTask, type GuideTaskSpec } from './task'
+import { createGuideTask, PROGRESS_SAY_CHARS, PROGRESS_TITLE_CHARS, taskProgress, type GuideTaskEvent, type GuideTaskSpec } from './task'
 
 const SPEC: GuideTaskSpec = {
   id: 'theme', title: 'Change the theme',
@@ -133,5 +133,28 @@ describe('progress Otto sees for himself', () => {
     t.start()
     expect(t.observe({ kind: 'activate', target: 'a' })).toEqual([])
     expect(ids(t.complete())).toEqual(['done'])
+  })
+})
+
+describe('taskProgress', () => {
+  const last = (events: GuideTaskEvent[], spec = SPEC) => (events.length ? taskProgress(events[events.length - 1], spec) : undefined)
+
+  it('says nothing before start, names the step while active, and clears once done or cancelled', () => {
+    const t = createGuideTask(SPEC)
+    expect(last(t.complete())).toBeUndefined() // before start: no event, so nothing is published
+    expect(last(t.start())).toEqual({ id: 'theme', title: 'Change the theme', step: 1, total: 3, say: 'Open Settings.' })
+    expect(last(t.complete())).toEqual({ id: 'theme', title: 'Change the theme', step: 2, total: 3, say: 'Pick a theme.' })
+    expect(last(t.back())).toMatchObject({ step: 1 })
+    t.complete(); t.complete()
+    expect(last(t.complete())).toBeNull()
+    expect(last(started().cancel())).toBeNull()
+  })
+
+  it('caps long titles and step words', () => {
+    const long = { ...SPEC, title: 't'.repeat(500), steps: [{ id: 'a', target: 'x', say: 's'.repeat(500) }] }
+    const out = last(createGuideTask(long).start(), long)!
+    expect(out.title).toHaveLength(PROGRESS_TITLE_CHARS)
+    expect(out.say).toHaveLength(PROGRESS_SAY_CHARS)
+    expect(out.say.endsWith('…')).toBe(true)
   })
 })
