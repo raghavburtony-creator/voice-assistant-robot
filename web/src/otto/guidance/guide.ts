@@ -155,8 +155,8 @@ export type GuideTaskHandle = {
 export type OttoGuide = {
   /** Point the visitor to a target (a string is the target id). */
   show(request: string | GuideRequest): void
-  /** Start a task; an active one is cancelled (reason 'replaced'). */
-  startTask(spec: GuideTaskSpec): GuideTaskHandle
+  /** Start a task; an active one is cancelled (reason 'replaced'). `atStep` resumes it at that step (a reload, D-20). */
+  startTask(spec: GuideTaskSpec, atStep?: string): GuideTaskHandle
   /** Cancel the active task (reason 'user') and stop guiding. */
   stop(): void
   /** What the visitor just did (the shell's observer calls this): the active task moves on if a step's signal matches. */
@@ -185,11 +185,11 @@ export function createOttoGuide(): OttoGuide {
 
   return {
     show(request) { send({ type: 'show', request: typeof request === 'string' ? { target: request } : request }) },
-    startTask(spec) {
+    startTask(spec, atStep) {
       const task = createGuideTask(spec) // throws on a bad spec before touching the active task
       if (active) run(active.spec, active.task.cancel('replaced'))
       active = { task, spec }
-      run(spec, task.start())
+      run(spec, task.start(atStep))
       return {
         get status() { return task.status },
         get step() { return task.step },

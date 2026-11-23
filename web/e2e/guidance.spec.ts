@@ -30,6 +30,46 @@ test('Otto notices each step of a task as the visitor does it, follows them back
   await expect(log).toContainText('task lab-follow done')
 })
 
+test('a running task survives a reload in the tab, at its step, kept as ids only; an ended one does not', async ({ page }) => {
+  await page.goto('/lab.html')
+  const realOtto = page.getByLabel('Use the real Otto')
+  const status = page.getByText(/^(Task: |No task running)/)
+  await realOtto.check()
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  // Only the ids and a time, in this tab (D-20): no title, no step words.
+  const kept = await page.evaluate(() => [sessionStorage.getItem('otto-kit:guide-task'), localStorage.getItem('otto-kit:guide-task')])
+  expect(JSON.parse(kept[0]!)).toEqual({ task: 'lab-follow', step: 'f2', savedAt: expect.any(Number) })
+  expect(kept[1]).toBeNull()
+
+  await page.reload()
+  await realOtto.check()
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  const log = page.locator('#lab-guides + ol')
+  await expect(log).toContainText('task step 2/3 (resume): f2')
+  // Straight to the kept step: the first one is never shown on the way.
+  await expect(log).not.toContainText('task step 1/3')
+
+  // Ended: forgotten, so the next reload resumes nothing.
+  await page.getByRole('button', { name: 'App: visitor left' }).click()
+  await expect(status).toHaveText('No task running.')
+  expect(await page.evaluate(() => sessionStorage.getItem('otto-kit:guide-task'))).toBeNull()
+  await page.reload()
+  await realOtto.check()
+  await page.waitForTimeout(300)
+  await expect(status).toHaveText('No task running.')
+})
+
+test('a kept task whose step the page no longer has is dropped, not guessed at', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.evaluate(() => sessionStorage.setItem('otto-kit:guide-task', JSON.stringify({ task: 'lab-follow', step: 'gone', savedAt: Date.now() })))
+  await page.reload()
+  await page.getByLabel('Use the real Otto').check()
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('otto-kit:guide-task'))).toBeNull()
+  await expect(page.getByText(/^(Task: |No task running)/)).toHaveText('No task running.')
+})
+
 test('leaving abandons a followed task', async ({ page }) => {
   await page.goto('/lab.html')
   await page.getByRole('button', { name: 'Start it', exact: true }).click()

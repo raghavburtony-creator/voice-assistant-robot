@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGuideTask, PROGRESS_SAY_CHARS, PROGRESS_TITLE_CHARS, taskProgress, type GuideTaskEvent, type GuideTaskSpec } from './task'
+import { createGuideTask, PROGRESS_SAY_CHARS, PROGRESS_TITLE_CHARS, resumeFrom, SAVED_TASK_MAX_AGE_MS, savedTask, taskProgress, type GuideTaskEvent, type GuideTaskSpec } from './task'
 
 const SPEC: GuideTaskSpec = {
   id: 'theme', title: 'Change the theme',
@@ -156,5 +156,41 @@ describe('taskProgress', () => {
     expect(out.title).toHaveLength(PROGRESS_TITLE_CHARS)
     expect(out.say).toHaveLength(PROGRESS_SAY_CHARS)
     expect(out.say.endsWith('…')).toBe(true)
+  })
+})
+
+describe('a task kept across a reload (D-20)', () => {
+  const find = (id: string) => (id === SPEC.id ? SPEC : null)
+  const now = 1_000_000_000
+
+  it('keeps only the ids and the time on a step, and forgets the task once it ends', () => {
+    const [step] = createGuideTask(SPEC).start()
+    expect(savedTask(step, now)).toEqual({ task: 'theme', step: 'open', savedAt: now })
+    expect(savedTask({ type: 'done', task: 'theme' }, now)).toBeNull()
+    expect(savedTask({ type: 'cancelled', task: 'theme', reason: 'user' }, now)).toBeNull()
+  })
+
+  it('starts straight at a resumed step, without passing the first, and refuses an unknown one', () => {
+    expect(createGuideTask(SPEC).start('pick')).toEqual([{ type: 'step', task: 'theme', step: SPEC.steps[1], index: 1, total: 3, via: 'resume' }])
+    expect(createGuideTask(SPEC).start('open')).toMatchObject([{ index: 0, via: 'resume' }])
+    const t = createGuideTask(SPEC)
+    expect(t.start('gone')).toEqual([])
+    expect(t.status).toBe('idle')
+  })
+
+  it('resumes at the saved step while the page still offers the task and the step', () => {
+    expect(resumeFrom({ task: 'theme', step: 'pick', savedAt: now - 1000 }, find, now)).toEqual({ spec: SPEC, step: 'pick' })
+    expect(resumeFrom({ task: 'theme', step: 'pick', savedAt: now - SAVED_TASK_MAX_AGE_MS }, find, now)).not.toBeNull()
+  })
+
+  it('drops an expired, future, malformed, unoffered or changed task instead of guessing', () => {
+    const saved = { task: 'theme', step: 'pick', savedAt: now }
+    expect(resumeFrom({ ...saved, savedAt: now - SAVED_TASK_MAX_AGE_MS - 1 }, find, now)).toBeNull()
+    expect(resumeFrom({ ...saved, savedAt: now + 1 }, find, now)).toBeNull()
+    expect(resumeFrom({ ...saved, savedAt: 'yesterday' }, find, now)).toBeNull()
+    expect(resumeFrom(null, find, now)).toBeNull()
+    expect(resumeFrom('theme', find, now)).toBeNull()
+    expect(resumeFrom({ ...saved, task: 'gone' }, find, now)).toBeNull()
+    expect(resumeFrom({ ...saved, step: 'renamed' }, find, now)).toBeNull()
   })
 })
