@@ -1,0 +1,22 @@
+[
+  { "name": "type: epic", "color": "3E4B9E", "description": "A product capability made of several issues. No code of its own." },
+  { "name": "type: feature", "color": "1D76DB", "description": "New behaviour a visitor or a host developer can see." },
+  { "name": "type: bug", "color": "D73A4A", "description": "Behaviour that breaks the README or a decision." },
+  { "name": "type: docs", "color": "0075CA", "description": "Docs only: README, docs/, AGENTS.md." },
+  { "name": "type: chore", "color": "C5DEF5", "description": "Tooling, tests, CI or refactoring with no change in behaviour." },
+  { "name": "type: question", "color": "D876E3", "description": "An investigation that answers a Q-xx in docs/decisions.md." },
+  { "name": "priority: p0", "color": "B60205", "description": "A security, privacy or cost rule is broken (D-01, D-04, D-09, D-17). Drop other work." },
+  { "name": "priority: p1", "color": "D93F0B", "description": "Blocks the current milestone." },
+  { "name": "priority: p2", "color": "FBCA04", "description": "Planned for the current or next milestone." },
+  { "name": "priority: p3", "color": "FEF2C0", "description": "Worth doing; not scheduled." },
+  { "name": "difficulty: starter", "color": "7FD99B", "description": "One area, a few files, all named by the routing table." },
+  { "name": "difficulty: intermediate", "color": "2EA44F", "description": "Crosses one boundary: both ends of the protocol, or core and shell." },
+  { "name": "difficulty: advanced", "color": "0E5A2B", "description": "Several areas, or an open question nearby. Read the decisions first." },
+  { "name": "status: blocked", "color": "000000", "description": "Waits on another issue, named under Blocked by." },
+  { "name": "status: needs-decision", "color": "5319E7", "description": "Waits on a Q-xx in docs/decisions.md. Don't pick an answer in code." },
+  { "name": "area: server", "color": "BFDADC", "description": "server/: route, bridge, tools, config." },
+  { "name": "area: kit", "color": "BFDADC", "description": "web/src/otto/: guidance, awareness, context, the panel." },
+  { "name": "area: voice", "color": "BFDADC", "description": "Live audio, playback, barge-in, wake word, sound." },
+  { "name": "area: robot", "color": "BFDADC", "description": "The robot, faces, gestures, movement." },
+  { "name": "area: packaging", "color": "BFDADC", "description": "<otto-mascot>, the adapters, the library build." }
+]

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ASSISTANT_NAME } from '../otto.config'
 import type { AnswerLength } from './consent'
+import type { AssistantCard } from './messages'
 import { Button, Icon, IconButton, Notice } from './ui'
 import { NO_RETRY_CODES, type useVoiceAssistant } from './useVoiceAssistant'
 import { recognitionCtor, useWakeSetting } from './wakeWord'
@@ -13,6 +14,32 @@ type Assistant = ReturnType<typeof useVoiceAssistant>
 
 /** Sample questions shown as chips before the first message. Each one is sent as if typed. */
 const SUGGESTIONS = ['What can this app do?', 'Take me to Features', 'Show me a message']
+
+/**
+ * A card from the show_card tool: the visual channel, for what reads better than it sounds. Everything is text (React
+ * escapes it): no HTML, no links, nothing the model wrote is run or followed (D-02, D-18). A follow-up is sent only when
+ * the visitor presses it, as if typed.
+ */
+export function VoiceCard({ card, onAsk }: { card: AssistantCard; onAsk: (text: string) => boolean | void }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    if (!card.code || typeof navigator === 'undefined' || !navigator.clipboard) return
+    void navigator.clipboard.writeText(card.code).then(() => setCopied(true), () => {})
+  }
+  return <article className="voice-assistant__card" aria-label={`Card: ${card.title}`}>
+    <h3 className="voice-assistant__card-title">{card.title}</h3>
+    <p className="voice-assistant__card-body">{card.body}</p>
+    {card.code && <div className="voice-assistant__card-code">
+      <pre><code>{card.code}</code></pre>
+      <Button variant="text" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
+    </div>}
+    {card.followUps && <ul className="voice-assistant__chips" aria-label="Ask next">
+      {card.followUps.map(question => <li key={question}>
+        <button type="button" className="voice-assistant__chip" onClick={() => onAsk(question)}>{question}</button>
+      </li>)}
+    </ul>}
+  </article>
+}
 
 const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
 
@@ -109,7 +136,8 @@ export default function VoiceAssistant({ assistant, onClose }: { assistant: Assi
   const orbClass = ['voice-assistant__orb', `voice-assistant__orb--${status}`, micOff && 'is-muted'].filter(Boolean).join(' ')
 
   return <>
-  <section ref={panel} className="voice-assistant" role="region" aria-labelledby="voice-assistant-title" onKeyDown={onKeyDown}>
+  {/* data-otto-private: the conversation is the visitor's own words; the page snapshot for the model never reads it. */}
+  <section ref={panel} className="voice-assistant" role="region" aria-labelledby="voice-assistant-title" onKeyDown={onKeyDown} data-otto-private="">
     <span className="voice-assistant__handle" aria-hidden="true" />
     <header className="voice-assistant__header">
       <span className={orbClass} aria-hidden="true">
@@ -161,9 +189,11 @@ export default function VoiceAssistant({ assistant, onClose }: { assistant: Assi
 
     <ol className="voice-assistant__log" ref={log} aria-label="Conversation">
       {transcript.length === 0 && <li className="voice-assistant__hint">Ask what a page does, how to use it, or say where you want to go.</li>}
-      {transcript.map(entry => <li key={entry.id} className={`voice-assistant__line voice-assistant__line--${entry.role}`}>
-        <span className="ui-visually-hidden">{entry.role === 'user' ? 'You said:' : 'Guide said:'} </span>{entry.text}
-      </li>)}
+      {transcript.map(entry => entry.card
+        ? <li key={entry.id} className="voice-assistant__line voice-assistant__line--card"><VoiceCard card={entry.card} onAsk={assistant.sendText} /></li>
+        : <li key={entry.id} className={`voice-assistant__line voice-assistant__line--${entry.role}`}>
+          <span className="ui-visually-hidden">{entry.role === 'user' ? 'You said:' : 'Guide said:'} </span>{entry.text}
+        </li>)}
     </ol>
 
     {/* Says what the guide just did, once, without moving focus. */}

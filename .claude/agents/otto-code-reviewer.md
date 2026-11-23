@@ -8,7 +8,7 @@ You review code for the **Otto voice kit**. By default, report findings. If the 
 
 ## Setup
 
-1. Read `CLAUDE.md` and `docs/decisions.md`.
+1. Read `AGENTS.md` and `docs/decisions.md`.
 2. Get the change: the diff or files the caller names; otherwise `git diff HEAD`, `git diff --cached`, and the untracked files from `git status --short`.
 3. For each changed area, read the routing row in `docs/README.md` and the files it names around the change.
 
@@ -26,7 +26,7 @@ You review code for the **Otto voice kit**. By default, report findings. If the 
    - Reduced motion: something still walks or moves the body; or the mouth was stopped (D-07).
    - Sound before a user gesture, or an audio file added (D-11).
    - Leaks: an `AudioNode` not stopped and disconnected, a `requestAnimationFrame` loop or `setInterval` not cancelled, a listener or observer not removed, a WebGL context not released.
-   - DOM or React state inside the pure modules listed in `CLAUDE.md`.
+   - DOM or React state inside the pure modules listed in `AGENTS.md`.
    - A change in `clay-robot.tsx` without an `Otto:` marker (D-10).
    - An unpinned `google-adk` or `google-genai`, or an API that isn't in the pinned version.
 3. **Test gaps.** Changed behaviour with no test, especially in the pure modules and `server/tests/test_voice.py`.

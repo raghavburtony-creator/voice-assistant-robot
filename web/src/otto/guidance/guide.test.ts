@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createOttoGuide, MISSING_SAY, planGuide, type GuideCommand, type GuideEvent, type GuideRequest, type GuideSettings, type GuideSituation } from './guide'
 import type { GuideTaskSpec } from './task'
 
-const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 }
+const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000, proactiveHelpEnabled: false, frictionCooldownMs: 60_000, stallMs: 20_000 }
 const TARGET = { id: 'save', label: 'the Save button' }
 const SIT: GuideSituation = {
   side: 'right', distance: 0.5, visible: true, tabVisible: true, idle: 'awake', conversing: false, movementEnabled: true,
@@ -15,12 +15,12 @@ const asked = { reason: 'asked' } as const
 
 describe('planGuide: a missing target', () => {
   it('the visitor asked: a sad face and an apology (unless the voice speaks)', () => {
-    expect(plan(asked, {}, {}, null)).toMatchObject({ size: 'explain', steps: [{ do: 'face', face: 'sad' }, { do: 'say', text: MISSING_SAY }] })
-    expect(plan({ ...asked, say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }])
+    expect(plan(asked, {}, {}, null)).toMatchObject({ size: 'explain', steps: [{ do: 'face', face: 'sad' }, { do: 'gesture', name: 'headShake' }, { do: 'say', text: MISSING_SAY }] })
+    expect(plan({ ...asked, say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }, { do: 'gesture', name: 'headShake' }])
   })
   it('a task step: like asking', () => {
-    expect(plan({ reason: 'task' }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }, { do: 'say', text: MISSING_SAY }])
-    expect(plan({ reason: 'task', say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }])
+    expect(plan({ reason: 'task' }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }, { do: 'gesture', name: 'headShake' }, { do: 'say', text: MISSING_SAY }])
+    expect(plan({ reason: 'task', say: null }, {}, {}, null).steps).toEqual([{ do: 'face', face: 'sad' }, { do: 'gesture', name: 'headShake' }])
   })
   it('the app suggested it: nothing', () => {
     expect(plan({}, {}, {}, null).size).toBe('skip')
@@ -203,5 +203,23 @@ describe('createOttoGuide', () => {
     guide.show('x')
     guide.emit({ type: 'missing', target: 'x' })
     expect(seen).toEqual([])
+  })
+})
+
+describe('planGuide: an explicit offer', () => {
+  it('asks first whatever the importance, in the words given', () => {
+    const p = plan({ mode: 'offer', importance: 'major', offer: 'Need a hand with this?' })
+    expect(p.size).toBe('offer')
+    expect(p.steps).toEqual([{ do: 'face', face: 'curious' }, LOOK, { do: 'say', text: 'Need a hand with this?' }])
+  })
+  it('without words, the usual question; in a conversation, only a glance', () => {
+    expect(plan({ mode: 'offer' }).steps.at(-1)).toEqual({ do: 'say', text: 'Want me to show you the Save button?' })
+    expect(plan({ mode: 'offer' }, { conversing: true }).size).toBe('glance')
+  })
+  it('answered (the same request with reason asked): shown, not offered again', () => {
+    const p = plan({ mode: 'offer', offer: 'Need a hand with this?', say: 'Include an @.', reason: 'asked' })
+    expect(p.size).toBe('approach')
+    expect(p.steps.at(-1)).toEqual({ do: 'say', text: 'Include an @.' })
+    expect(p.why).toContain('the offer was answered')
   })
 })

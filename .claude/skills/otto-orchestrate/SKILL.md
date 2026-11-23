@@ -16,7 +16,7 @@ If the task touches one or two files and needs no specialist, do it yourself (or
 
 ## 1. Plan (no agents yet)
 
-1. Read `CLAUDE.md`, `docs/decisions.md` and the task's rows in the routing table of `docs/README.md`.
+1. Read `AGENTS.md`, `docs/decisions.md` and the task's rows in the routing table of `docs/README.md`.
 2. Split the task into **units**. Each unit has:
    - a name and a one-line goal;
    - the **files it owns**. No two units running at the same time may own the same file;
@@ -43,7 +43,7 @@ Start every unit whose dependencies are done **in one message, in parallel**. Gi
 UNIT: <name>
 GOAL: <one or two sentences: what must be true when it's done>
 YOU OWN: <files>; edit nothing else
-READ FIRST: <the 1–3 other files it must understand, and the CLAUDE.md rules or D- entries that apply>
+READ FIRST: <the 1–3 other files it must understand, and the AGENTS.md rules or D- entries that apply>
 CONTEXT: <what the other units are doing, only where it touches this unit; interfaces they'll provide>
 CHECKS: <exact commands>, e.g. cd web && npx vitest run src/otto/<file>.test.ts && npm run typecheck
 DONE MEANS: <the acceptance checks>

@@ -12,12 +12,13 @@ import {
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
 import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES } from '../otto.config'
-import { findGuideTarget } from './guidance/targets'
-import { parseServerMessage, toAssistantAction, type AssistantAction } from './messages'
+import { findGuideTarget, findGuideTask } from './guidance/targets'
+import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
 
 export type { AssistantAction } from './messages'
 export type AssistantStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'ended' | 'error'
-export type TranscriptEntry = { id: number; role: 'user' | 'assistant'; text: string }
+/** A line of the conversation, or a card Otto put in the panel (show_card: the visual channel, D-18). */
+export type TranscriptEntry = { id: number; role: 'user' | 'assistant'; text: string; card?: undefined } | { id: number; role: 'card'; text: string; card: AssistantCard }
 
 /** One thing Otto did, in plain words, and the action that takes it back (null when nothing can). */
 export type ActionRecord = { id: number; label: string; inverse: AssistantAction | null }
@@ -30,6 +31,8 @@ function describeAction(action: AssistantAction, before: string): { label: strin
     return { label: `Opened ${title}`, inverse: back && back.id !== action.page ? { action: 'navigate', page: back.id } : null }
   }
   if (action.action === 'guide') return { label: `Showed you: ${findGuideTarget(action.target)?.info.label ?? action.target}`, inverse: null }
+  if (action.action === 'task') return { label: `Started: ${findGuideTask(action.task)?.title ?? action.task}`, inverse: null }
+  if (action.action === 'card') return { label: `Put a card in the panel: ${action.card.title}`, inverse: null }
   return { label: COMMAND_LABELS[action.name], inverse: null }
 }
 
@@ -172,7 +175,13 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
   }, [])
 
   // Built outside the state updater, which StrictMode runs twice.
-  const addTranscript = useCallback((role: TranscriptEntry['role'], text: string) => {
+  const addCard = useCallback((card: AssistantCard) => {
+    openEntry.current = null // the next words start a new line, below the card
+    entries.current = [...entries.current, { id: nextId.current++, role: 'card' as const, text: card.title, card }].slice(-MAX_ENTRIES)
+    setTranscript(entries.current)
+  }, [])
+
+  const addTranscript = useCallback((role: 'user' | 'assistant', text: string) => {
     const open = openEntry.current
     if (open && open.role === role) {
       entries.current = entries.current.map(entry => entry.id === open.id ? { ...entry, text: entry.text + text } : entry)
@@ -416,10 +425,11 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
           break
         case 'action':
           {
-            const action = toAssistantAction(message, id => findGuideTarget(id) !== null)
+            const action = toAssistantAction(message, id => findGuideTarget(id) !== null, id => findGuideTask(id) !== null)
             if (action) {
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)
+              if (action.action === 'card') addCard(action.card)
               actionRef.current(action)
             }
           }
@@ -436,7 +446,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
           break
       }
     }
-  }, [language, teardown, fail, addTranscript, forwardContext, record, startMic, armQuiet])
+  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet])
 
   /**
    * Starts a conversation, from a click. With the audio code loaded (the usual case) everything happens inside the click.

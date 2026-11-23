@@ -24,13 +24,14 @@ import type { Importance } from '../awareness/events'
 import type { IdleState } from '../idle'
 import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
-import { createGuideTask, type GuideTask, type GuideTaskEvent, type GuideTaskSpec, type GuideTaskStatus, type GuideTaskStep } from './task'
+import { createGuideTask, type GuideObservation, type GuideTask, type GuideTaskEvent, type GuideTaskSpec, type GuideTaskStatus, type GuideTaskStep } from './task'
 
 export type GuideSettings = OttoConfig['guidance']
 
 /** asked: the visitor asked (voice or click); task: a task step; app: the host suggests. */
 export type GuideReason = 'asked' | 'task' | 'app'
-export type GuideMode = 'auto' | 'glance' | 'point' | 'approach' | 'explain'
+/** 'offer' asks first ("Want me to show you...?") whatever the importance; see `offer` for the words. */
+export type GuideMode = 'auto' | 'offer' | 'glance' | 'point' | 'approach' | 'explain'
 export type GuideTargetInfo = { id: string; label: string; description?: string }
 export type GuideRequest = {
   target: string
@@ -41,6 +42,8 @@ export type GuideRequest = {
   reason?: GuideReason
   /** Default 'normal'. */
   importance?: Importance
+  /** The question an offer asks. Default: "Want me to show you <label>?". */
+  offer?: string
 }
 export type GuideSituation = {
   /** Where the target is, from Otto's (the viewer's) point of view. */
@@ -82,7 +85,8 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
   if (!target) {
     if (reason === 'app') return skip('target not on this page')
     why.push('target not on this page: explain')
-    const steps: GuideStep[] = [{ do: 'face', face: 'sad' }]
+    // A shake of the head says "no" before any words (its cue is chirpNegative, config.sound.gestureCues).
+    const steps: GuideStep[] = [{ do: 'face', face: 'sad' }, { do: 'gesture', name: 'headShake' }]
     if (request.say !== null) steps.push({ do: 'say', text: MISSING_SAY })
     return { size: 'explain', steps, why }
   }
@@ -109,7 +113,9 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
     why.push(`unrequested: ${size}`)
     if (situation.conversing && size !== 'glance') { size = 'glance'; why.push('in a conversation: glance') }
   } else {
-    size = mode === 'auto' ? auto() : mode
+    // Asked is already the answer to an offer ({ ...offered.request, reason: 'asked' }): show it, don't ask again.
+    if (mode === 'offer') why.push('the offer was answered')
+    size = mode === 'auto' || mode === 'offer' ? auto() : mode
     why.push(`${reason === 'asked' ? 'asked' : 'task step'}: ${size}`)
   }
   if (size === 'approach' && !situation.movementEnabled) { size = 'point'; why.push('movement off: point') }
@@ -123,7 +129,7 @@ export function planGuide(request: GuideRequest, target: GuideTargetInfo | null,
     steps.push({ do: 'gesture', name: situation.side === 'left' ? 'pointLeft' : situation.side === 'right' ? 'pointRight' : 'nod' })
   }
   if (size !== 'glance' && request.say !== null) {
-    const text = size === 'offer' ? `Want me to show you ${target.label}?` : request.say ?? target.description ?? `Here's ${target.label}.`
+    const text = size === 'offer' ? request.offer ?? `Want me to show you ${target.label}?` : request.say ?? target.description ?? `Here's ${target.label}.`
     steps.push({ do: 'say', text })
   }
   if (request.say === null && size !== 'glance') why.push('the voice speaks')
@@ -135,7 +141,8 @@ export type GuideCommand = { type: 'show'; request: GuideRequest } | { type: 'ta
 export type GuideEvent =
   | { type: 'shown'; target: string; size: GuideSize }
   | { type: 'offered'; target: string; request: GuideRequest }
-  | { type: 'missing'; target: string }
+  /** not_found: no such target on the page; hidden: it is there but not drawn (display: none, collapsed). */
+  | { type: 'missing'; target: string; reason?: 'not_found' | 'hidden' }
   | GuideTaskEvent
 export type GuideTaskHandle = {
   readonly status: GuideTaskStatus
@@ -152,6 +159,10 @@ export type OttoGuide = {
   startTask(spec: GuideTaskSpec): GuideTaskHandle
   /** Cancel the active task (reason 'user') and stop guiding. */
   stop(): void
+  /** What the visitor just did (the shell's observer calls this): the active task moves on if a step's signal matches. */
+  observe(seen: GuideObservation): void
+  /** The active task's spec while it runs, else null. */
+  readonly task: GuideTaskSpec | null
   /** For Otto (the runner): receive commands. Returns an unsubscribe function. */
   subscribe(listener: (command: GuideCommand) => void): () => void
   /** For the host: what Otto did. Returns an unsubscribe function. */
@@ -191,6 +202,11 @@ export function createOttoGuide(): OttoGuide {
       active = null
       send({ type: 'stop' })
     },
+    observe(seen) {
+      if (!active || active.task.status !== 'active') return
+      run(active.spec, active.task.observe(seen))
+    },
+    get task() { return active && active.task.status === 'active' ? active.spec : null },
     subscribe(listener) { commands.add(listener); return () => { commands.delete(listener) } },
     onEvent(listener) { events.add(listener); return () => { events.delete(listener) } },
     emit,

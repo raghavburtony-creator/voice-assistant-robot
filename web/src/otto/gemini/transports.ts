@@ -27,7 +27,11 @@ export type Transport = {
 }
 
 export type ProxyTransportOptions = { type: 'proxy'; url: string }
-export type LiveTransportOptions = { type: 'live'; token: string; model?: string }
+export type LiveTransportOptions = {
+  type: 'live'; token: string; model?: string
+  /** Sent in the setup message (buildOttoSystemPrompt). A token whose config is locked server-side may ignore it. */
+  systemInstruction?: string
+}
 export type TransportOptions = ProxyTransportOptions | LiveTransportOptions
 
 /** Session details sent when the connection opens (proxy only: a live token carries its own config). */
@@ -161,6 +165,8 @@ export function openTransport(options: TransportOptions, start: StartDetails, on
         generationConfig: { responseModalities: ['AUDIO'] },
         outputAudioTranscription: {},
         inputAudioTranscription: {},
+        // [verify] BidiGenerateContentSetup.systemInstruction is a Content: { parts: [{ text }] }.
+        ...(options.systemInstruction ? { systemInstruction: { parts: [{ text: options.systemInstruction }] } } : {}),
       } }))
     } else send(JSON.stringify({ type: 'start', language: start.language ?? 'en', ...(start.page ? { page: start.page } : {}) }))
   }

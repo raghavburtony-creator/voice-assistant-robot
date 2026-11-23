@@ -5,6 +5,11 @@
 //   reply(text)   Otto answers: the transcript in pieces and synthetic speech (24 kHz PCM16) streamed faster than real time,
 //                 in chunks, as Gemini Live does, then turn_complete
 //   bargeIn()     the server hears the visitor over Otto (Gemini's own voice detection): it stops and sends `interrupted`
+//   action(a)     a tool sends an action (guide, task, card), as tools.py does
+//   context(key)  the last context the page sent under `key` (e.g. 'page': the privacy-filtered snapshot the model reads)
+//
+// Typed questions: "show me X" / "where is X" -> a guide action; "card" or "how do I install" -> a show_card action and a
+// one-line spoken answer; anything else -> the stock answer.
 
 export type ServerLog = (line: string) => void
 
@@ -79,7 +84,11 @@ export class FakeVoiceServer {
   connected = false
   speaking = false
   private log: ServerLog
+  private contexts = new Map<string, unknown>()
   constructor(log: ServerLog = () => {}) { this.log = log }
+
+  /** What the page last sent under `key` (null when cleared, undefined when never sent). */
+  context(key: string): unknown { return this.contexts.get(key) }
 
   /** Pass to <Otto createSocket={server.createSocket} />. */
   readonly createSocket = (url: string): WebSocket => {
@@ -94,13 +103,22 @@ export class FakeVoiceServer {
     if (socket !== this.socket) return
     if (data instanceof ArrayBuffer) { this.micFrames++; return }
     if (typeof data !== 'string') return
-    const message = JSON.parse(data) as { type: string; text?: string }
+    const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown }
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
+    else if (typeof message.key === 'string') this.contexts.set(message.key, message.data ?? null)
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
     else if (message.type === 'text') {
       const text = (message.text ?? '').trim()
       const ask = /^(show me|where is) /i.exec(text)
-      if (ask) {
+      if (/\bcard\b|how do i install/i.test(text)) {
+        this.later(() => {
+          this.send({ type: 'action', action: 'card', card: {
+            title: 'Install the kit', body: 'Run these two commands in the web folder, then open the lab.',
+            code: 'npm ci\nnpm run dev', follow_ups: ['What does the lab do?', 'Where is the server?'],
+          } })
+          this.reply("I've put the two commands in the panel.")
+        }, 400)
+      } else if (ask) {
         const target = text.slice(ask[0].length).trim().toLowerCase().replace(/\s+/g, '-')
         this.later(() => { this.send({ type: 'action', action: 'guide', target }); this.reply(`Here is ${target.replace(/-/g, ' ')}.`) }, 400)
       } else this.later(() => this.reply(), 400)
@@ -149,6 +167,14 @@ export class FakeVoiceServer {
   }
 
   /** The server hears the visitor talking over Otto: it stops the turn and says so. */
+  /** The model calls a tool that sends an action (as tools.py does), e.g. start_guided_task: { action: 'task', task }. */
+  action(action: Record<string, unknown>) {
+    if (!this.socket || !this.connected) return false
+    this.send({ type: 'action', ...action })
+    this.log(`action: ${JSON.stringify(action)}`)
+    return true
+  }
+
   bargeIn() {
     if (!this.socket || !this.speaking) return false
     this.stopStreaming()

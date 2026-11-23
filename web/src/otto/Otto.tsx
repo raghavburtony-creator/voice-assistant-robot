@@ -29,7 +29,11 @@ import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
 import { attachGuide } from './guidance/runner'
-import { listGuideTargets, onGuideTargetsChange } from './guidance/targets'
+import { createSpotlight } from './guidance/spotlight'
+import { watchPageContext } from './awareness/collectPage'
+import { toSpoken } from './gemini/channels'
+import { findGuideTask, listGuideTargets, listGuideTasks, onGuideTargetsChange, onGuideTasksChange } from './guidance/targets'
+import { observeGuidance } from './guidance/observe'
 import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
@@ -92,6 +96,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   // A voice 'guide' action (already checked against the page's targets) is shown by Otto's body; the model speaks.
   const handleAction = useCallback((action: AssistantAction) => {
     if (action.action === 'guide') ottoGuide.show({ target: action.target, reason: 'asked', say: null })
+    // A voice 'task' action (checked against the page's offered tasks): Otto walks the visitor through it, step by step.
+    if (action.action === 'task') { const spec = findGuideTask(action.task); if (spec) ottoGuide.startTask(spec) }
     onAction(action)
   }, [ottoGuide, onAction])
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })
@@ -131,7 +137,10 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
         if (!offerRef.current) setGuideSay('') // read time is over: the line goes (a newer line would have cancelled this timer)
       }, 5000 + (text.length / 15) * 1000), done }
     })
+    // The ring around what Otto shows (point, approach, explain); Escape or a press dismisses it.
+    const spotlight = createSpotlight()
     const detach = attachGuide(ottoGuide, {
+      highlight: element => spotlight.show(element),
       stage: ottoStage,
       playGesture: name => channel.play(name),
       face: () => faceRef.current,
@@ -148,8 +157,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
       else if (e.type === 'shown' || e.type === 'step') setOffer(null)
     })
     const offStop = ottoGuide.subscribe(command => { if (command.type === 'stop') clear() })
-    return () => { detach(); offFeed(); offStop(); endSay(false) }
+    return () => { detach(); offFeed(); offStop(); endSay(false); spotlight.dispose() }
   }, [ottoGuide, ottoStage, channel])
+  // Otto follows what the visitor does: their clicks and typing move a guided task on, and events that name a help
+  // target may get an offer of help (guidance/observe.ts).
+  useEffect(() => observeGuidance(ottoGuide, { events: otto, settings: () => configRef.current.guidance }), [ottoGuide, otto])
   const answerOffer = (yes: boolean) => {
     if (yes && offer) ottoGuide.show({ ...offer.request, reason: 'asked' })
     else setGuideSay('')
@@ -163,8 +175,28 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     return () => { cancelAnimationFrame(frame); off() }
   }, [page])
   useEffect(() => () => publishContext('guide_targets', null), [])
-  /** What Otto is saying now, for the robot to mouth. */
-  const line = status === 'speaking' ? ([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
+  // And which guided tasks the page offers (the voice can start only these).
+  useEffect(() => {
+    const publish = () => publishContext('guide_tasks', { tasks: listGuideTasks() })
+    publish()
+    const off = onGuideTasksChange(publish)
+    return () => { off(); publishContext('guide_tasks', null) }
+  }, [])
+  // While a conversation is open: what the page shows, privacy-filtered and budgeted (awareness/collectPage.ts), and the
+  // targets' current state (hidden, disabled), refreshed as the visitor works. Nothing is read or sent otherwise.
+  const pageContext = config.pageContext
+  useEffect(() => {
+    if (!conversing || !pageContext.enabled) return
+    let sentTargets = ''
+    const stop = watchPageContext(snapshot => {
+      publishContext('page', snapshot)
+      const targets = JSON.stringify(listGuideTargets())
+      if (targets !== sentTargets) { sentTargets = targets; publishContext('guide_targets', { targets: JSON.parse(targets) }) }
+    }, () => ({ maxChars: pageContext.maxChars, maxNodes: pageContext.maxNodes, includeSelection: pageContext.includeSelection, includeTargets: false }))
+    return () => { stop(); publishContext('page', null) }
+  }, [conversing, pageContext.enabled, pageContext.maxChars, pageContext.maxNodes, pageContext.includeSelection])
+  /** What Otto is saying now, for the robot to mouth: the spoken channel only (no URLs, code or markdown in the bubble). */
+  const line = status === 'speaking' ? toSpoken([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
   const openPanel = useCallback(() => {
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -215,7 +247,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const wakeText = busy ? undefined : WAKE_TEXT[wake.state]
 
   return <>
-    <div className="otto-notices">
+    <div className="otto-notices" data-otto-private="">
       {wakeText && <div className="otto-wake" role="status">
         <span>{wakeText}</span>
         <button type="button" className="otto-btn otto-btn--text" onClick={() => setWakeOn(false)}>Turn off</button>

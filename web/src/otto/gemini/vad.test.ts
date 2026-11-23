@@ -89,6 +89,14 @@ describe('VoiceActivityDetector', () => {
     expect(h.onNoSpeech).toHaveBeenCalledTimes(1)
   })
 
+  it('a shared context is used as is and left open for its owner', () => {
+    const shared = new FakeContext()
+    new VoiceActivityDetector({} as MediaStream, DEFAULT_VAD, { onSpeechEnd: vi.fn(), onNoSpeech: vi.fn() }, shared as unknown as AudioContext).dispose()
+    expect(contexts).toHaveLength(1)
+    expect(shared.rec.closed).toBe(false)
+    expect(shared.rec.nodes.every(n => n.disconnected)).toBe(true)
+  })
+
   it('dispose() stops the tick timer, disconnects nodes and closes the context; twice is safe', () => {
     const { vad, h } = start()
     vad.dispose(); vad.dispose()

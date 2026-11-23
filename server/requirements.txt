@@ -7,5 +7,7 @@ google-adk==2.13.0
 
 # Tests
 pytest>=8.3.0
+# tests/test_docs.py reads the issue templates and the label workflow.
+pyyaml>=6.0
 # fastapi.testclient prefers httpx2 (a real package) and warns with plain httpx.
 httpx2

@@ -40,6 +40,7 @@ const TICK_MS = 50
 
 export class VoiceActivityDetector {
   private context: AudioContext | null
+  private readonly ownsContext: boolean
   private source: MediaStreamAudioSourceNode | null
   private analyser: AnalyserNode | null
   private buffer: Float32Array<ArrayBuffer>
@@ -54,15 +55,17 @@ export class VoiceActivityDetector {
   private readonly settings: VadSettings
   private readonly handlers: VadHandlers
 
-  constructor(stream: MediaStream, settings: VadSettings, handlers: VadHandlers) {
+  /** `context`: share a running one (the recorder's, made in the click) instead of making a new one that may start suspended. */
+  constructor(stream: MediaStream, settings: VadSettings, handlers: VadHandlers, context?: AudioContext) {
     this.settings = settings
     this.handlers = handlers
-    this.context = new AudioContext()
+    this.ownsContext = !context
+    this.context = context ?? new AudioContext()
     this.source = this.context.createMediaStreamSource(stream)
     this.analyser = this.context.createAnalyser()
     this.analyser.fftSize = 1024
     this.source.connect(this.analyser)
-    void this.context.resume().catch(() => {}) // a context made outside a click can start suspended
+    if (this.ownsContext) void this.context.resume().catch(() => {}) // a context made outside a click can start suspended
     this.buffer = new Float32Array(this.analyser.fftSize)
     this.timer = setInterval(this.tick, TICK_MS)
   }
@@ -115,7 +118,7 @@ export class VoiceActivityDetector {
     clearInterval(this.timer)
     this.source?.disconnect()
     this.analyser?.disconnect()
-    void this.context?.close().catch(() => {})
+    if (this.ownsContext) void this.context?.close().catch(() => {})
     this.source = this.analyser = this.context = null
   }
 }

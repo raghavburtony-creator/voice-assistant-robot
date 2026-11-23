@@ -19,6 +19,8 @@ import type { Reaction } from '../awareness/reactions'
 import { defineOttoConfig, type DeepPartial, type OttoConfig, type ThemeName } from '../config'
 import { OttoConfigProvider, useOttoConfig } from '../useOttoConfig'
 import { attachGuide } from '../guidance/runner'
+import { createSpotlight } from '../guidance/spotlight'
+import { observeGuidance } from '../guidance/observe'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type GuideTaskHandle, type OttoGuide } from '../guidance/guide'
 import type { GuideTaskSpec } from '../guidance/task'
 import type { IdleState } from '../idle'
@@ -251,7 +253,11 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
   // Guidance: the host says what to show; the runner has Otto do it with his own stage, gestures, face and voice.
   const guide = options.guide ?? createOttoGuide()
   cleanups.push(guide.onEvent(e => dispatch('otto:guide', e)))
+  // The ring around what he shows lives in his own shadow root (fixed, so in viewport px like his stage); dispose removes it.
+  const spotlight = createSpotlight({ host: shadow })
+  cleanups.push(() => spotlight.dispose())
   cleanups.push(attachGuide(guide, {
+    highlight: element => spotlight.show(element),
     stage,
     playGesture: name => gestures.play(name),
     face: () => held,
@@ -267,6 +273,9 @@ export function createOtto(container: HTMLElement, options: CreateOttoOptions = 
       return { left: x, right: x, top: 0, bottom: 0 }
     },
   }))
+  // Otto follows what the visitor does: clicks and typing on targets move a guided task on, and notify() events that
+  // name a `help` target may get an offer of help.
+  cleanups.push(observeGuidance(guide, { events, settings: () => config.guidance }))
 
   function setState(next: RobotPose) {
     if (next === pose) return

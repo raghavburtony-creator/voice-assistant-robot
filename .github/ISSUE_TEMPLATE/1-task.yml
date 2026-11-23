@@ -1,0 +1,68 @@
+name: Task
+description: One small, verifiable piece of work (feature, bug, docs or chore) that can land in one pull request.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep it to one pull request. How an issue moves to a merged PR is in [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md). Add one `type:`, one `priority:` and one `difficulty:` label, and pick a milestone if the work is scheduled.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem, and who has it (a visitor, a host developer, a maintainer).
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What this issue changes. Name behaviour, not class names or file layouts, unless the code has been inspected.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this issue deliberately leaves alone, and where that work is tracked instead.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Checkable conditions. Each should name a test, a command or something a reviewer can see.
+      value: |
+        - [ ]
+        - [ ] Tests cover the new behaviour (`server/tests/` or a `*.test.ts`), and existing tests still pass.
+        - [ ] README and docs/README.md routing table updated if behaviour changed.
+    validations:
+      required: true
+  - type: textarea
+    id: read-first
+    attributes:
+      label: Read first
+      description: The decisions (D-xx, Q-xx) and the docs/README.md routing-table row for this work.
+      placeholder: |
+        - docs/decisions.md: D-02, D-16
+        - docs/README.md row: "Guidance by voice"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Blocks / Blocked by
+      description: "Issue numbers. If it waits on a Q-xx, add the `status: needs-decision` label and name the question."
+      value: |
+        - **Blocks:** none
+        - **Blocked by:** none
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent
+      description: The epic this belongs to, as an issue number, or "none".
+      placeholder: "#7"
+    validations:
+      required: true

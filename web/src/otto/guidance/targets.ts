@@ -9,6 +9,8 @@
 //   findGuideTarget('save')  // { element, info } or null
 
 import type { GuideTargetInfo } from './guide'
+import type { GuideTaskSpec } from './task'
+import { isElementHidden, isPrivateElement } from './hidden'
 
 type Entry = { place: Element | string; info?: { label?: string; description?: string } }
 
@@ -52,16 +54,34 @@ export function findGuideTarget(id: string): { element: Element; info: GuideTarg
   return element ? { element, info: infoFor(id, element, entry?.info) } : null
 }
 
-/** Every target: registered first (in order), then marked-up ones, one per id. */
-export function listGuideTargets(): GuideTargetInfo[] {
-  const out = new Map<string, GuideTargetInfo>()
+/** A target as the voice model is told about it: `hidden` (not drawn: Otto can't show it), `disabled` (shown, but it can't be used now). */
+export type ListedGuideTarget = GuideTargetInfo & { hidden?: true; disabled?: true }
+
+const isDisabled = (e: Element) => {
+  try { return e.matches(':disabled') || e.closest('[aria-disabled="true"]') !== null } catch { return false }
+}
+const withState = (info: GuideTargetInfo, e: Element): ListedGuideTarget => {
+  const out: ListedGuideTarget = { ...info }
+  if (isElementHidden(e)) out.hidden = true
+  else if (isDisabled(e)) out.disabled = true
+  return out
+}
+
+/** Every target: registered first (in order), then marked-up ones, one per id, with whether it is hidden or disabled now. */
+export function listGuideTargets(): ListedGuideTarget[] {
+  const out = new Map<string, ListedGuideTarget>()
+  // A target inside a private area is left out: its label would tell the model what is there.
+  const skip = new Set<string>()
   for (const [id, entry] of registry) {
     const element = resolve(entry.place)
-    if (element) out.set(id, infoFor(id, element, entry.info))
+    if (element && isPrivateElement(element)) skip.add(id)
+    else if (element) out.set(id, withState(infoFor(id, element, entry.info), element))
   }
   for (const e of marked()) {
     const id = e.getAttribute(ATTR)
-    if (id && !out.has(id) && e.isConnected) out.set(id, infoFor(id, e))
+    if (!id || out.has(id) || skip.has(id) || !e.isConnected) continue
+    if (isPrivateElement(e)) skip.add(id)
+    else out.set(id, withState(infoFor(id, e), e))
   }
   return [...out.values()]
 }
@@ -70,4 +90,40 @@ export function listGuideTargets(): GuideTargetInfo[] {
 export function onGuideTargetsChange(listener: () => void): () => void {
   listeners.add(listener)
   return () => { listeners.delete(listener) }
+}
+
+/** The ids of every target that contains `node` (innermost first): what the visitor touched. */
+export function guideTargetsAt(node: Node | null): string[] {
+  const element = node instanceof Element ? node : node?.parentElement ?? null
+  if (!element) return []
+  const out: string[] = []
+  for (let e: Element | null = element.closest(`[${ATTR}]`); e; e = e.parentElement?.closest(`[${ATTR}]`) ?? null) {
+    const id = e.getAttribute(ATTR)
+    if (id && !out.includes(id)) out.push(id)
+  }
+  for (const [id, entry] of registry) {
+    const target = resolve(entry.place)
+    if (target?.contains(element) && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+// Guided tasks the page offers, so the voice can start one ("help me with this") by id, like a target.
+const tasks = new Map<string, GuideTaskSpec>()
+const taskListeners = new Set<() => void>()
+
+/** Offers a task to the voice (the model sees its id and title; it can only start tasks listed here). */
+export function registerGuideTask(spec: GuideTaskSpec): () => void {
+  tasks.set(spec.id, spec)
+  taskListeners.forEach(l => l())
+  return () => { if (tasks.get(spec.id) === spec) { tasks.delete(spec.id); taskListeners.forEach(l => l()) } }
+}
+export function findGuideTask(id: string): GuideTaskSpec | null { return tasks.get(id) ?? null }
+/** What the voice model is told: id, title (cleaned, capped) and how many steps. */
+export function listGuideTasks(): { id: string; title: string; steps: number }[] {
+  return [...tasks.values()].map(t => ({ id: t.id, title: clean(t.title, 80), steps: t.steps.length }))
+}
+export function onGuideTasksChange(listener: () => void): () => void {
+  taskListeners.add(listener)
+  return () => { taskListeners.delete(listener) }
 }

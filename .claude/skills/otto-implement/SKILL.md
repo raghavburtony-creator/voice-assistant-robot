@@ -25,7 +25,7 @@ Implement `$ARGUMENTS` for the Otto voice kit. Run the whole pipeline without as
 
 4. **Docs.** If behaviour the README describes, a config key, the protocol, the public API or a decision changed, launch `otto-docs-keeper`.
 
-5. **Verify.** Run the checks in `CLAUDE.md` ("Checks") yourself and report the real numbers. If `server/.venv` or `web/node_modules` is missing, say so instead of claiming a pass.
+5. **Verify.** Run the checks in `AGENTS.md` ("Checks") yourself and report the real numbers. If `server/.venv` or `web/node_modules` is missing, say so instead of claiming a pass.
 
 6. **Commit (only with `--commit`).** If on `main`, create `feat/<short-slug>` first. Stage the changed files by name and commit with a clear message. Never push.
 

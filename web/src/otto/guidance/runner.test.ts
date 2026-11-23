@@ -3,7 +3,7 @@ import { createOttoGuide, MISSING_SAY, type GuideEvent, type GuideSettings } fro
 import { attachGuide, type GuideRunnerDeps } from './runner'
 import { findGuideTarget, listGuideTargets, onGuideTargetsChange, registerGuideTarget } from './targets'
 
-const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: false, approachMinDistance: 0.25, lookSeconds: 2.5 }
+const SETTINGS: GuideSettings = { cooldownMs: 20_000, offerFirst: false, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000, proactiveHelpEnabled: false, frictionCooldownMs: 60_000, stallMs: 20_000 }
 
 type FakeEl = Element & { attrs: Map<string, string> }
 const el = (left: number, attrs: Record<string, string> = {}, text = ''): FakeEl => {
@@ -125,7 +125,49 @@ describe('attachGuide', () => {
     guide.show({ target: 'nope', reason: 'asked' })
     await tick()
     expect(calls).toContain(`say:${MISSING_SAY}`)
-    expect(events).toEqual([{ type: 'missing', target: 'nope' }, { type: 'missing', target: 'nope' }])
+    expect(events).toEqual([{ type: 'missing', target: 'nope', reason: 'not_found' }, { type: 'missing', target: 'nope', reason: 'not_found' }])
+    expect(calls).toContain('gesture:headShake')
+  })
+
+  it('a target that is there but not drawn is missing (hidden): sad, a head shake, no move, no ring', async () => {
+    const menu = el(800)
+    const highlight = vi.fn(() => () => {})
+    const { guide, calls, events } = setup({ menu }, { isHidden: () => true, highlight })
+    guide.show({ target: 'menu', reason: 'asked' })
+    await tick()
+    expect(events).toEqual([{ type: 'missing', target: 'menu', reason: 'hidden' }])
+    expect(calls).toEqual(['face:sad', 'gesture:headShake', `say:${MISSING_SAY}`, 'face:null'])
+    expect(highlight).not.toHaveBeenCalled()
+  })
+
+  it('rings the target for a point, approach or explain, never for an offer or a glance; the ring goes when it ends', async () => {
+    const save = el(800)
+    const off = vi.fn()
+    const highlight = vi.fn(() => off)
+    const { guide, advance } = setup({ save }, { highlight, settings: () => ({ ...SETTINGS, offerFirst: true }) })
+    guide.show({ target: 'save', reason: 'asked', mode: 'point' })
+    await tick()
+    expect(highlight).toHaveBeenCalledTimes(1)
+    expect(off).toHaveBeenCalledTimes(1)
+    for (const importance of ['minor', 'normal'] as const) {
+      advance(SETTINGS.cooldownMs)
+      guide.show({ target: 'save', importance }) // a glance, then an offer
+      await tick()
+    }
+    expect(highlight).toHaveBeenCalledTimes(1)
+  })
+
+  it('a newer command takes the ring away at once', async () => {
+    const save = el(800)
+    const off = vi.fn()
+    let release = () => {}
+    const { guide } = setup({ save }, { highlight: () => off, speak: () => new Promise<void>(r => { release = r }) })
+    guide.show({ target: 'save', reason: 'asked', mode: 'point', say: 'Here.' })
+    await tick()
+    expect(off).not.toHaveBeenCalled()
+    guide.stop()
+    expect(off).toHaveBeenCalledTimes(1)
+    release()
   })
 
   it('honours the app cooldown', async () => {
@@ -164,7 +206,7 @@ describe('attachGuide', () => {
     expect(calls).toContain('say:Then this.')
     t.complete()
     await tick()
-    expect(calls.slice(-4)).toEqual(['face:happy', 'gesture:celebrate', 'say:Nice!', 'face:null'])
+    expect(calls.slice(-4)).toEqual(['face:excited', 'gesture:celebrate', 'say:Nice!', 'face:null'])
 
     calls.length = 0
     guide.startTask({ id: 'u', title: 'U', steps: [{ id: '1', target: 'a', say: 'x' }] })

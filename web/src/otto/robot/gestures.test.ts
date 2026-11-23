@@ -160,7 +160,7 @@ describe('pointing', () => {
   })
 
   it('config has guidance defaults and merges a partial override', () => {
-    expect(DEFAULT_OTTO_CONFIG.guidance).toEqual({ cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5 })
+    expect(DEFAULT_OTTO_CONFIG.guidance).toEqual({ cooldownMs: 20_000, offerFirst: true, approachMinDistance: 0.25, lookSeconds: 2.5, helpAfterFailures: 2, helpWindowMs: 60_000, proactiveHelpEnabled: false, frictionCooldownMs: 60_000, stallMs: 20_000 })
     expect(defineOttoConfig({ guidance: { offerFirst: false } }).guidance).toEqual({ ...DEFAULT_OTTO_CONFIG.guidance, offerFirst: false })
   })
 })
