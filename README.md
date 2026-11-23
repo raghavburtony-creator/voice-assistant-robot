@@ -414,6 +414,8 @@ const { ref, otto, ready } = useOtto()
 - `transport: { type: 'proxy', url: 'wss://…/ws/voice' }`: this repo's server, which holds the key (recommended);
 - `transport: { type: 'live', token }`: Gemini Live directly, with an ephemeral token your server mints per session.
 
+The bridge also ends the visitor's turn itself: a Web Audio RMS meter on the microphone (`vad` option, defaults and notes under `VAD` in `otto.config.ts`) confirms speech after `speechOnsetMs` above `speechThreshold`, ends the turn after `silenceTimeoutMs` of quiet (it stops the mic, sends `mic_off` to the proxy or `audioStreamEnd` to Gemini Live, and Otto starts thinking), cancels back to idle after `noSpeechTimeoutMs` with no speech, and cuts any turn at `maxTurnDurationMs`. The meter is muted while Otto is audible (D-05), and it runs on a timer so a background tab still ends the turn. `vad: false` leaves turn-taking to the server. The main panel (`useVoiceAssistant`) does not use it yet. The lab has a meter and a simulated cutoff.
+
 The Live protocol details (the endpoint, the model id, message field names, audio formats) are marked `[verify]` in `web/src/otto/gemini/transports.ts`, and haven't been checked against a real endpoint yet (Q-01).
 
 **Dependencies:** React is bundled inside the element, so a page needs nothing else; a React app gets a second, isolated copy (`./react` itself bundles none, but the element it loads still has its own). There is no Three.js to share: the robot is one WebGL 2 shader. Before publishing, give `web/package.json` a public name and remove `private`.

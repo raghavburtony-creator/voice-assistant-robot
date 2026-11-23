@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGeminiVoiceBridge, mapEvent, type VoiceBridgeTarget } from './bridge'
+import type { VadHandlers } from './vad'
 import { parseLiveMessage, parseProxyMessage, GEMINI_LIVE_ENDPOINT, type BridgeEvent } from './transports'
 
 // --- fakes -------------------------------------------------------------------------------------------------------------
@@ -9,8 +10,13 @@ vi.mock('../audio', async original => ({
   startRecorder: vi.fn(async (onFrame: (pcm: ArrayBuffer) => void) => {
     const r = { onFrame, stopped: false }
     recorders.push(r)
-    return { stop: () => { r.stopped = true }, setMuted: () => {} }
+    return { stop: () => { r.stopped = true }, setMuted: () => {}, stream: {} as MediaStream }
   }),
+}))
+const detectors: { handlers: VadHandlers; disposed: boolean }[] = []
+vi.mock('./vad', async original => ({
+  ...(await original<typeof import('./vad')>()),
+  VoiceActivityDetector: class { handlers: VadHandlers; disposed = false; constructor(_s: unknown, _o: unknown, handlers: VadHandlers) { this.handlers = handlers; detectors.push(this) } dispose() { this.disposed = true } },
 }))
 
 class FakeNode { connected = true; connect() { return this } disconnect() { this.connected = false } }
@@ -62,7 +68,7 @@ function fakeOtto() {
 }
 
 beforeEach(() => {
-  FakeContext.made = []; FakeSocket.made = []; recorders.length = 0
+  FakeContext.made = []; FakeSocket.made = []; recorders.length = 0; detectors.length = 0
   vi.stubGlobal('AudioContext', FakeContext)
   vi.stubGlobal('WebSocket', FakeSocket)
   vi.stubGlobal('window', new EventTarget())
@@ -275,6 +281,95 @@ describe('createGeminiVoiceBridge', () => {
     await bridge.startMic()
     recorders[0].onFrame(new Int16Array([1, 2]).buffer)
     expect(JSON.parse(ws.sent.at(-1) as string).realtimeInput.audio).toEqual({ data: b64(new Int16Array([1, 2]).buffer), mimeType: 'audio/pcm;rate=16000' })
+    bridge.close()
+  })
+
+  it('vad: the end of speech stops the mic, ends the turn and makes Otto think; no speech goes back to idle', async () => {
+    const { otto, calls } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    expect(detectors).toHaveLength(1)
+    detectors[0].handlers.onSpeechEnd('silence')
+    expect(recorders[0].stopped).toBe(true)
+    expect(detectors[0].disposed).toBe(true)
+    expect(ws.sent.at(-1)).toBe('{"type":"mic_off"}')
+    expect(calls).toContainEqual(['setState', 'thinking'])
+    expect(calls).toContainEqual(['playGesture', 'thinkingHand'])
+    await bridge.startMic()
+    detectors[1].handlers.onNoSpeech()
+    expect(recorders[1].stopped).toBe(true)
+    expect(calls.at(-1)).toEqual(['setState', 'idle'])
+    expect(calls).toContainEqual(['setFace', 'happy'])
+    bridge.close()
+  })
+
+  it('reopens the mic after the reply, but not once the caller muted it or no speech cancelled it', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    detectors[0].handlers.onSpeechEnd('silence')
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve(); await Promise.resolve()
+    expect(recorders).toHaveLength(2)
+    bridge.stopMic()
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve()
+    expect(recorders).toHaveLength(2)
+    await bridge.startMic()
+    detectors.at(-1)!.handlers.onNoSpeech()
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve()
+    expect(recorders).toHaveLength(3)
+    bridge.close()
+  })
+
+  it('a reply that lands before the silence timeout restarts the detector; a failed reopen goes back to idle', async () => {
+    const { otto, calls } = fakeOtto()
+    const errors: Error[] = []
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' }, onError: e => errors.push(e) })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    ws.receive('{"type":"turn_complete"}')
+    expect(detectors).toHaveLength(2)
+    expect(detectors[0].disposed).toBe(true)
+    expect(recorders).toHaveLength(1)
+    detectors[1].handlers.onSpeechEnd('silence')
+    const { startRecorder } = await import('../audio')
+    vi.mocked(startRecorder).mockRejectedValueOnce(new Error('denied'))
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve(); await Promise.resolve()
+    expect(errors[0]?.message).toBe('denied')
+    expect(calls.at(-1)).toEqual(['setState', 'idle'])
+    bridge.close()
+  })
+
+  it('the detector is muted while Otto is audible', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    const { muted } = detectors[0].handlers
+    expect(muted?.()).toBe(false)
+    ws.receive(pcm())
+    expect(muted?.()).toBe(true)
+    bridge.close()
+  })
+
+  it('live: endTurn sends audioStreamEnd', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'live', token: 'auth_tokens/abc' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive(JSON.stringify({ setupComplete: {} })); await done
+    await bridge.startMic()
+    detectors[0].handlers.onSpeechEnd('silence')
+    expect(JSON.parse(ws.sent.at(-1) as string)).toEqual({ realtimeInput: { audioStreamEnd: true } })
     bridge.close()
   })
 

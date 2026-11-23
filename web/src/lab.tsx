@@ -26,6 +26,8 @@ import { findGuideTarget, registerGuideTask } from './otto/guidance/targets'
 import { observeGuidance } from './otto/guidance/observe'
 import { createSpotlight } from './otto/guidance/spotlight'
 import { EmbodiedSandbox } from './lab/EmbodiedSandbox'
+import { VAD } from './otto.config'
+import { VoiceActivityDetector } from './otto/gemini/vad'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
@@ -511,6 +513,8 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
             <div key={band.from}><span ref={el => { meter.current[i] = el }} /><small>{kHz(band.from)}-{kHz(band.to)}</small></div>)}</div>
         </fieldset>
 
+        <VadLab />
+
         <fieldset><legend>Sound</legend>
           <p className="lab-hint">Gestures chirp as they start (SOUND_SETTINGS.gestureCues). Sound starts after your first click.</p>
           <label className="lab-inline"><input type="checkbox" checked={soundOn} onChange={e => setSoundOn(e.target.checked)} /> Sound on</label>
@@ -568,6 +572,58 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
           idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={s => { idleRef.current = s; setIdleState(s) }} idleControls={idle}
           events={events} onReaction={(e, r) => addReaction(describeReaction(e, r))} awarenessRef={knows} />}
   </>
+}
+
+/** Live input level against the VAD threshold, with a simulated turn (tone, then silence) that must be cut off. */
+function VadLab() {
+  const btn = 'otto-btn otto-btn--tonal'
+  const bar = useRef<HTMLSpanElement>(null)
+  const stop = useRef<(() => void) | null>(null)
+  const token = useRef(0) // a new run, Stop or unmount bumps it; a getUserMedia that resolves late checks it
+  const [lines, setLines] = useState<string[]>([])
+  const add = (text: string) => setLines(l => [...l.slice(-7), `${(performance.now() / 1000).toFixed(1)}s ${text}`])
+  useEffect(() => () => { token.current++; stop.current?.() }, [])
+  const run = async (simulated: boolean) => {
+    stop.current?.()
+    const mine = ++token.current
+    const context = new AudioContext()
+    let stream: MediaStream
+    let cleanup = () => {}
+    if (simulated) {
+      // 0.3 s of nothing, 1.5 s of tone, then silence: the detector must report speech, then the cutoff after silenceTimeoutMs.
+      const osc = context.createOscillator(), gain = context.createGain(), dest = context.createMediaStreamDestination()
+      gain.gain.setValueAtTime(0, 0); gain.gain.setValueAtTime(0.3, context.currentTime + 0.3); gain.gain.setValueAtTime(0, context.currentTime + 1.8)
+      osc.connect(gain).connect(dest); osc.start()
+      stream = dest.stream
+      cleanup = () => osc.stop()
+    } else {
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) } catch { add('microphone refused'); void context.close(); return }
+      if (mine !== token.current) { stream.getTracks().forEach(t => t.stop()); void context.close(); return }
+      cleanup = () => stream.getTracks().forEach(t => t.stop())
+    }
+    add(simulated ? 'simulated turn started' : 'listening to the microphone')
+    const detector = new VoiceActivityDetector(stream, VAD, {
+      onLevel: rms => { if (bar.current) bar.current.style.width = `${Math.min(100, rms * 500)}%` },
+      onSpeechStart: () => add('speech confirmed'),
+      onSpeechEnd: reason => { add(`turn ended (${reason})`); end() },
+      onNoSpeech: () => { add('no speech: cancelled'); end() },
+    })
+    const end = () => { detector.dispose(); cleanup(); void context.close(); stop.current = null; if (bar.current) bar.current.style.width = '0' }
+    stop.current = end
+  }
+  return (
+    <fieldset><legend>End-of-turn detection (VAD)</legend>
+      <p className="lab-hint">Level against the threshold ({VAD.speechThreshold}), settings from VAD in otto.config.ts.</p>
+      <div className="lab-meter" aria-hidden="true" style={{ position: 'relative', height: 10, background: 'rgba(128,128,128,.25)' }}>
+        <span ref={bar} style={{ display: 'block', height: '100%', width: 0, background: 'currentColor' }} />
+        <i style={{ position: 'absolute', top: 0, bottom: 0, left: `${VAD.speechThreshold * 500}%`, borderLeft: '2px solid red' }} />
+      </div>
+      <button type="button" className={btn} onClick={() => void run(true)}>Simulate a turn and a silence cutoff</button>
+      <button type="button" className={btn} onClick={() => void run(false)}>Meter my microphone</button>
+      <button type="button" className={btn} onClick={() => { token.current++; stop.current?.() }}>Stop</button>
+      <p role="status" className="lab-hint">{lines.join(' | ')}</p>
+    </fieldset>
+  )
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Lab /></StrictMode>)
