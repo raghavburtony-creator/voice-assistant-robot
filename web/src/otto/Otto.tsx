@@ -16,7 +16,7 @@
 // Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, type PageId } from '../otto.config'
+import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX, type PageId } from '../otto.config'
 import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
@@ -30,7 +30,8 @@ import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
 import { attachGuide } from './guidance/runner'
-import { taskProgress } from './guidance/task'
+import { resumeFrom, savedTask, taskProgress } from './guidance/task'
+import { readStored, writeStoredText } from './storage'
 import { createSpotlight } from './guidance/spotlight'
 import { watchPageContext } from './awareness/collectPage'
 import { toSpoken } from './gemini/channels'
@@ -66,6 +67,9 @@ type Props = {
   /** For the lab: set to the idle lifecycle's controls. */
   idleControls?: { current: IdleControls | null }
 }
+
+/** The running guided task, kept in this tab only (D-20). */
+const GUIDE_TASK_KEY = `${STORAGE_PREFIX}:guide-task`
 
 const WAKE_TEXT: Partial<Record<WakeState, string>> = {
   listening: `Listening for “Hey ${ASSISTANT_NAME}”`,
@@ -190,6 +194,24 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   useEffect(() => {
     const off = ottoGuide.subscribe(command => { if (command.type === 'task') publishContext('guide_task_running', taskProgress(command.event, command.spec)) })
     return () => { off(); publishContext('guide_task_running', null) }
+  }, [ottoGuide])
+  // A running task survives a reload in this tab (D-20): its ids are kept on every step and forgotten when it ends. On
+  // load it resumes only if the page still offers that task with that step; otherwise the entry goes and nothing resumes.
+  useEffect(() => {
+    const off = ottoGuide.subscribe(command => {
+      if (command.type !== 'task') return
+      const keep = savedTask(command.event, Date.now())
+      writeStoredText(GUIDE_TASK_KEY, keep && JSON.stringify(keep), 'session')
+    })
+    // After the first frame, so the page has registered its tasks (a parent's effects run after Otto's).
+    // shortcut: a task registered later than that (a lazy page) is not resumed; listen to onGuideTasksChange if one must be.
+    const frame = requestAnimationFrame(() => {
+      if (ottoGuide.task) return // the host started one itself: its steps are what is kept now
+      const resume = resumeFrom(readStored(GUIDE_TASK_KEY, JSON.parse, null, 'session'), findGuideTask, Date.now())
+      if (!resume) { writeStoredText(GUIDE_TASK_KEY, null, 'session'); return }
+      ottoGuide.startTask(resume.spec, resume.step)
+    })
+    return () => { cancelAnimationFrame(frame); off() }
   }, [ottoGuide])
   // And what the app is busy with (its events.task handles, open and lately ended), so "is my upload done?" gets a real answer.
   useEffect(() => {

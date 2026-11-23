@@ -52,7 +52,7 @@ export type GuideTaskStatus = 'idle' | 'active' | 'done' | 'cancelled'
 export const GUIDE_TASK_MOVES = ['stop', 'back', 'next'] as const
 export type GuideTaskMove = (typeof GUIDE_TASK_MOVES)[number]
 export type GuideTaskEvent =
-  | { type: 'step'; task: string; step: GuideTaskStep; index: number; total: number; via: 'start' | 'next' | 'skip' | 'back' | 'goto' }
+  | { type: 'step'; task: string; step: GuideTaskStep; index: number; total: number; via: 'start' | 'resume' | 'next' | 'skip' | 'back' | 'goto' }
   | { type: 'done'; task: string }
   | { type: 'cancelled'; task: string; reason: 'user' | 'app' | 'replaced' }
 
@@ -62,7 +62,8 @@ export type GuideTask = {
   readonly index: number
   /** The current step while active, else null. */
   readonly step: GuideTaskStep | null
-  start(): GuideTaskEvent[]
+  /** Starts at the first step, or straight at `atStep` (via 'resume': no intro, no first step shown on the way). */
+  start(atStep?: string): GuideTaskEvent[]
   complete(stepId?: string): GuideTaskEvent[]
   back(): GuideTaskEvent[]
   goTo(stepId: string): GuideTaskEvent[]
@@ -81,6 +82,30 @@ const cap = (text: string, max: number) => (text.length > max ? `${text.slice(0,
 export function taskProgress(event: GuideTaskEvent, spec: GuideTaskSpec): GuideTaskProgress | null {
   if (event.type !== 'step') return null
   return { id: spec.id, title: cap(spec.title, PROGRESS_TITLE_CHARS), step: event.index + 1, total: event.total, say: cap(event.step.say, PROGRESS_SAY_CHARS) }
+}
+
+/** The running task as kept across a reload in this tab (D-20): ids and a time only, never words. */
+export type SavedGuideTask = { task: string; step: string; savedAt: number }
+/** A saved task older than this is dropped instead of resumed (D-20: fixed in code, not a config key). */
+export const SAVED_TASK_MAX_AGE_MS = 30 * 60 * 1000
+
+/** What to keep after `event`: the task and step ids on a step, null (forget it) once the task is done or cancelled. */
+export function savedTask(event: GuideTaskEvent, now: number): SavedGuideTask | null {
+  return event.type === 'step' ? { task: event.task, step: event.step.id, savedAt: now } : null
+}
+
+/**
+ * The task to resume from what was kept, or null to drop it: not a saved task, expired (or from the future), the page no
+ * longer offers that task, or the task no longer has that step. Never a guess at the nearest step.
+ */
+export function resumeFrom(saved: unknown, find: (id: string) => GuideTaskSpec | null, now: number): { spec: GuideTaskSpec; step: string } | null {
+  if (typeof saved !== 'object' || saved === null) return null
+  const { task, step, savedAt } = saved as Record<string, unknown>
+  if (typeof task !== 'string' || typeof step !== 'string' || typeof savedAt !== 'number') return null
+  const age = now - savedAt
+  if (!(age >= 0 && age <= SAVED_TASK_MAX_AGE_MS)) return null
+  const spec = find(task)
+  return spec && spec.steps.some(s => s.id === step) ? { spec, step } : null
 }
 
 export function createGuideTask(spec: GuideTaskSpec): GuideTask {
@@ -102,10 +127,11 @@ export function createGuideTask(spec: GuideTaskSpec): GuideTask {
     get status() { return status },
     get index() { return index },
     get step() { return active() ? steps[index] : null },
-    start() {
-      if (status !== 'idle') return []
+    start(atStep) {
+      const j = atStep === undefined ? 0 : ids.indexOf(atStep)
+      if (status !== 'idle' || j < 0) return []
       status = 'active'
-      return go(0, 'start')
+      return go(j, atStep === undefined ? 'start' : 'resume')
     },
     complete(stepId) {
       if (!active()) return []
