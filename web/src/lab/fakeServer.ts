@@ -9,7 +9,8 @@
 //   context(key)  the last context the page sent under `key` (e.g. 'page': the privacy-filtered snapshot the model reads)
 //
 // Typed questions: "show me X" / "where is X" -> a guide action; "card" or "how do I install" -> a show_card action and a
-// one-line spoken answer; anything else -> the stock answer.
+// one-line spoken answer; "where am I?" / "where was I?" / "what's next?" -> the step from the guide_task_running context
+// the page sent, as the model answers it; anything else -> the stock answer.
 
 export type ServerLog = (line: string) => void
 
@@ -121,6 +122,12 @@ export class FakeVoiceServer {
       } else if (ask) {
         const target = text.slice(ask[0].length).trim().toLowerCase().replace(/\s+/g, '-')
         this.later(() => { this.send({ type: 'action', action: 'guide', target }); this.reply(`Here is ${target.replace(/-/g, ' ')}.`) }, 400)
+      } else if (/\bwhere (am|was) i\b|\bwhat'?s next\b/i.test(text)) {
+        // Only what the page reported (taskProgress in guidance/task.ts); nothing running is said, not guessed.
+        const running = this.context('guide_task_running') as { title: string; step: number; total: number; say: string } | null | undefined
+        this.later(() => this.reply(running
+          ? `You're on step ${running.step} of ${running.total} of ${running.title}: ${running.say}`
+          : 'No guided task is running right now.'), 400)
       } else this.later(() => this.reply(), 400)
     }
     else if (message.type === 'stop') socket.close()

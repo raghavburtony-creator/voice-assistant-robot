@@ -306,7 +306,8 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 - run a narrated task;
 - run a task Otto follows: click the cards, or send "saved", "undone" and "left" events;
 - send a failure or attention naming a help target;
-- with the real Otto against the simulated server, have the "voice" start an offered task, or one the page never offered.
+- with the real Otto against the simulated server, have the "voice" start an offered task, or one the page never offered;
+- with the real Otto, type "Where was I?" or "What's next?" to hear the step the page reported (`guide_task_running`), or that no task is running.
 
 Every plan and offer is logged with why.
 
