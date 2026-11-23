@@ -51,6 +51,6 @@ A milestone is a release: a set of issues that ship together and that a visitor 
 | Milestone | What ships |
 |---|---|
 | 0.2 Task-aware Otto, in page | The model knows which guided task is running, where the visitor is in it, and what the app is busy with, within one page session. Nothing new is stored. |
-| 0.3 Task continuity | A guided task survives a reload, within the answer to Q-02. Starts once Q-02 is answered. |
+| 0.3 Task continuity | A guided task survives a reload in the same tab, as D-20 decides. |
 
 Unscheduled work has no milestone. Give it one when it is planned, not when it is filed.

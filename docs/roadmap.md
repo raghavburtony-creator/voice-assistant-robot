@@ -6,7 +6,7 @@ Otto's product epics, how they depend on each other, and what is filed for the f
 
 | Epic | Outcome | Blocked by | Milestones |
 |---|---|---|---|
-| **E1 Task-aware Otto** ([#7](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/7)) | The model knows which guided task is running, which step it is on and what the app is busy with. Later, a task survives a reload. | none (the reload slice waits on Q-02) | 0.2, 0.3 |
+| **E1 Task-aware Otto** ([#7](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/7)) | The model knows which guided task is running, which step it is on and what the app is busy with. Later, a task survives a reload. | none (the reload slice follows D-20) | 0.2, 0.3 |
 | **E2 Continuity across interfaces** ([#8](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/8)) | A task started in one session, device or app can be picked up in another. | E1; Q-03, Q-04, Q-08 | not scheduled |
 | **E3 Multimodal input** ([#9](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/9)) | Otto can take camera or screen input, with consent and a visible indicator. | Q-07 | not scheduled |
 | **E4 Sign-language support** ([#10](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/10)) | A visitor can sign to Otto, and what Otto understands appears as text. | E3; Q-07 | not scheduled |
@@ -40,6 +40,6 @@ What exists already: guided tasks with observed progress (D-16), awareness `task
 |---|---|---|---|
 | **TA-4** ([#16](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/16)) Investigate Q-02: where task state lives, and for how long | question, p2, advanced | none | D-17, Q-02 |
 
-Resuming a task after a reload is filed only once TA-4 has answered Q-02: what can be built depends on the answer.
+Resuming a task after a reload is filed now that TA-4 has answered Q-02 with D-20: within a tab, as ids only.
 
 Milestones are set on GitHub once `.github/workflows/sync-labels.yml` has created them. Until then each issue names its milestone in its first line.
