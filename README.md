@@ -199,6 +199,8 @@ job.succeed('Your image is ready')                                              
 - Each reaction size has a cooldown.
 - A per-minute gesture budget limits how often he gestures.
 
+**What the voice model sees:** `<Otto>` also reports the `events.task(...)` handles under `app_tasks` (`awareness/busy.ts`, pure and tested). `running` lists the handles still open, with id and topic. `ended` lists the last five that finished, newest first, each with its outcome (`succeeded`, `failed` or `complete`) and message. Each list keeps at most five entries, and topics and messages are cut at 160 characters. No other event type is sent. Like all context, it reaches the server only while a conversation is open, so "Is my upload done?" or "Why did it fail?" is answered from what your app reported. Keep task messages free of anything the visitor wouldn't want read back.
+
 **What Otto notices by himself:** the visitor leaving the tab and coming back, the cursor resting on him or a click on him, and page changes in `<Otto>`.
 
 **Your own rules:** `awareness.rules` in the config are functions of the event and what Otto knows. Return a reaction to react differently, for example by `topic`; the limits above still apply. The lab logs every decision with its reasons.

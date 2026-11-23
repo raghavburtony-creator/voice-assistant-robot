@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, type PageId } from '../otto.config'
+import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
 import { OttoConfigProvider, useOttoConfig } from './useOttoConfig'
@@ -182,6 +183,15 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     const off = onGuideTasksChange(publish)
     return () => { off(); publishContext('guide_tasks', null) }
   }, [])
+  // And what the app is busy with (its events.task handles, open and lately ended), so "is my upload done?" gets a real answer.
+  useEffect(() => {
+    let busy = EMPTY_BUSY
+    const off = otto.subscribe(event => {
+      const next = nextBusy(busy, event)
+      if (next !== busy) publishContext('app_tasks', busyContext(busy = next))
+    })
+    return () => { off(); publishContext('app_tasks', null) }
+  }, [otto])
   // While a conversation is open: what the page shows, privacy-filtered and budgeted (awareness/collectPage.ts), and the
   // targets' current state (hidden, disabled), refreshed as the visitor works. Nothing is read or sent otherwise.
   const pageContext = config.pageContext
