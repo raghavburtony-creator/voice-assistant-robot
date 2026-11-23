@@ -7,6 +7,7 @@ import type { GestureName } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
 import type { SoundCue } from '../soundCues'
 import { SpeechPlayer, startRecorder, type Recorder } from '../audio'
+import { DEFAULT_VAD, VoiceActivityDetector, type VadSettings } from './vad'
 import { openTransport, parseLiveMessage, assertNoApiKey, assertSecureProxyUrl, type BridgeEvent, type Transport, type TransportOptions } from './transports'
 
 /** The part of Otto the bridge drives. */
@@ -25,6 +26,10 @@ export type GeminiVoiceBridgeOptions = {
   page?: string
   /** Show the model's words in Otto's bubble. Default true. */
   showText?: boolean
+  /** End-of-turn detection on the microphone; override any part. Pass `false` to leave turn-taking to the server. */
+  vad?: Partial<VadSettings> | false
+  /** Every frame's input level (RMS 0..1) while the detector listens, for a meter. */
+  onLevel?: (rms: number) => void
   onError?: (error: Error) => void
   onState?: (state: BridgeState) => void
 }
@@ -78,6 +83,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   let player: SpeechPlayer | null = null
   let disconnectAudio: (() => void) | null = null
   let recorder: Recorder | null = null
+  let detector: VoiceActivityDetector | null = null
   let micAttempt = 0
   let said = ''
   let settle: { resolve: () => void; reject: (e: Error) => void } | null = null
@@ -105,6 +111,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
 
   const release = () => {
     micAttempt++
+    detector?.dispose(); detector = null
     recorder?.stop(); recorder = null
     const t = transport; transport = null; t?.close()
     disconnectAudio?.(); disconnectAudio = null
@@ -127,7 +134,10 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
         void otto.speakText(said, { durationMs: remainingMs(), mouth: false })
         break
       case 'turnComplete': case 'interrupted':
-        player?.endTurn(); said = ''; break
+        player?.endTurn(); said = ''
+        // The VAD closed the mic at the end of the visitor's turn; reopen it for the next one.
+        if (event.type === 'turnComplete' && options.microphone && !recorder && state === 'open') bridge.startMic().catch(e => options.onError?.(e instanceof Error ? e : new Error(String(e))))
+        break
       case 'error':
         options.onError?.(new Error(event.message))
         settle?.reject(new Error(event.message)); settle = null
@@ -187,10 +197,21 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
       })
       if (attempt !== micAttempt || state === 'closed') { created.stop(); return }
       recorder = created
+      if (options.vad !== false) {
+        const settings = { ...DEFAULT_VAD, ...options.vad }
+        detector = new VoiceActivityDetector(created.stream, settings, {
+          onLevel: options.onLevel,
+          onSpeechStart: () => apply({ do: 'state', state: 'listening' }),
+          // Stop the mic first (the browser's recording light goes off), then tell the model; Otto thinks at once.
+          onSpeechEnd: () => { bridge.stopMic(); transport?.endTurn(); handle({ type: 'thinking' }) },
+          onNoSpeech: () => { bridge.stopMic(); apply({ do: 'face', face: 'happy' }); apply({ do: 'state', state: 'idle' }) },
+        })
+      }
     },
 
     stopMic() {
       micAttempt++
+      detector?.dispose(); detector = null
       recorder?.stop(); recorder = null
     },
 

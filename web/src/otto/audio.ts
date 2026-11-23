@@ -44,7 +44,7 @@ class PcmRecorder extends AudioWorkletProcessor {
 registerProcessor("pcm-recorder", PcmRecorder);
 `;
 
-export type Recorder = { stop: () => void; setMuted: (muted: boolean) => void };
+export type Recorder = { stop: () => void; setMuted: (muted: boolean) => void; /** The live microphone stream, for level meters. */ stream: MediaStream };
 
 /** Peak level of a PCM16 frame, 0 to 1. */
 export function frameLevel(pcm: ArrayBuffer): number {
@@ -84,6 +84,7 @@ export async function startRecorder(onFrame: (pcm: ArrayBuffer) => void): Promis
   source.connect(node).connect(sink).connect(context.destination);
   if (context.state === "suspended") await context.resume();
   return {
+    stream,
     setMuted(next) {
       muted = next;
       stream.getAudioTracks().forEach(track => { track.enabled = !next; });

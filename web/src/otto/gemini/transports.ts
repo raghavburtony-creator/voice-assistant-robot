@@ -21,6 +21,8 @@ export type BridgeEvent =
 export type Transport = {
   sendAudio(pcm: ArrayBuffer): void
   sendText(text: string): void
+  /** The visitor stopped talking: tell the model the audio stream is over so it answers. */
+  endTurn(): void
   close(): void
 }
 
@@ -187,6 +189,11 @@ export function openTransport(options: TransportOptions, start: StartDetails, on
       // [verify] clientContent with one user turn and turnComplete.
       if (live) send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }))
       else send(JSON.stringify({ type: 'text', text }))
+    },
+    endTurn() {
+      // [verify] realtimeInput.audioStreamEnd; the proxy's mic_off makes the server send it (bridge.py audio_end).
+      if (live) send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }))
+      else send(JSON.stringify({ type: 'mic_off' }))
     },
     close() {
       if (closed) return

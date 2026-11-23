@@ -2,6 +2,7 @@
 // PAGES and COMMANDS must match server/app/voice/app_config.py (server/tests/test_voice.py checks it).
 
 import { defineOttoConfig } from './otto/config'
+import type { VadSettings } from './otto/gemini/vad'
 
 export const ASSISTANT_NAME = 'Otto'
 
@@ -82,6 +83,19 @@ export const BARGE_IN = {
   holdMs: 200,
   /** The last frames held back (50 ms each) that are sent once he is cut off, so the first words reach the server. */
   keepFrames: 8,
+}
+
+/**
+ * When the visitor has finished talking (the Gemini adapter's createGeminiVoiceBridge, passed as its `vad` option). The
+ * page meters the microphone: speech counts after `speechOnsetMs` above `speechThreshold` (RMS 0..1), the turn ends after
+ * `silenceTimeoutMs` of quiet, and Otto starts thinking. Raise `speechThreshold` in a noisy room.
+ */
+export const VAD: VadSettings = {
+  speechThreshold: 0.02,
+  speechOnsetMs: 180,
+  silenceTimeoutMs: 1000,
+  noSpeechTimeoutMs: 6000,
+  maxTurnDurationMs: 30_000,
 }
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */
