@@ -1,0 +1,68 @@
+name: Architecture question
+description: Investigate an open question (Q-xx in docs/decisions.md) and propose a decision (D-xx).
+labels: ["type: question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A new question first gets a row in the table at the end of [docs/decisions.md](../blob/main/docs/decisions.md), with the next free Q number. This issue is the investigation. It closes when a PR adds the answering `D-xx`, or when the row is marked `dropped`.
+  - type: input
+    id: question-id
+    attributes:
+      label: Question ID
+      placeholder: Q-02
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What can't be built, or would be built on a guess, until this is answered.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: The options to compare, and the evidence to gather (code to read, a spike, a measurement).
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Usually the implementation. That is a separate task, blocked by this issue.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      value: |
+        - [ ] A PR adds the answering D-xx (Decision, Why, Where) or marks the question `dropped`, with the reason.
+        - [ ] The Q-xx row and the index in docs/decisions.md show the new status.
+        - [ ] Issues labelled `status: needs-decision` for this question are unblocked or updated.
+    validations:
+      required: true
+  - type: textarea
+    id: read-first
+    attributes:
+      label: Read first
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Blocks / Blocked by
+      value: |
+        - **Blocks:** none
+        - **Blocked by:** none
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent
+      description: The epic this unblocks, or "none".
+    validations:
+      required: true

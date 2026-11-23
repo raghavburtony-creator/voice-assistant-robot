@@ -1,0 +1,4 @@
+[
+  { "title": "0.2 Task-aware Otto, in page", "description": "The model knows which guided task is running, where the visitor is in it, and what the app is busy with, within one page session. Nothing new is stored." },
+  { "title": "0.3 Task continuity", "description": "A guided task survives a reload, within the answer to Q-02. Starts once Q-02 is answered." }
+]
