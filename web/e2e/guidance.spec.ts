@@ -94,4 +94,3 @@ test('the model hears which task is running and which step, only while a convers
   await page.getByRole('button', { name: 'App: visitor left' }).click()
   await expect(async () => { await ask.click(); await expect(server.locator('li').first()).toHaveText(/running task: null/) }).toPass()
 })
-

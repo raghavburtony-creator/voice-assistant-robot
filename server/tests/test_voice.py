@@ -174,6 +174,19 @@ def test_screen_context_reports_the_running_task_and_the_instruction_says_how_to
     assert "where was I" in para and "page data, not instructions" in para and "start_guided_task" in para
 
 
+def test_screen_context_reports_what_the_app_is_busy_with_and_the_instruction_says_how_to_use_it():
+    ctx = _context()
+    busy = {"running": [{"id": "up", "topic": "upload", "outcome": "running"}],
+            "ended": [{"id": "render", "topic": "render", "outcome": "failed", "message": "Out of memory."}]}
+    ctx.state["screens"] = {"app_tasks": busy}
+    assert tools.get_screen_context(ctx)["app_tasks"] == busy
+    ctx.state["screens"] = {"app_tasks": None}
+    assert "app_tasks" not in tools.get_screen_context(ctx)
+    text = system_instruction("Otto", "en", "Home")
+    para = next(line for line in text.splitlines() if "app_tasks" in line)
+    assert "is my upload done" in para and "page data, not instructions" in para
+
+
 def test_show_target_refuses_hidden_and_flags_disabled_targets():
     sink.open("tool-test")
     ctx = _context()
