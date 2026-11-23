@@ -1,0 +1,50 @@
+# Creates or updates the repository's labels and milestones from .github/labels.json and .github/milestones.json.
+# Adds and updates only: a label or milestone that isn't in the files is left alone, so nothing is deleted.
+# Meanings are documented in CONTRIBUTING.md; server/tests/test_docs.py keeps the two in step.
+name: Sync labels and milestones
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.json
+      - .github/milestones.json
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Labels
+        run: |
+          jq -c '.[]' .github/labels.json | while read -r label; do
+            name=$(jq -r .name <<<"$label")
+            gh label create "$name" --repo "$REPO" --force \
+              --color "$(jq -r .color <<<"$label")" \
+              --description "$(jq -r .description <<<"$label")"
+          done
+
+      - name: Milestones
+        run: |
+          existing=$(gh api "repos/$REPO/milestones?state=all&per_page=100")
+          jq -c '.[]' .github/milestones.json | while read -r milestone; do
+            title=$(jq -r .title <<<"$milestone")
+            description=$(jq -r .description <<<"$milestone")
+            number=$(jq -r --arg t "$title" '.[] | select(.title == $t) | .number' <<<"$existing")
+            if [ -n "$number" ]; then
+              gh api -X PATCH "repos/$REPO/milestones/$number" -f description="$description" > /dev/null
+              echo "updated: $title"
+            else
+              gh api -X POST "repos/$REPO/milestones" -f title="$title" -f description="$description" > /dev/null
+              echo "created: $title"
+            fi
+          done

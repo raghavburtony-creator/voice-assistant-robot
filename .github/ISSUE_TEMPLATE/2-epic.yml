@@ -1,0 +1,59 @@
+name: Epic
+description: A product capability made of several tasks. Holds the outcome and the dependencies, not the code.
+labels: ["type: epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An epic lists its tasks as sub-issues. Break it down one slice at a time: file tasks for the next slice only, once its prerequisites and open questions are known. See [docs/roadmap.md](../blob/main/docs/roadmap.md) and [docs/architecture.md](../blob/main/docs/architecture.md).
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The outcome for visitors or host developers, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: The capability, and which existing parts it builds on (docs/architecture.md, "Target").
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: The outcome that closes the epic. Usually "every sub-issue is closed" plus a visible check.
+    validations:
+      required: true
+  - type: textarea
+    id: read-first
+    attributes:
+      label: Read first
+      description: Decisions and open questions (D-xx, Q-xx) this capability touches.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Blocks / Blocked by
+      description: Other epics and Q-xx questions.
+      value: |
+        - **Blocks:** none
+        - **Blocked by:** none
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent
+      description: The roadmap issue, or "none".
+    validations:
+      required: true

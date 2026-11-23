@@ -6,6 +6,8 @@ A starter kit for adding **Otto**, a clay robot voice guide, to a web app. You t
 - **Web** (`web/`): React, TypeScript and Vite. The robot, the voice panel, "Hey Otto", consent, push-to-talk or open mic, a text fallback.
 - **Server** (`server/`): FastAPI and Google ADK. It holds the Gemini session and the API key, and runs Otto's tools.
 
+Where the project is going, and how to work on it: [docs/architecture.md](docs/architecture.md) (today's pipeline and the target), [docs/roadmap.md](docs/roadmap.md) (the epics), [docs/decisions.md](docs/decisions.md) (decisions and open questions, with an index), and [CONTRIBUTING.md](CONTRIBUTING.md) (issue templates, labels, milestones, and the path from issue to merged PR).
+
 ## Run it
 
 You need Node.js 22 or newer, Python 3.11 or newer, and a Gemini API key (https://aistudio.google.com/apikey).

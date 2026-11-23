@@ -35,7 +35,10 @@ Project: **Otto voice kit**, a starter kit that adds Otto, a clay robot voice gu
 | [docs/decisions.md](docs/decisions.md) | **Wins over every other doc** where it states a decision (`D-xx`) or leaves one open (`Q-xx`). |
 | [README.md](README.md) | Source of truth for behaviour: how Otto works, the config surface, the `<otto-mascot>` API. |
 | [docs/README.md](docs/README.md) | The routing table: what to load for a task. Load only the rows your task needs. |
+| [docs/architecture.md](docs/architecture.md), [docs/roadmap.md](docs/roadmap.md) | How the parts fit together today and in the target, and the epics. They describe; they don't decide. |
 | Code comments | Explain why a line is the way it is. They lose to the docs above when they disagree. |
+
+Work is tracked as GitHub issues made from `.github/ISSUE_TEMPLATE/` (Task, Epic, Architecture question). How an issue becomes a reviewed PR, and what the labels and milestones mean, is in [CONTRIBUTING.md](CONTRIBUTING.md). Read an issue's *Read first* and *Blocked by* before you start. If it carries `status: needs-decision`, stop and report: the open `Q-xx` is the owner's to answer, not yours (D-19).
 
 If two docs disagree and `docs/decisions.md` is silent, follow the order above, add a `Q-` entry describing the conflict, and continue. Never pick silently.
 
@@ -61,7 +64,9 @@ web/             React 19 + TypeScript + Vite
   preview/             the <otto-mascot> playground
   e2e/                 Playwright browser tests (lab, mascot, guidance)
   scripts/             check-dist.mjs: proves the library's entry points stay separate
-docs/            routing table and decisions
+docs/            routing table, decisions (with index), architecture, roadmap
+.github/         issue templates, labels.json, milestones.json, the label sync workflow
+CONTRIBUTING.md  issue-to-PR workflow, label and milestone meanings
 ```
 
 ### Rules for code
@@ -184,7 +189,8 @@ Report only high-signal problems: bugs, security holes, broken contracts. For ea
   - blocking calls inside async handlers.
 - **Accessibility (D-06, D-07).** The robot must stay `aria-hidden`, and everything Otto says or does must also appear as text in the panel. Under reduced motion the body and walking stop and the mouth still moves.
 - **Vendored robot (D-10).** A change to `clay-robot.tsx` without an `Otto:` comment.
-- **Docs drift.** Behaviour changes need the matching README section, the routing row in `docs/README.md` and, if a decision changed, `docs/decisions.md`. Decision numbers must not collide.
+- **Docs drift.** Behaviour changes need the matching README section, the routing row in `docs/README.md` and, if a decision changed, `docs/decisions.md` (its section and its index row). Decision numbers must not collide. `server/tests/test_docs.py` checks the numbering, the index, and that labels and milestones match CONTRIBUTING.md.
+- **Parallel systems (D-19).** Flag a new capability that adds its own channel to the model, its own action path past `tools.py` and `toAssistantAction`, its own task state beside `guidance/task.ts`, or its own event bus beside `createOttoEvents`.
 - **Tests.** New behaviour needs a `*.test.ts` or `server/tests/` case. Flag a test that was weakened, skipped or deleted to get green.
 
 ### Do Not Flag (Ignore)

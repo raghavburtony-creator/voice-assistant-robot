@@ -6,10 +6,47 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-19**, **Q-02**. Before using one, check `main` and the open PRs (`gh pr list`) for the same number.
+- Take the next free number. Next free: **D-20**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
-- An open question is a row in the table at the end: ID, question, owner, status (`open`, `answered by D-xx`, `dropped`).
+- A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
+- An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
+- Answer a question with a new decision. Set the question's status to `answered by D-xx`, and leave the row.
 - When a decision changes behaviour, update the root `README.md` and the routing table in [README.md](README.md) in the same commit.
+- [architecture.md](architecture.md) describes how the decisions fit together. It doesn't make decisions.
+
+## Index
+
+| ID | Title | Area | Status |
+|---|---|---|---|
+| D-01 | The Gemini key stays on the server | security | current |
+| D-02 | Every action is checked twice | security | current |
+| D-03 | Pages and commands are listed in both configs | contracts | current |
+| D-04 | Sessions are capped in length and number | cost | current |
+| D-05 | The microphone is silent while Otto is audible | voice | current |
+| D-06 | The robot is decorative | accessibility | current |
+| D-07 | Reduced motion stops the body, not the mouth | accessibility | current |
+| D-08 | "Hey Otto" is off until the visitor turns it on | privacy | current |
+| D-09 | CORS lists explicit origins | security | current |
+| D-10 | The clay robot is vendored, with marked changes | robot | current |
+| D-11 | Sound is synthesised and waits for a gesture | sound | current |
+| D-12 | One shader, no 3D library | robot | current |
+| D-13 | The web kit has two layers, and the dependency points inward | layers | current |
+| D-14 | Guidance: the host says what, Otto decides how | guidance | current |
+| D-15 | Adapters are optional subpaths | packaging | current |
+| D-16 | Otto sees task progress and offers help himself; the voice can start offered tasks | guidance | current |
+| D-17 | The page snapshot is privacy-filtered, budgeted and sent only while talking | privacy | current |
+| D-18 | Two channels: the voice speaks plainly, cards carry what must be read | channels | current |
+| D-19 | New capabilities extend the existing pipeline | architecture | current |
+| Q-01 | Is the Gemini Live wire format right? | voice | open |
+| Q-02 | Where does task state live, and for how long? | tasks | open |
+| Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
+| Q-04 | Is runtime authority a chain, or one component? | architecture | open |
+| Q-05 | How are the server's layers enforced? | layers | open |
+| Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
+| Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | open |
+| Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | open |
+
+The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
 
 ## D-01 The Gemini key stays on the server
 
@@ -140,8 +177,27 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 **Why:** A native-audio model's speech can't be filtered after it is generated; it has to be asked not to say these things, and given somewhere else to put them. A link or HTML from the model would be untrusted output used as a URL or markup (D-02). A model that can't see the screen can't know a step is done.
 **Where:** `show_card` in `server/app/voice/tools.py`, `system_instruction` in `app_config.py`, tests `test_show_card_checks_and_caps_what_the_model_sends` and `test_instruction_keeps_urls_and_code_out_of_speech`; `web/src/otto/messages.ts`, `VoiceAssistant.tsx` (`VoiceCard`), `web/src/otto/gemini/channels.ts`, `prompt.ts`, `bridge.ts`; README, "Embodied assistance".
 
+## D-19 New capabilities extend the existing pipeline
+
+**Decision:** A new capability (task awareness, continuity, cross-application, multimodal input, sign language, environmental intelligence, spatial presence) attaches to the parts that exist. It does not run beside them:
+- Model actions go through a checked tool in `tools.py` and through `toAssistantAction` (D-02). Widening what the model can do means a list the page reports, not a free-form string.
+- What the model learns about the page goes through the context channel (`publishContext` and the session's `screens`), within a budget. Nothing opens a second channel.
+- New rules are core modules with tests, and their adapters are shell (D-13). Task state belongs to the guide (`guidance/task.ts`), and app events to `createOttoEvents`.
+- Everything Otto shows, says or signs is also text in the panel (D-06), and every new input keeps the privacy exclusions of D-17.
+- Runtime authority is the chain in [architecture.md](architecture.md#who-decides-at-runtime): the model proposes, the server checks, the browser checks, the host executes, Otto decides how. Engineering agents have no runtime or architectural authority. They work within this log and a person reviews their pull requests.
+
+**Why:** The checks in D-02, D-14, D-16 and D-17 hold only if every path goes through them. A parallel system for a new capability would need the same checks again, and would drift from them. The owner set this rule in issue #6.
+**Where:** [architecture.md](architecture.md); enforced by the existing tests for D-02, D-13 and D-17 (`server/tests/test_voice.py`, `web/src/otto/layers.test.ts`, `web/src/otto/messages.test.ts`, `web/src/otto/awareness/collectPage.test.ts`) and by review (AGENTS.md, "Review guidelines").
+
 ## Open questions
 
-| ID | Question | Owner | Status |
-|---|---|---|---|
-| Q-01 | Is the Gemini Live wire format in `web/src/otto/gemini/transports.ts` right? Every `[verify]` item there (the ephemeral-token endpoint, the model id, message field names, audio formats, the setup message) has to be checked against a real Live endpoint and the pinned `google-genai`. | unassigned | open |
+| ID | Question | Blocks | Owner | Status |
+|---|---|---|---|---|
+| Q-01 | Is the Gemini Live wire format in `web/src/otto/gemini/transports.ts` right? Every `[verify]` item there (the ephemeral-token endpoint, the model id, message field names, audio formats, the setup message) has to be checked against a real Live endpoint and the pinned `google-genai`. | `otto-mascot/gemini` in production | unassigned | open |
+| Q-02 | Where does task state live, and for how long? Today a guided task lives in the browser's memory (`createOttoGuide`): a reload ends it, and the server keeps nothing after a session (`InMemorySessionService`, deleted on close). Options: memory only; `sessionStorage` (survives a reload in this tab); `localStorage` (survives closing the tab); on the server. Each step out widens what is stored about the visitor (D-17). | Task continuity (reload, new session); investigated in #16 | unassigned | open |
+| Q-03 | Who is the visitor, across sessions and interfaces? The server uses one fixed `USER_ID = "visitor"` (`bridge.py`). Continuity across devices or apps needs an identity the kit doesn't have, supplied by the host and never invented by the kit, along with a consent and retention rule. | Task continuity across interfaces, cross-application | unassigned | open |
+| Q-04 | Issue #6 calls Otto's orchestrator the runtime authority, but no such module exists: authority is the chain in architecture.md (D-19). Keep the chain as the definition, or introduce one component that owns it? A component would be a new layer every action passes, so it needs a reason beyond naming. | Nothing yet; decide before cross-application | unassigned | open |
+| Q-05 | How are the server's layers enforced? D-13 covers `web/src/otto/` only. A test like `layers.test.ts` for `server/app/voice/` (`tools.py` and `app_config.py` must not import FastAPI or ADK transport code) would make D-19 checkable there. | Any server change that adds a module | unassigned | open |
+| Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? Reuse the pure robot state (`robot/robot.ts`, gestures, movement) with a second renderer, or amend D-12? | Spatial / AR epic | unassigned | open |
+| Q-07 | What consent and privacy rules apply to camera and screen input (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads. A video frame can't be filtered that way, so it needs its own rule: when capture runs, what is sent, what is never kept, and how the visitor sees that it is on (as with D-08). | Multimodal, sign language, environmental intelligence | unassigned | open |
+| Q-08 | How are pages and commands allowed when they aren't known at build time? D-03 needs static `Literal`s. Cross-application work would need lists the page reports at runtime (as `show_target` does, D-14), which loses the build-time parity test. | Cross-application | unassigned | open |

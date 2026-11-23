@@ -8,7 +8,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 
 | Task | Decisions | README sections | Files |
 |---|---|---|---|
-| Get oriented | all (one page) | "How it works", "Using it in a new project" | `AGENTS.md` |
+| Get oriented | all (the index in decisions.md) | "How it works", "Using it in a new project" | `AGENTS.md`, [architecture.md](architecture.md) |
 | Add a page or a command | D-02, D-03 | "Using it in a new project" | `web/src/otto.config.ts`, `server/app/voice/app_config.py`, `server/app/voice/tools.py`, `server/tests/test_voice.py` |
 | Add a tool | D-02, D-03 | "Adding a tool" | `server/app/voice/tools.py`, `sink.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `App.tsx` `onAction` |
 | Change the wire protocol (a message type) | D-02, D-04 | "How it works" | `server/app/voice/bridge.py`, `route.py`, `web/src/otto/messages.ts`, `web/src/otto/useVoiceAssistant.ts`, `web/src/lab/fakeServer.ts` |
@@ -37,7 +37,9 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | The lab | | "Run it", "Embodied assistance: page context, cards, friction" (sandbox) | `web/src/lab.tsx`, `web/src/lab/` |
 | Tests | | "Run it" (checks) | `server/tests/`, `web/src/**/*.test.ts` |
 | Browser tests (Playwright) | | "Run it" (checks) | `web/e2e/`, `web/playwright.config.ts` |
-| Record or change a decision | the one concerned | | [decisions.md](decisions.md) ("Rules for entries") |
+| Record or change a decision, or add an open question | the one concerned | | [decisions.md](decisions.md) ("Rules for entries", "Index"), `server/tests/test_docs.py` |
+| Plan a new capability, or check how one fits | D-19, and the Q-xx it touches | | [architecture.md](architecture.md), [roadmap.md](roadmap.md) |
+| File or triage an issue: templates, labels, milestones, the issue-to-PR workflow | D-19 | | [CONTRIBUTING.md](../CONTRIBUTING.md), `.github/ISSUE_TEMPLATE/`, `.github/labels.json`, `.github/milestones.json`, `.github/workflows/sync-labels.yml`, `server/tests/test_docs.py` |
 
 ## Editing rules
 
