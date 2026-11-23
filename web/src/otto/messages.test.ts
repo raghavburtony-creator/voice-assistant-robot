@@ -27,6 +27,15 @@ describe('task actions', () => {
   })
 })
 
+describe('task moves', () => {
+  it('pass only stop, back or next, checked again in the browser', () => {
+    const m = parseServerMessage('{"type":"action","action":"task_move","move":"back"}')
+    expect(m).toMatchObject({ type: 'action', action: 'task_move', move: 'back' })
+    for (const move of ['stop', 'back', 'next'] as const) expect(toAssistantAction({ action: 'task_move', move })).toEqual({ action: 'task_move', move })
+    for (const move of ['skip', 'goto', 'STOP', '', 3, null, undefined]) expect(toAssistantAction({ action: 'task_move', move })).toBeNull()
+  })
+})
+
 describe('card actions', () => {
   it('pass the schema and come out as plain, capped text', () => {
     const m = parseServerMessage(JSON.stringify({ type: 'action', action: 'card', card: { title: 'Steps', body: 'One.' } }))

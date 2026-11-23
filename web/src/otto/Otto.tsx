@@ -100,6 +100,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     if (action.action === 'guide') ottoGuide.show({ target: action.target, reason: 'asked', say: null })
     // A voice 'task' action (checked against the page's offered tasks): Otto walks the visitor through it, step by step.
     if (action.action === 'task') { const spec = findGuideTask(action.task); if (spec) ottoGuide.startTask(spec) }
+    // A voice 'task_move' (checked against the fixed moves): stop the running task, or go back or on a step.
+    if (action.action === 'task_move') ottoGuide.move(action.move)
     onAction(action)
   }, [ottoGuide, onAction])
   const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })

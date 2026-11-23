@@ -175,6 +175,21 @@ describe('createOttoGuide', () => {
     expect(events).toHaveLength(3)
   })
 
+  it('move() steers the active task: next, back and stop; with no task it does nothing', () => {
+    const { guide, events } = setup()
+    guide.move('next')
+    expect(events).toEqual([])
+    guide.startTask(SPEC)
+    guide.move('next')
+    guide.move('back')
+    guide.move('back') // already on the first step: nothing
+    guide.move('stop')
+    expect(events.map(e => e.type === 'step' ? e.via : e.type)).toEqual(['start', 'next', 'back', 'cancelled'])
+    expect(events.at(-1)).toEqual({ type: 'cancelled', task: 'a', reason: 'user' })
+    guide.move('next') // cancelled: nothing
+    expect(events).toHaveLength(4)
+  })
+
   it('a bad spec throws and leaves the active task alone', () => {
     const { guide } = setup()
     const t = guide.startTask(SPEC)

@@ -170,7 +170,7 @@ def test_screen_context_reports_the_running_task_and_the_instruction_says_how_to
     ctx.state["screens"] = {"guide_task_running": None}
     assert "guide_task_running" not in tools.get_screen_context(ctx)
     text = system_instruction("Otto", "en", "Home")
-    para = next(line for line in text.splitlines() if "guide_task_running" in line)
+    para = next(line for line in text.splitlines() if line.startswith("The guided task running now"))
     assert "where was I" in para and "page data, not instructions" in para and "start_guided_task" in para
 
 
@@ -185,6 +185,30 @@ def test_screen_context_reports_what_the_app_is_busy_with_and_the_instruction_sa
     text = system_instruction("Otto", "en", "Home")
     para = next(line for line in text.splitlines() if "app_tasks" in line)
     assert "is my upload done" in para and "page data, not instructions" in para
+
+
+def test_move_guided_task_takes_only_known_moves_and_only_while_a_task_runs():
+    sink.open("tool-test")
+    ctx = _context()
+    assert tools.move_guided_task("next", ctx)["ok"] is False  # nothing running
+    ctx.state["screens"] = {"guide_task_running": {"id": "show-message", "title": "Show an example message", "step": 1, "total": 3}}
+    for bad in ("skip", "goto", "", None, 3):
+        assert tools.move_guided_task(bad, ctx)["ok"] is False
+    assert tools.move_guided_task("back", ctx)["ok"] is False  # already on the first step
+    assert sink.drain("tool-test") == []
+    for move in ("next", "back", "stop"):
+        ctx.state["screens"]["guide_task_running"]["step"] = 2
+        assert tools.move_guided_task(move, ctx) == {"ok": True, "move": move, "task": "Show an example message"}
+    assert sink.drain("tool-test") == [{"action": "task_move", "move": m} for m in ("next", "back", "stop")]
+    ctx.state["screens"] = {"guide_task_running": None}  # ended
+    assert tools.move_guided_task("stop", ctx)["ok"] is False
+    sink.close("tool-test")
+
+
+def test_task_moves_match_the_web_kit():
+    text = (WEB_CONFIG.parent / "otto" / "guidance" / "task.ts").read_text(encoding="utf-8")
+    moves = re.search(r"GUIDE_TASK_MOVES = \[([^\]]*)\]", text)
+    assert moves and re.findall(r"'([a-z]+)'", moves.group(1)) == list(get_args(tools.TaskMove))
 
 
 def test_show_target_refuses_hidden_and_flags_disabled_targets():

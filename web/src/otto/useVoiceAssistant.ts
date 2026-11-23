@@ -12,6 +12,7 @@ import {
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
 import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES } from '../otto.config'
+import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
 
@@ -23,6 +24,8 @@ export type TranscriptEntry = { id: number; role: 'user' | 'assistant'; text: st
 /** One thing Otto did, in plain words, and the action that takes it back (null when nothing can). */
 export type ActionRecord = { id: number; label: string; inverse: AssistantAction | null }
 
+const TASK_MOVE_LABELS: Record<GuideTaskMove, string> = { stop: 'Stopped the task', back: 'Went back a step', next: 'Moved on a step' }
+
 /** The words and the undo for an action. `before` is the page that was showing. Add a case for each new kind of action. */
 function describeAction(action: AssistantAction, before: string): { label: string; inverse: AssistantAction | null } {
   if (action.action === 'navigate') {
@@ -32,6 +35,7 @@ function describeAction(action: AssistantAction, before: string): { label: strin
   }
   if (action.action === 'guide') return { label: `Showed you: ${findGuideTarget(action.target)?.info.label ?? action.target}`, inverse: null }
   if (action.action === 'task') return { label: `Started: ${findGuideTask(action.task)?.title ?? action.task}`, inverse: null }
+  if (action.action === 'task_move') return { label: TASK_MOVE_LABELS[action.move], inverse: null }
   if (action.action === 'card') return { label: `Put a card in the panel: ${action.card.title}`, inverse: null }
   return { label: COMMAND_LABELS[action.name], inverse: null }
 }
