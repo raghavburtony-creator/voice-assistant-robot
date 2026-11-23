@@ -542,6 +542,7 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.bargeIn()) addServer('Otto is not speaking') }}>Barge in (the server hears you)</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: FOLLOW_TASK.id })) addServer('not connected') }}>Voice: start the followed task</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.action({ action: 'task', task: 'not-offered' })) addServer('not connected') }}>Voice: start a task the page never offered</button>
+            <button type="button" className={btn} disabled={!full} onClick={() => addServer(`app tasks: ${JSON.stringify(server.context('app_tasks') ?? null)}`)}>What the server knows of the app's tasks</button>
           </div>
           <p className="lab-hint">To cut Otto off from this page instead, use the panel's Stop talking while he talks.</p>
         </fieldset>

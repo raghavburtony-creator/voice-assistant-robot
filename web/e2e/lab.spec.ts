@@ -31,3 +31,29 @@ test('barge-in stops Otto mid-speech and the server log records it', async ({ pa
   await expect(log).not.toContainText('Otto is not speaking')
   await expect(log).not.toContainText('turn_complete') // it was cut off, not finished
 })
+
+test('the model hears what the app is busy with, only while a conversation is open', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  const ask = page.getByRole('button', { name: "What the server knows of the app's tasks" })
+  const newest = page.locator('#lab-server + ol li').first()
+  // No conversation yet: a task that runs and ends stays in the browser.
+  await page.getByRole('button', { name: 'A 1 s task, then success' }).click()
+  await page.waitForTimeout(1200)
+  await ask.click()
+  await expect(newest).toHaveText(/app tasks: null$/)
+
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+  // Opening the conversation sends what the browser already knew: that task, ended.
+  await expect(async () => { await ask.click(); await expect(newest).toHaveText(/"outcome":"succeeded".*"message":"The lab task finished."/, { timeout: 250 }) }).toPass()
+  // A task that is still running, then fails (sends are debounced, so poll).
+  await page.getByRole('button', { name: 'A 3 s task, then failure' }).click()
+  await expect(async () => { await ask.click(); await expect(newest).toContainText('"outcome":"running"', { timeout: 250 }) }).toPass()
+  await expect(async () => { await ask.click(); await expect(newest).toHaveText(/"outcome":"failed".*"message":"The lab task failed."/, { timeout: 250 }) }).toPass({ timeout: 8000 })
+  await expect(newest).toContainText('"running":[]')
+})
+
