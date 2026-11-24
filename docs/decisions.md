@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-23**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-24**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -20,7 +20,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 |---|---|---|---|
 | D-01 | The Gemini key stays on the server | security | current |
 | D-02 | Every action is checked twice | security | current |
-| D-03 | Pages and commands are listed in both configs | contracts | current |
+| D-03 | Pages and commands are listed in both configs | contracts | amended by D-23 |
 | D-04 | Sessions are capped in length and number | cost | current |
 | D-05 | The microphone is silent while Otto is audible | voice | current |
 | D-06 | The robot is decorative | accessibility | current |
@@ -40,6 +40,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-20 | A running task survives a reload in the same tab, as ids only | tasks | current |
 | D-21 | Camera and screen are sent only while the visitor shares them, as still frames, and never kept | privacy | current |
 | D-22 | Runtime authority is a chain of checks, not one component | architecture | current |
+| D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
@@ -47,7 +48,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | Q-05 | How are the server's layers enforced? | layers | open |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
-| Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | open |
+| Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
 
@@ -248,6 +249,31 @@ This applies to every camera, screen or surroundings input: multimodal input, si
 A single component couldn't replace the two checks, because they sit on two machines that don't trust each other (D-02). So it would be a third place to keep in step, with no check of its own to run. That is the parallel system D-19 rules out.
 **Where:** [architecture.md](architecture.md#who-decides-at-runtime). The checks are in `server/app/voice/tools.py`, `sink.py` and `web/src/otto/messages.ts`. Otto's own actions are carried out by `handleAction` in `web/src/otto/Otto.tsx`. The adapter drops actions at `web/src/otto/gemini/transports.ts`, tested in `bridge.test.ts`. The test `test_action_kinds_match_on_both_ends` is in `server/tests/test_voice.py`. The existing tests for D-02, D-08, D-18 and D-21 cover the rest.
 
+## D-23 What the page may report at runtime, and what the deployment must register
+
+This amends D-03. Commands stay as D-03 says. Pages may also be reported at runtime.
+
+**Decision:**
+- **The line is who authorises the act.** Some acts only show the visitor something or move them, and the visitor does any real step themselves. For these, the page's own report is enough authority. That covers pointing (`show_target`), guided tasks (`start_guided_task`) and moving to a page or view the page offers. Every other act changes the app's data or state, or can't be undone from the panel: a `run_command`, or any later tool that sends, buys, saves or deletes. For these, the deployment must register the act itself, because the page is not trusted to grant it.
+- **What may be reported at runtime.** Targets, guided tasks and destinations (pages or views to move to). The page reports each under a context key through `publishContext` (D-19), as ids with page-data labels, inside the context budget. A destination is an id. The host maps it to a route in its own `onAction`. A URL or a route is never reported to the model or accepted from it (D-02). The app's own static pages (`PAGES`, D-03) stay as they are, and `explain_page` stays limited to them: its text is the deployment's, and a reported destination's label is page data.
+- **What must be registered.** Commands. They stay static `Literal`s, listed in `app_config.py`, in `otto.config.ts` and in `tools.py`, and the parity test checks them (D-03). A deployment that serves several apps registers each app's commands on its server. No list from the page, from another app or from the model adds a command.
+- **How a runtime list is checked.**
+  - The server accepts an id only if it is in the list this session's page reported, and only if it fits the id rule below. The browser accepts it only if its own live registry still has it (`findGuideTarget`, `findGuideTask`). It does not trust the list it sent.
+  - A list is valid only for the session and the page that reported it. It is never kept on the server after the session. An id from one app is never valid in another. A saved id is checked against the registry again before use (D-20).
+  - The model can't add to a list. Labels, titles and descriptions are page data, not instructions (D-14, D-17).
+- **The id rule.** A runtime id is 1 to 64 characters from `A-Z a-z 0-9 _ . : -`, starting with a letter or a digit. It has no spaces, so an id can't carry a sentence to the model. The page leaves out an entry whose id breaks the rule, and the server refuses it.
+- **A list always fits its budget.** The browser caps how many entries it reports, so the whole list fits `MAX_CONTEXT_BYTES`. When the server refuses a context update, it clears that key instead of keeping the previous value. A stale list must never stay usable.
+- **What replaces the parity test for runtime lists.** No build-time list exists to compare, so the tests check the contract instead:
+  - each tool refuses an id outside the reported list (as the D-14 and D-16 tests do today);
+  - the id rule is the same on both ends, checked the way `test_task_moves_match_the_web_kit` checks the moves;
+  - the context keys and fields the server reads are the ones the browser publishes;
+  - an over-budget list is capped in the browser and cleared on the server.
+
+**Why:** A runtime list moves the authority to the page. The server can then only prove that the model didn't invent an id. It can't prove the host allows the act, since the browser isn't trusted either (D-21). That is enough when the worst case is Otto pointing at the wrong thing or opening a page the visitor can leave with one click. It is not enough for an act with consequences. So those stay where the deployment's owner, not the page, has listed them, and D-03's test keeps both ends equal.
+
+Today's code shows why the last two rules are needed. `listGuideTargets` has no cap. A page with about 50 targets carrying full descriptions goes over the 16 KB context limit. The server then drops the update and keeps the old list (`Bridge.update_context`), so `show_target` checks against a stale list. The browser's own registry check stops a wrong pointer. But the model is told about targets that no longer exist, and is never told about the new ones.
+**Where:** Today, the reported lists are `listGuideTargets` and `listGuideTasks` in `web/src/otto/guidance/targets.ts`, published in `web/src/otto/Otto.tsx`. The server checks are `show_target` and `start_guided_task` in `server/app/voice/tools.py`, and the context budget is `Bridge.update_context` in `bridge.py`. The browser checks are `toAssistantAction` in `web/src/otto/messages.ts`. The static lists are D-03's. The tests are `test_show_target_only_allows_reported_targets`, `test_start_guided_task_only_allows_reported_tasks` and the D-03 parity tests in `server/tests/test_voice.py`. The id rule, the caps, the clearing of a refused key and reported destinations are filed as tasks citing this decision.
+
 ## Open questions
 
 | ID | Question | Blocks | Owner | Status |
@@ -259,4 +285,4 @@ A single component couldn't replace the two checks, because they sit on two mach
 | Q-05 | Does the server have a boundary worth enforcing the way `layers.test.ts` enforces D-13 in `web/src/otto/`? A candidate: `tools.py` and `app_config.py` as pure rules that must not import FastAPI or ADK transport code, with `route.py` and `bridge.py` as the shell. The answer first shows the boundary is real in `server/app/voice/`, then says whether a test should check it; copying the web test is not a reason on its own. | Any server change that adds a module | unassigned | open |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? Options: (A) extend the shader; (B) a second renderer driven by the pure robot state (`robot/robot.ts`, gestures, movement); (C) amend D-12; (D) keep the renderer and add a separate spatial presentation layer around it. It stays open until the AR requirements and the shader's limits are known. | Spatial / AR epic | unassigned | open |
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
-| Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | open |
+| Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
