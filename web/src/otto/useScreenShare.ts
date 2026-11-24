@@ -24,11 +24,27 @@ type WithHandle = MediaDevices & { setCaptureHandleConfig?: (config: HandleConfi
 type TrackWithHandle = MediaStreamTrack & { getCaptureHandle?: () => { handle?: string } | null }
 const HANDLE = `otto-${Math.random().toString(36).slice(2)}`
 
-/** Where this page's private regions are now, in viewport CSS px: D-17's exclusions, Otto's panel included. */
-function privateBoxes(doc: Document): Box[] {
+/** What a sensitive field's label and error are, the same ways the page snapshot finds them (D-17): `for` or wrapping labels, and the aria ids. */
+function fieldText(field: Element, doc: Document): Element[] {
+  const ids = ['aria-labelledby', 'aria-errormessage', 'aria-describedby'].flatMap(a => (field.getAttribute(a) ?? '').split(/\s+/))
+  const labels = (field as HTMLInputElement).labels ? [...(field as HTMLInputElement).labels!] : []
+  return [...labels, ...ids.map(id => (id ? doc.getElementById(id) : null)).filter((e): e is HTMLElement => !!e)]
+}
+
+/** This page's private regions: D-17's exclusions (Otto's panel too), and a sensitive field's label and error with the field. */
+export function privateElements(doc: Document): Element[] {
   const elements = new Set<Element>(doc.querySelectorAll(PRIVATE_SELECTOR))
-  doc.querySelectorAll('input, select, textarea').forEach(e => { if (isSensitiveField(e)) elements.add(e) })
-  return [...elements].map(e => e.getBoundingClientRect())
+  doc.querySelectorAll('input, select, textarea').forEach(e => {
+    if (!isSensitiveField(e)) return
+    elements.add(e)
+    fieldText(e, doc).forEach(t => elements.add(t))
+  })
+  return [...elements]
+}
+
+/** Where those regions are now, in viewport CSS px. */
+function privateBoxes(doc: Document): Box[] {
+  return privateElements(doc).map(e => e.getBoundingClientRect())
 }
 
 function toBase64(blob: Blob): Promise<string> {
