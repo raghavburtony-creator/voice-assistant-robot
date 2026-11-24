@@ -11,6 +11,7 @@
 import type { GuideTargetInfo } from './guide'
 import type { GuideTaskSpec } from './task'
 import { isElementHidden, isPrivateElement } from './hidden'
+import { isRuntimeId } from '../runtimeId'
 
 type Entry = { place: Element | string; info?: { label?: string; description?: string } }
 
@@ -19,6 +20,18 @@ const listeners = new Set<() => void>()
 const changed = () => listeners.forEach(l => l())
 
 const ATTR = 'data-otto-target'
+
+// An id that breaks the runtime id rule (D-23) is never reported to the model. Its page hears why, once per id.
+const warned = new Set<string>()
+const fitsRule = (id: string, kind: 'target' | 'task'): boolean => {
+  const shown = JSON.stringify(id.slice(0, 80))
+  if (isRuntimeId(id)) return true
+  if (!warned.has(shown)) {
+    warned.add(shown)
+    console.warn(`Otto: the guide ${kind} id ${shown} is left out. Use 1 to 64 of A-Z a-z 0-9 _ . : -, starting with a letter or a digit.`)
+  }
+  return false
+}
 
 const resolve = (place: Element | string): Element | null => {
   if (typeof place !== 'string') return place.isConnected ? place : null
@@ -73,13 +86,14 @@ export function listGuideTargets(): ListedGuideTarget[] {
   // A target inside a private area is left out: its label would tell the model what is there.
   const skip = new Set<string>()
   for (const [id, entry] of registry) {
+    if (!fitsRule(id, 'target')) { skip.add(id); continue }
     const element = resolve(entry.place)
     if (element && isPrivateElement(element)) skip.add(id)
     else if (element) out.set(id, withState(infoFor(id, element, entry.info), element))
   }
   for (const e of marked()) {
     const id = e.getAttribute(ATTR)
-    if (!id || out.has(id) || skip.has(id) || !e.isConnected) continue
+    if (!id || out.has(id) || skip.has(id) || !e.isConnected || !fitsRule(id, 'target')) continue
     if (isPrivateElement(e)) skip.add(id)
     else out.set(id, withState(infoFor(id, e), e))
   }
@@ -119,9 +133,9 @@ export function registerGuideTask(spec: GuideTaskSpec): () => void {
   return () => { if (tasks.get(spec.id) === spec) { tasks.delete(spec.id); taskListeners.forEach(l => l()) } }
 }
 export function findGuideTask(id: string): GuideTaskSpec | null { return tasks.get(id) ?? null }
-/** What the voice model is told: id, title (cleaned, capped) and how many steps. */
+/** What the voice model is told: id, title (cleaned, capped) and how many steps. A task whose id breaks the rule is left out. */
 export function listGuideTasks(): { id: string; title: string; steps: number }[] {
-  return [...tasks.values()].map(t => ({ id: t.id, title: clean(t.title, 80), steps: t.steps.length }))
+  return [...tasks.values()].filter(t => fitsRule(t.id, 'task')).map(t => ({ id: t.id, title: clean(t.title, 80), steps: t.steps.length }))
 }
 export function onGuideTasksChange(listener: () => void): () => void {
   taskListeners.add(listener)

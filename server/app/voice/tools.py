@@ -23,6 +23,22 @@ PageId = Literal["home", "features", "about"]
 Command = Literal["show_message", "toggle_theme"]
 #: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
 TaskMove = Literal["stop", "back", "next"]
+#: The id rule for lists the page reports (D-23): 1 to 64 of A-Z a-z 0-9 _ . : -, starting with a letter or a digit, so an id
+#: can't carry a sentence to the model. A test checks it equals RUNTIME_ID in web/src/otto/runtimeId.ts.
+RUNTIME_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}")
+
+
+def is_runtime_id(value: object) -> bool:
+    return isinstance(value, str) and RUNTIME_ID.fullmatch(value) is not None
+
+
+def _reported(tool_context: ToolContext, key: str, field: str) -> dict[str, dict]:
+    """What the page reported under `key`, by id. An entry whose id breaks the rule is left out, so it is never offered back."""
+    report = (tool_context.state.get("screens") or {}).get(key)
+    entries = report.get(field) if isinstance(report, dict) else None
+    if not isinstance(entries, list):
+        return {}
+    return {e["id"]: e for e in entries if isinstance(e, dict) and is_runtime_id(e.get("id"))}
 
 
 def _send(tool_context: ToolContext, action: dict) -> None:
@@ -52,6 +68,14 @@ def get_screen_context(tool_context: ToolContext) -> dict:
     state = tool_context.state
     page = state.get("page", "home")
     screens = {key: value for key, value in (state.get("screens") or {}).items() if value is not None}
+    # The page's lists reach the model only with ids that fit the rule (D-23), whoever published them.
+    for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks")):
+        if isinstance(screens.get(key), dict):
+            screens[key] = {**screens[key], field: list(_reported(tool_context, key, field).values())}
+    # So does the running task's id. A host can start a task it never registered, so this id is checked here too.
+    running = screens.get("guide_task_running")
+    if isinstance(running, dict) and "id" in running and not is_runtime_id(running["id"]):
+        screens["guide_task_running"] = {k: v for k, v in running.items() if k != "id"}
     return {"current_page": {"id": page, "title": PAGES.get(page, PAGES["home"])["title"]},
             **(screens or {"note": "The page has reported nothing else."})}
 
@@ -69,10 +93,8 @@ def show_target(target_id: str, tool_context: ToolContext) -> dict:
     """Have Otto point at something on the user's current page. Use it when the user asks where something is, what something is,
     how to do something on this page, or says "show me". target_id must be one of the ids from get_screen_context under
     guide_targets; never invent one. Then explain it in one or two plain sentences."""
-    screens = tool_context.state.get("screens") or {}
-    reported = (screens.get("guide_targets") or {}).get("targets")
-    targets = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
-    if not isinstance(target_id, str) or not target_id or len(target_id) > 64 or target_id not in targets:
+    targets = _reported(tool_context, "guide_targets", "targets")
+    if not is_runtime_id(target_id) or target_id not in targets:
         return {"ok": False, "error": "Unknown target. Use one of the known ids.", "known": list(targets)}
     found = targets[target_id]
     # The page reports a target it has but is not drawing (collapsed, display: none): Otto can't point at it. Say so, don't pretend.
@@ -92,10 +114,8 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
     user does each step. Use it when the user asks for help doing something ("how do I...", "help me with...") and a task
     in get_screen_context under guide_tasks fits. task_id must be one of those ids; never invent one. Otto says each step
     himself, so only introduce it in one short sentence; don't read the steps out."""
-    screens = tool_context.state.get("screens") or {}
-    reported = (screens.get("guide_tasks") or {}).get("tasks")
-    tasks = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
-    if not isinstance(task_id, str) or not task_id or len(task_id) > 64 or task_id not in tasks:
+    tasks = _reported(tool_context, "guide_tasks", "tasks")
+    if not is_runtime_id(task_id) or task_id not in tasks:
         return {"ok": False, "error": "Unknown task. Use one of the known ids.", "known": list(tasks)}
     _send(tool_context, {"action": "task", "task": task_id})
     found = tasks[task_id]

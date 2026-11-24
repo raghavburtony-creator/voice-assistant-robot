@@ -219,7 +219,7 @@ Your app says what to show; Otto decides how. First mark the things he may show,
 const off = registerGuideTarget('save', '#save', { label: 'the Save button' })   // code wins over markup with the same id
 ```
 
-Without `data-otto-label`, the label is the `aria-label`, then the element's text. Then make a guide channel once and ask:
+Without `data-otto-label`, the label is the `aria-label`, then the element's text. An id is 1 to 64 of `A-Z a-z 0-9 _ . : -`, starting with a letter or a digit, with no spaces. The same rule holds for guided task ids. A target or task whose id breaks it is never told to the model (the console warns once), and both ends refuse it (`runtimeId.ts`, `RUNTIME_ID` in `tools.py`; D-23). Then make a guide channel once and ask:
 
 ```tsx
 const guide = useMemo(createOttoGuide, [])

@@ -25,6 +25,7 @@ const CORE = [
   'movement/stage.ts',
   'robot/gestures.ts',
   'robot/robot.ts',
+  'runtimeId.ts',
   'soundCues.ts',
 ]
 
