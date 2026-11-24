@@ -10,6 +10,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 |---|---|---|---|
 | Get oriented | all (the index in decisions.md) | "How it works", "Using it in a new project" | `AGENTS.md`, [architecture.md](architecture.md) |
 | Add a page or a command | D-02, D-03, D-23 | "Using it in a new project" | `web/src/otto.config.ts`, `server/app/voice/app_config.py`, `server/app/voice/tools.py`, `server/tests/test_voice.py` |
+| Runtime navigation destinations (`navigate_to`) | D-02, D-03, D-17, D-22, D-23 | "Using it in a new project", "Adding a tool" | `web/src/otto/context.ts`, `contextBudget.ts`, `runtimeId.ts`, `messages.ts`, `useVoiceAssistant.ts` (`currentPageInfo`, start/page messages), `Otto.tsx` (`page`), `App.tsx` `onAction`, and their tests; `server/app/voice/runtime.py`, `tools.py`, `route.py` (start), `bridge.py` (page changes), `app_config.py` (`system_instruction`), `server/tests/test_voice.py` |
 | Add a tool | D-02, D-03, D-22, D-23 | "Adding a tool" | `server/app/voice/tools.py`, `sink.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `App.tsx` `onAction` |
 | Change the wire protocol (a message type) | D-02, D-04 | "How it works" | `server/app/voice/bridge.py`, `route.py`, `web/src/otto/messages.ts`, `web/src/otto/useVoiceAssistant.ts`, `web/src/lab/fakeServer.ts` |
 | Server: session, key, CORS, limits | D-01, D-04, D-09 | "Deploying" | `server/app/config.py`, `server/app/main.py`, `server/app/voice/route.py`, `model.py` |

@@ -13,10 +13,10 @@
 //   const stage = useMemo(createOttoStage, [])
 //   <Otto stage={stage} ... />   then   await stage.moveToElement('#cart'); gestures.play('celebrate')
 //
-// Put it once near the top of your app. `page` is the page the visitor is on now (an id from otto.config.ts PAGES).
+// Put it once near the top of your app. `page` is the current static page id, or a runtime destination id the page reports.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX, type PageId } from '../otto.config'
+import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX } from '../otto.config'
 import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
@@ -49,7 +49,8 @@ import { useWakeSetting } from './wakeWord'
 import './voice.css'
 
 type Props = {
-  page: PageId
+  /** The current static page id, or a valid runtime destination id (D-23). URLs and paths are refused. */
+  page: string
   onAction: (action: AssistantAction) => void
   /** Hide the 3D robot and keep only the panel (for a small or low-power page). Default true. */
   showRobot?: boolean
