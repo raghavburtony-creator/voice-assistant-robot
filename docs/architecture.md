@@ -78,7 +78,7 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 
 ## Review of D-01 to D-18 (November 2026)
 
-All 18 decisions are **current**: each one is enforced by the code or test it cites, and nothing in the target architecture requires amending one yet. Several will come under pressure from later epics. Each pressure point is an open question, so none is amended speculatively:
+When this review was done, all 18 decisions were **current**: each one was enforced by the code or test it cites, and nothing in the target architecture required amending one yet. Several were under pressure from later epics. Each pressure point became an open question, so none was amended speculatively. The table shows where those questions stand now; D-03 has since been amended by D-23:
 
 | Decision | Status | Pressure from | Tracked as |
 |---|---|---|---|

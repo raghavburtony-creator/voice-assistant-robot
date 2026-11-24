@@ -26,6 +26,7 @@ import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
 import type { IdleControls } from './OttoStage'
 import { publishContext } from './context'
+import { capList } from './contextBudget'
 import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
 import { createOttoGuide, type GuideEvent, type GuideRequest, type OttoGuide } from './guidance/guide'
@@ -175,9 +176,9 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     else setGuideSay('')
     setOffer(null)
   }
-  // Tell the server which targets exist (it only lets the model show these).
+  // Tell the server which targets exist (it only lets the model show these), capped to the context budget (D-23).
   useEffect(() => {
-    const publish = () => publishContext('guide_targets', { targets: listGuideTargets() })
+    const publish = () => publishContext('guide_targets', capList('targets', listGuideTargets()))
     const frame = requestAnimationFrame(publish) // after the page has rendered
     const off = onGuideTargetsChange(publish)
     return () => { cancelAnimationFrame(frame); off() }
@@ -185,7 +186,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   useEffect(() => () => publishContext('guide_targets', null), [])
   // And which guided tasks the page offers (the voice can start only these).
   useEffect(() => {
-    const publish = () => publishContext('guide_tasks', { tasks: listGuideTasks() })
+    const publish = () => publishContext('guide_tasks', capList('tasks', listGuideTasks()))
     publish()
     const off = onGuideTasksChange(publish)
     return () => { off(); publishContext('guide_tasks', null) }
@@ -230,8 +231,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     let sentTargets = ''
     const stop = watchPageContext(snapshot => {
       publishContext('page', snapshot)
-      const targets = JSON.stringify(listGuideTargets())
-      if (targets !== sentTargets) { sentTargets = targets; publishContext('guide_targets', { targets: JSON.parse(targets) }) }
+      const targets = JSON.stringify(capList('targets', listGuideTargets()))
+      if (targets !== sentTargets) { sentTargets = targets; publishContext('guide_targets', JSON.parse(targets)) }
     }, () => ({ maxChars: pageContext.maxChars, maxNodes: pageContext.maxNodes, includeSelection: pageContext.includeSelection, includeTargets: false }))
     return () => { stop(); publishContext('page', null) }
   }, [conversing, pageContext.enabled, pageContext.maxChars, pageContext.maxNodes, pageContext.includeSelection])

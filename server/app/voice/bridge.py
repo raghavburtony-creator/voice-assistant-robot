@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import uuid
 import warnings
 from contextlib import asynccontextmanager
@@ -20,6 +21,8 @@ from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.sink import sink
 
+logger = logging.getLogger(__name__)
+
 APP_ID = "otto-voice"
 USER_ID = "visitor"
 #: ADK fills this from session state each time it builds the instruction, so Otto always knows the current page.
@@ -27,7 +30,8 @@ PAGE_PLACEHOLDER = "{page_title}"
 
 MAX_AUDIO_FRAME_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 2000
-#: A page's context: a JSON object (or null), at most this big when serialised.
+#: A page's context: a JSON object (or null), at most this many UTF-8 bytes as compact JSON (`context_bytes`). The browser caps
+#: its lists to the same number (web/src/otto/contextBudget.ts; a test checks they match), and a refused update clears its key (D-23).
 MAX_CONTEXT_BYTES = 16 * 1024
 MAX_CONTEXT_KEYS = 8
 CONTEXT_KEY_CHARS = 40
@@ -39,6 +43,14 @@ CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
 JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def context_bytes(data: object) -> int:
+    """The UTF-8 length of `data` as compact JSON, as `contextBytes` in web/src/otto/contextBudget.ts measures it.
+
+    A lone surrogate arrives escaped (`\\ud800`, 6 bytes) and json.loads makes it one character. It is counted as that
+    escape again, so a client can't fit twice the budget into an update with them."""
+    return len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "backslashreplace"))
 
 
 class LiveSession(Protocol):
@@ -158,11 +170,17 @@ class Bridge:
         key, data = event.get("key"), event.get("data")
         if not isinstance(key, str) or not 0 < len(key) <= CONTEXT_KEY_CHARS:
             return
-        if data is not None and (not isinstance(data, dict) or len(json.dumps(data)) > MAX_CONTEXT_BYTES):
-            return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
+        if data is not None and (not isinstance(data, dict) or context_bytes(data) > MAX_CONTEXT_BYTES):
+            # Never keep the previous value: a stale list must not stay usable (D-23). The content is not logged.
+            if key in screens:
+                screens[key] = None
+                self.live.state["screens"] = screens
+            logger.warning("Refused a context update for %r: not an object or over %d bytes; the key is cleared", key, MAX_CONTEXT_BYTES)
+            return
         if key not in screens and len(screens) >= MAX_CONTEXT_KEYS:
+            logger.warning("Refused a context update for %r: already %d keys", key, MAX_CONTEXT_KEYS)
             return
         screens[key] = data
         self.live.state["screens"] = screens

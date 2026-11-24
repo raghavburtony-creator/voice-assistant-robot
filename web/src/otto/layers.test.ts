@@ -13,6 +13,7 @@ const CORE = [
   'awareness/reactions.ts',
   'capture.ts',
   'config.ts',
+  'contextBudget.ts',
   'gemini/channels.ts',
   'gemini/prompt.ts',
   'guidance/friction.ts',
