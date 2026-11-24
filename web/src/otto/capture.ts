@@ -10,6 +10,9 @@ export type CaptureStopReason = 'stop' | 'ended' | 'hidden' | 'track_ended'
 export const FRAME_INTERVAL_MS = 1100
 export const MAX_FRAME_SIDE = 768
 
+/** What the camera is asked for: pictures only. The microphone has its own consent (D-05), so a share never brings audio. */
+export const CAMERA_REQUEST = { video: true, audio: false } as const
+
 export interface CaptureState {
   /** A conversation is open. */
   open: boolean

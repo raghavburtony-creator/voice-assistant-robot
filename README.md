@@ -359,14 +359,15 @@ Either gets a quiet offer on the first invalid field's target: a curious look an
 
 **For your own Gemini session** (`otto-mascot/gemini`): `buildOttoSystemPrompt({ appName, description, page: collectPageContext() })` writes a prompt with the same rules, the page fenced as data. The bridge's bubble gets the spoken channel, and `onVisual(parts)` gets the code blocks and links. Links are model output: check one against your own allow-list before making it clickable.
 
-### Sharing the screen
+### Sharing the screen or the camera
 
-During a conversation, the panel has **Share screen** (in browsers with `getDisplayMedia`). The rules are D-21:
+During a conversation, the panel has **Share screen** (in browsers with `getDisplayMedia`) and **Show camera** (with `getUserMedia`), one share at a time. The rules are D-21:
 - **Asked first, every time.** Pressing it shows what is sent and to whom before the browser's picker opens. Nothing remembers a yes, and the model has no tool to start a share.
 - **Shown the whole time.** While it runs, the panel says "Sharing your screen" with **Stop sharing**, beside the browser's own indicator.
 - **What is sent.** JPEG stills, at most one a second and 768 px on the long side, through the same session as the voice (`sendCapture`, `sendFrame` in `useVoiceAssistant.ts`). The server checks the type, size and rate again (`Bridge.send_frame`). Nothing is kept: no storage, no logs, and ADK's `save_live_blob` is off.
 - **Private regions.** The picker asks for this tab first. When the visitor picks this tab (known through Chrome's Capture Handle), every region the page snapshot never reads (D-17: `[data-otto-private]`, Otto's panel, password, hidden and `cc-*` fields) is painted over before encoding. When they pick another tab or window, the panel says "Otto sees everything in this window." instead.
-- **When it stops.** At Stop sharing, at the end of the conversation (the time limit too), when the tab is hidden, at the browser's own Stop sharing, or when the panel closes. It never restarts by itself.
+- **The camera.** Its notice says "Everything in view is sent." and nothing is masked: a camera frame can't be filtered. While it runs, the panel says "Camera on" with **Turn camera off**. It has the same limits and stop paths as the screen. No microphone audio comes with it; the voice keeps its own consent.
+- **When it stops.** At Stop sharing (or Turn camera off), at the end of the conversation (the time limit too), when the tab is hidden, at the browser's own Stop sharing, or when the panel closes. It never restarts by itself.
 
 The rules are core (`capture.ts`: `captureStop`, `frameDue`, `frameSize`, `maskBoxes`); the capture is shell (`useScreenShare.ts`, `ScreenShare.tsx`). `<otto-mascot>` doesn't capture. In the lab, "What the server has of a share" shows the source and a frame count, never the pictures. Whether the live endpoint accepts these frames is unverified until Q-01 is answered.
 

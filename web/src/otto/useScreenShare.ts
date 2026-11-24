@@ -1,12 +1,13 @@
-// Sharing the screen with Otto (D-21). Shell: getDisplayMedia, a hidden video, a canvas, the masks. The rules (when to
-// stop, how often, how big, where the masks go) are in capture.ts.
+// Sharing the screen or the camera with Otto (D-21), one at a time. Shell: getDisplayMedia or getUserMedia, a hidden
+// video, a canvas, the masks (this tab only; a camera is sent as it is). The rules (when to stop, how often, how big,
+// where the masks go) are in capture.ts.
 //
 //   off --ask()--> notice --share()--> starting --picker ok--> on --any stop reason--> off (never restarts by itself)
 //                    \--cancel()--> off               \--picker refused--> off
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isSensitiveField } from './awareness/collectPage'
-import { captureStop, FRAME_INTERVAL_MS, frameSize, maskBoxes, type Box, type CaptureStopReason } from './capture'
+import { CAMERA_REQUEST, captureStop, FRAME_INTERVAL_MS, frameSize, maskBoxes, type Box, type CaptureSource, type CaptureStopReason } from './capture'
 import { PRIVATE_SELECTOR } from './guidance/hidden'
 
 export type ScreenSharePhase = 'off' | 'notice' | 'starting' | 'on'
@@ -14,7 +15,7 @@ export type ScreenSharePhase = 'off' | 'notice' | 'starting' | 'on'
 interface Options {
   /** A conversation is open: sharing may start, and it stops when this goes false. */
   open: boolean
-  sendCapture: (source: 'screen' | null) => boolean
+  sendCapture: (source: CaptureSource | null) => boolean
   sendFrame: (data: string) => boolean
 }
 
@@ -58,6 +59,9 @@ function toBase64(blob: Blob): Promise<string> {
 
 export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
   const [phase, setPhase] = useState<ScreenSharePhase>('off')
+  /** What the visitor asked to share (or last shared). */
+  const [source, setSource] = useState<CaptureSource>('screen')
+  const sourceRef = useRef(source)
   /** The shared surface is this tab, so its private regions are painted over. False: Otto sees everything in it. */
   const [ownTab, setOwnTab] = useState(false)
   /** Why the last share stopped, for the panel to say; null before any share. */
@@ -70,7 +74,14 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
   const openRef = useRef(open)
   openRef.current = open
 
-  const ask = useCallback(() => { if (openRef.current) { setStopped(null); setDeclined(false); setPhase('notice') } }, [])
+  const ask = useCallback((what: CaptureSource = 'screen') => {
+    if (!openRef.current || stopRef.current) return
+    sourceRef.current = what
+    setSource(what)
+    setStopped(null)
+    setDeclined(false)
+    setPhase('notice')
+  }, [])
   const cancel = useCallback(() => setPhase(p => (p === 'notice' ? 'off' : p)), [])
   const stop = useCallback(() => stopRef.current?.('stop'), [])
 
@@ -79,12 +90,18 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
     if (!openRef.current || stopRef.current) return
     setPhase('starting')
     const devices = navigator.mediaDevices as WithHandle | undefined
+    const what = sourceRef.current
     let stream: MediaStream
     try {
-      devices?.setCaptureHandleConfig?.({ handle: HANDLE, permittedOrigins: [location.origin] })
-      if (!devices?.getDisplayMedia) throw new Error('unsupported')
-      // preferCurrentTab and selfBrowserSurface are Chrome hints; other browsers ignore them and show their picker.
-      stream = await devices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' } as DisplayMediaStreamOptions)
+      if (what === 'camera') {
+        if (!devices?.getUserMedia) throw new Error('unsupported')
+        stream = await devices.getUserMedia(CAMERA_REQUEST)
+      } else {
+        devices?.setCaptureHandleConfig?.({ handle: HANDLE, permittedOrigins: [location.origin] })
+        if (!devices?.getDisplayMedia) throw new Error('unsupported')
+        // preferCurrentTab and selfBrowserSurface are Chrome hints; other browsers ignore them and show their picker.
+        stream = await devices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' } as DisplayMediaStreamOptions)
+      }
     } catch {
       setDeclined(true)
       setPhase('off')
@@ -96,7 +113,7 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
       setPhase('off')
       return
     }
-    const own = (track as TrackWithHandle).getCaptureHandle?.()?.handle === HANDLE
+    const own = what === 'screen' && (track as TrackWithHandle).getCaptureHandle?.()?.handle === HANDLE
     const video = document.createElement('video')
     video.muted = true
     video.playsInline = true
@@ -152,7 +169,7 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
     document.addEventListener('visibilitychange', onVisibility)
     track.addEventListener('ended', onEnded)
     timer = window.setInterval(tick, FRAME_INTERVAL_MS)
-    sendRef.current.sendCapture('screen')
+    sendRef.current.sendCapture(what)
     setOwnTab(own)
     setPhase('on')
   }, [])
@@ -167,5 +184,5 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
   // Unmount: nothing keeps running (tracks, timer, listeners).
   useEffect(() => () => stopRef.current?.('stop'), [])
 
-  return { phase, ownTab, stopped, declined, ask, cancel, share, stop }
+  return { phase, source, ownTab, stopped, declined, ask, cancel, share, stop }
 }

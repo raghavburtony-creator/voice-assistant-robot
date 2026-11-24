@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureStop, frameDue, frameSize, FRAME_INTERVAL_MS, MASK_PAD, maskBoxes, MAX_FRAME_SIDE } from './capture'
+import { CAMERA_REQUEST, captureStop, frameDue, frameSize, FRAME_INTERVAL_MS, MASK_PAD, maskBoxes, MAX_FRAME_SIDE } from './capture'
 
 describe('maskBoxes', () => {
   const viewport = { width: 1000, height: 500 }
@@ -54,5 +54,11 @@ describe('frameSize', () => {
     expect(frameSize(640, 480)).toEqual({ width: 640, height: 480 })
     expect(frameSize(0, 480)).toBeNull()
     expect(frameSize(NaN, 480)).toBeNull()
+  })
+})
+
+describe('CAMERA_REQUEST', () => {
+  it('asks for pictures only: the camera never brings the microphone, which has its own consent (D-05)', () => {
+    expect(CAMERA_REQUEST).toEqual({ video: true, audio: false })
   })
 })
