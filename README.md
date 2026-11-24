@@ -42,6 +42,8 @@ Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the ges
 
 The two files you edit every time are the two config files. Their page and command lists must match (a server test checks it).
 
+What Otto only shows or walks the visitor through (guide targets and guided tasks) is reported by the page at runtime instead, as ids checked on both ends. Commands, which change something in your app, always stay in both lists. The page can't add one (D-23).
+
 | What | Web | Server |
 |---|---|---|
 | Otto's name, your pages, your commands | `web/src/otto.config.ts` | `server/app/voice/app_config.py` |

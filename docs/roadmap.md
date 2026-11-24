@@ -7,7 +7,7 @@ Otto's product epics, how they depend on each other, and what is filed for the f
 | Epic | Outcome | Blocked by | Milestones |
 |---|---|---|---|
 | **E1 Task-aware Otto** ([#7](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/7)) | The model knows which guided task is running, which step it is on and what the app is busy with. Later, a task survives a reload. | none (the reload slice follows D-20) | 0.2, 0.3 |
-| **E2 Continuity across interfaces** ([#8](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/8)) | A task started in one session, device or app can be picked up in another. | E1; Q-03, Q-08 (Q-04 answered by D-22) | not scheduled |
+| **E2 Continuity across interfaces** ([#8](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/8)) | A task started in one session, device or app can be picked up in another. | E1; Q-03 (Q-04 answered by D-22, Q-08 by D-23) | not scheduled |
 | **E3 Multimodal input** ([#9](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/9)) | Otto can take camera or screen input, with consent and a visible indicator. | none (Q-07 answered by D-21) | not scheduled |
 | **E4 Sign-language support** ([#10](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/10)) | A visitor can sign to Otto, and what Otto understands appears as text. | E3 (Q-07 answered by D-21) | not scheduled |
 | **E5 Environmental intelligence** ([#11](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/11)) | Otto reacts to what is around the visitor, through the existing awareness vocabulary. | E3 (Q-07 answered by D-21) | not scheduled |

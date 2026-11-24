@@ -47,7 +47,7 @@ Issue #6 called this chain "Otto's orchestrator". Q-04 asked whether it should b
 |---|---|---|---|
 | Task awareness and voice moves (E1) | the model, via `start_guided_task` and `move_guided_task` | server (reported ids, fixed moves), browser (the same again), Otto (the task machine) | No. It shipped this way |
 | Continuity (E2) | no one: a saved task resumes by a core rule | Otto (`resumeFrom`, D-20) | Across devices or apps, an identity is needed. That is Q-03, not a question of authority |
-| Cross-application (E2) | the model, with a different allow-list per app | server and browser, against lists each app reports; the host routes to the app | Allow-lists not known at build time are Q-08. A limit across apps needs Q-03 |
+| Cross-application (E2) | the model, with a different allow-list per app | server and browser, against lists each app reports; the host routes to the app | No. D-23: what only shows or moves the visitor comes from lists each app reports. Commands stay registered by the deployment. A limit across apps needs Q-03 |
 | Model-proposed reactions (not filed) | the model, via a tool with a `Literal` of reactions | server, browser, then Otto's own judgement, which may hold the reaction back | No. Adding the tool needs its own decision, since D-18 refused a celebrate tool |
 | Multimodal, sign language, environment (E3 to E5) | the visitor starts the input; frames are data | the visitor (D-21); any action they lead to still goes through links 1 to 5 | No |
 | Spatial / AR (E6) | no new proposer | Otto, through the same robot state | No. The renderer is Q-06
@@ -62,7 +62,7 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 |---|---|---|---|
 | **Task-aware Otto**: the model knows which task is running, which step it is on, and what the app is busy with | Guided tasks (`guidance/task.ts`, D-16), awareness `task` handles (`awareness/events.ts`), the context channel (`publishContext`, D-17 budget), tools with checked ids (D-02) | A second task model, or a second way to send context. Task state stays in the guide; the model reads a summary of it | none (Q-02 answered by D-20) |
 | **Task continuity**: a task survives a reload, then a new session, then another interface | The same task state, saved through `storage.ts` (already guarded): within a tab, as ids only (D-20) | Server-side memory of visitors before Q-03 is answered. Today there is one fixed `USER_ID` and `InMemorySessionService` | Q-03 (a reload is settled by D-20) |
-| **Cross-application**: Otto acts in more than one app | Reported-id allow-lists (the `show_target` pattern, D-14) in place of static `Literal`s | Free-form actions. Each app still reports what may be done (D-02) | Q-08 |
+| **Cross-application**: Otto acts in more than one app | Reported-id allow-lists (the `show_target` pattern, D-14) for targets, tasks and destinations; commands registered by the deployment (D-23) | Free-form actions, URLs from the model, or a command the page grants itself (D-02, D-23) | Q-03 (Q-08 answered by D-23) |
 | **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17), the existing session (`send_realtime`) | A capture path that skips the visitor's press, keeps a frame, or opens a second channel (D-21) | none (Q-07 answered by D-21) |
 | **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | none (Q-07 answered by D-21) |
 | **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | none (Q-07 answered by D-21) |
@@ -83,7 +83,7 @@ All 18 decisions are **current**: each one is enforced by the code or test it ci
 | Decision | Status | Pressure from | Tracked as |
 |---|---|---|---|
 | D-01 to D-02, D-04 to D-11, D-14 to D-16, D-18 | current | | |
-| D-03 static page and command lists | current | Cross-application needs lists that aren't known at build time | Q-08 |
+| D-03 static page and command lists | amended by D-23 | Cross-application needs lists that aren't known at build time | Q-08, answered by D-23: destinations may be reported, commands stay static |
 | D-12 one shader, no 3D library | current | Spatial / AR presence | Q-06 |
 | D-13 layers | current, partly enforced | The server isn't covered by a test | Q-05 |
 | D-17 snapshot only while talking, never stored | current | Continuity stores task state (within a tab, as ids, by D-20), and multimodal input adds camera and screen frames, sent while shared and never kept (D-21) | Q-03 |
