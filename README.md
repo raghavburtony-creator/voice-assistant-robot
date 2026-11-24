@@ -83,6 +83,7 @@ mic -> 16 kHz PCM ---- WebSocket ------->  Bridge -> ADK LiveRequestQueue ----> 
 speaker <- 24 kHz PCM <- WebSocket ------  Bridge <- ADK events <-------------   speech, transcripts, tool calls
 onAction(action) <---- {"type":"action"}   tools.py -> sink (checked actions)
 useAssistantContext -> {"type":"context"}  session state "screens" -> get_screen_context
+sendFrame (a share) -> {"type":"frame"}    checked (JPEG, 256 KB, 1/s) -> LiveRequestQueue ->  model (D-21)
 ```
 
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.

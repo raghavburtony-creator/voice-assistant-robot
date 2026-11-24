@@ -82,6 +82,9 @@ export class FakeVoiceServer {
   private timers = new Set<number>()
   /** Microphone frames received (the lab shows them flowing again after a barge-in). */
   micFrames = 0
+  /** What the page says it is sharing, and how many frames came (D-21): a count, never the pictures. */
+  capture: 'camera' | 'screen' | null = null
+  imageFrames = 0
   connected = false
   speaking = false
   private log: ServerLog
@@ -104,7 +107,9 @@ export class FakeVoiceServer {
     if (socket !== this.socket) return
     if (data instanceof ArrayBuffer) { this.micFrames++; return }
     if (typeof data !== 'string') return
-    const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown }
+    const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown; source?: unknown }
+    if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
+    if (message.type === 'capture') this.capture = message.source === 'camera' || message.source === 'screen' ? message.source : null
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
     else if (typeof message.key === 'string') this.contexts.set(message.key, message.data ?? null)
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
@@ -138,6 +143,7 @@ export class FakeVoiceServer {
     this.stopStreaming()
     this.socket = null
     this.connected = false
+    this.capture = null
     this.log('disconnected')
   }
 

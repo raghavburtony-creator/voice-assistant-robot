@@ -227,7 +227,7 @@ This applies to every camera, screen or surroundings input: multimodal input, si
 - Masking works only where the kit can see the layout, which is its own tab. Saying "Otto sees everything" elsewhere is honest. A filter that silently fails would not be.
 - Stopping when the tab is hidden matches the guide's own rule for hidden tabs. And it means a share left running in a background tab doesn't keep sending.
 
-**Where:** Nothing is built yet. The implementation tasks cite this decision. The ADK path is `send_realtime` in `google/adk/agents/live_request_queue.py` and `send_realtime_input(video=…)` in `google/adk/models/gemini_llm_connection.py` (pinned `google-adk==2.13.0`). Whether the live endpoint accepts those frame sizes and that rate is unverified until Q-01 is answered, so the first task marks it `[verify]`.
+**Where:** The rules are `captureStop`, `frameDue` and `frameSize` in `web/src/otto/capture.ts` (in `CORE`, tested in `capture.test.ts`). The browser's sender is `sendCapture` and `sendFrame` in `web/src/otto/useVoiceAssistant.ts`. The server's checks are `Bridge.send_frame` in `server/app/voice/bridge.py` (with `save_live_blob=False`), tested in `server/tests/test_voice.py`. The share controls, notice and masking are still to come (#37, #38). The ADK path is `send_realtime` in `google/adk/agents/live_request_queue.py` and `send_realtime_input(video=…)` in `google/adk/models/gemini_llm_connection.py` (pinned `google-adk==2.13.0`). Whether the live endpoint accepts those frame sizes and that rate is unverified until Q-01 is answered, so the first task marks it `[verify]`.
 
 ## Open questions
 

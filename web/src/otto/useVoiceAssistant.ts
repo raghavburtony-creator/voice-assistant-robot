@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Recorder, SpeechClock, SpeechPlayer } from './audio'
+import { frameDue, type CaptureSource } from './capture'
 import {
   readAnswerLength, readMicConsent, readMicTalk, saveAnswerLength, saveMicConsent, saveMicTalk,
   type AnswerLength, type MicConsent, type MicTalk,
@@ -144,6 +145,9 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
   /** The microphone's peak level, 0 to 1. A ref, so 20 updates a second re-render nothing; the meter reads it. */
   const levelRef = useRef(0)
   const socket = useRef<WebSocket | null>(null)
+  // What the visitor is sharing (D-21) and when its last frame went; both end with the conversation.
+  const sharing = useRef<CaptureSource | null>(null)
+  const lastFrameAt = useRef<number | null>(null)
   const recorder = useRef<Recorder | null>(null)
   const player = useRef<SpeechPlayer | null>(null)
   const openEntry = useRef<{ role: TranscriptEntry['role']; id: number } | null>(null)
@@ -283,6 +287,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
     recorder.current = null
     player.current?.close()
     player.current = null
+    sharing.current = null
+    lastFrameAt.current = null
     const ws = socket.current
     socket.current = null
     if (ws) {
@@ -581,6 +587,26 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
     return true
   }, [addTranscript])
 
+  /** Tells the server a share started (camera or screen) or stopped (null). Only while a conversation is open (D-21). */
+  const sendCapture = useCallback((source: CaptureSource | null) => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN) return false
+    sharing.current = source
+    lastFrameAt.current = null
+    ws.send(JSON.stringify({ type: 'capture', source }))
+    return true
+  }, [])
+
+  /** Sends one base64 JPEG frame of the running share; a frame with no share, or sooner than a second after the last, is dropped. */
+  const sendFrame = useCallback((data: string) => {
+    const ws = socket.current
+    const now = performance.now()
+    if (!sharing.current || ws?.readyState !== WebSocket.OPEN || !frameDue(now, lastFrameAt.current)) return false
+    lastFrameAt.current = now
+    ws.send(JSON.stringify({ type: 'frame', data }))
+    return true
+  }, [])
+
   useEffect(() => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: 'page', page }))
   }, [page])
@@ -596,6 +622,6 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
     mouth, speech, interrupt, interruptions,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }

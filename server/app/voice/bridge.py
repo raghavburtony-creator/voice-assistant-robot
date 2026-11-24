@@ -7,6 +7,7 @@ Nothing here logs user text or the API key.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import uuid
 import warnings
@@ -32,6 +33,12 @@ MAX_CONTEXT_KEYS = 8
 CONTEXT_KEY_CHARS = 40
 #: At least this long between two unprompted event prompts, so a busy page cannot make Otto talk non-stop.
 ANNOUNCE_GAP_SECONDS = 4.0
+#: A shared camera or screen frame (D-21): a JPEG still, at most this big, at most one per second. The browser sends one
+#: per 1.1 seconds, so network jitter doesn't squeeze two of them under the full second this side enforces.
+CAPTURE_SOURCES = ("camera", "screen")
+MAX_FRAME_BYTES = 256 * 1024
+FRAME_GAP_SECONDS = 1.0
+JPEG_MAGIC = b"\xff\xd8\xff"
 
 
 class LiveSession(Protocol):
@@ -41,6 +48,7 @@ class LiveSession(Protocol):
     def events(self) -> AsyncIterator[Any]: ...
     async def send_audio(self, pcm: bytes) -> None: ...  # 16 kHz PCM16
     async def send_text(self, text: str) -> None: ...
+    async def send_image(self, jpeg: bytes) -> None: ...
     async def audio_end(self) -> None: ...
     def close(self) -> None: ...
 
@@ -67,6 +75,11 @@ class _AdkLiveSession:
     async def send_text(self, text: str) -> None:
         from google.genai import types
         self._queue.send_content(types.Content(role="user", parts=[types.Part(text=text)]))
+
+    async def send_image(self, jpeg: bytes) -> None:
+        from google.genai import types
+        # [verify] (Q-01): ADK 2.13 sends an image/* blob as Live video input; the endpoint's limits are unchecked.
+        self._queue.send_realtime(types.Blob(data=jpeg, mime_type="image/jpeg"))
 
     async def audio_end(self) -> None:
         self._queue.send_audio_stream_end()
@@ -105,6 +118,8 @@ async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[Li
         response_modalities=[types.Modality.AUDIO],
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
+        # D-21: nothing the visitor shares is kept, so live audio and frames are never saved as artifacts.
+        save_live_blob=False,
     )
     queue = LiveRequestQueue()
     sink.open(session.id)
@@ -130,6 +145,10 @@ class Bridge:
         self.ws = ws
         self.live = live
         self.last_announce = 0.0
+        # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
+        self.capture: str | None = None
+        self.last_frame = float("-inf")
+        self.frames = 0
         # Gemini sends transcript chunks and then the whole text again; per role, did a chunk of this turn go out?
         self._chunked = {"user": False, "assistant": False}
 
@@ -154,6 +173,24 @@ class Bridge:
             self.last_announce = now
             await self.live.send_text(prompt)
 
+    async def send_frame(self, data: Any) -> None:
+        """D-21's limits, again on this side: a share is on, the data is a JPEG within the cap, and not too soon."""
+        now = asyncio.get_running_loop().time()
+        # The gap is checked first: a client that floods frames costs no decoding.
+        if self.capture is None or now - self.last_frame < FRAME_GAP_SECONDS:
+            return
+        if not isinstance(data, str) or len(data) > MAX_FRAME_BYTES * 4 // 3 + 4:
+            return
+        try:
+            jpeg = base64.b64decode(data, validate=True)
+        except ValueError:
+            return
+        if not 0 < len(jpeg) <= MAX_FRAME_BYTES or not jpeg.startswith(JPEG_MAGIC):
+            return
+        self.last_frame = now
+        self.frames += 1
+        await self.live.send_image(jpeg)
+
     async def browser_to_model(self) -> None:
         while True:
             message = await self.ws.receive()
@@ -175,6 +212,10 @@ class Bridge:
                 await self.update_context(event)
             elif kind == "text" and isinstance(event.get("text"), str) and event["text"].strip():
                 await self.live.send_text(event["text"][:MAX_TEXT_CHARS])
+            elif kind == "capture" and (event.get("source") in CAPTURE_SOURCES or event.get("source") is None):
+                self.capture = event.get("source")
+            elif kind == "frame":
+                await self.send_frame(event.get("data"))
             elif kind == "mic_off":
                 await self.live.audio_end()
             elif kind == "stop":

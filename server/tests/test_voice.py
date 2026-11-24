@@ -1,6 +1,10 @@
 """The voice route end to end with a fake Gemini session, the tools, and the page lists the web app must share."""
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
+import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +19,7 @@ from app.config import settings
 from app.main import app
 from app.voice import route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
+from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_FRAME_BYTES, Bridge
 from app.voice.sink import sink
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
@@ -27,6 +32,7 @@ class FakeLive:
         self.session_id = "fake"
         self.state = {"page": "home", "page_title": "Home", "screens": {}}
         self.sent_text: list[str] = []
+        self.images: list[bytes] = []
         sink.open(self.session_id)
 
     async def events(self):
@@ -37,6 +43,7 @@ class FakeLive:
 
     async def send_audio(self, pcm: bytes) -> None: ...
     async def send_text(self, text: str) -> None: self.sent_text.append(text)
+    async def send_image(self, jpeg: bytes) -> None: self.images.append(jpeg)
     async def audio_end(self) -> None: ...
     def close(self) -> None: sink.close(self.session_id)
 
@@ -261,3 +268,77 @@ def test_tool_schemas_have_no_anyof():
     """An Optional argument becomes anyOf in the schema; keep the declarations plain (see show_card)."""
     for tool in tools.TOOLS:
         assert "anyOf" not in str(tool._get_declaration().parameters_json_schema), tool.name
+
+
+# ---- shared frames (D-21) ----
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 60
+
+
+class ScriptedSocket:
+    """Hands the bridge these browser messages, then disconnects."""
+
+    def __init__(self, *messages: dict) -> None:
+        self.messages = [{"type": "websocket.receive", "text": json.dumps(m)} for m in messages]
+
+    async def receive(self) -> dict:
+        return self.messages.pop(0) if self.messages else {"type": "websocket.disconnect"}
+
+
+def run_bridge(*messages: dict) -> tuple[Bridge, FakeLive]:
+    live = FakeLive()
+    bridge = Bridge(ScriptedSocket(*messages), live)
+    asyncio.run(bridge.browser_to_model())
+    live.close()
+    return bridge, live
+
+
+def frame(data: bytes = JPEG) -> dict:
+    return {"type": "frame", "data": base64.b64encode(data).decode()}
+
+
+SHARE = {"type": "capture", "source": "screen"}
+
+
+def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
+    _, live = run_bridge(frame())
+    assert live.images == []
+    bridge, live = run_bridge(SHARE, frame())
+    assert live.images == [JPEG] and bridge.frames == 1
+    _, live = run_bridge({"type": "capture", "source": "camera"}, {"type": "capture", "source": None}, frame())
+    assert live.images == []
+
+
+def test_a_share_names_only_camera_or_screen():
+    bridge, live = run_bridge({"type": "capture", "source": "microphone"}, frame())
+    assert bridge.capture is None and live.images == []
+
+
+def test_frames_that_are_not_jpeg_too_big_or_not_base64_are_dropped():
+    _, live = run_bridge(SHARE, frame(b"\x89PNG\r\n\x1a\n" + b"\x00" * 60))
+    assert live.images == []
+    _, live = run_bridge(SHARE, frame(JPEG_MAGIC + b"\x00" * MAX_FRAME_BYTES))
+    assert live.images == []
+    _, live = run_bridge(SHARE, {"type": "frame", "data": "not base64!"}, {"type": "frame", "data": 42})
+    assert live.images == []
+
+
+def test_frames_faster_than_one_a_second_are_dropped():
+    bridge, live = run_bridge(SHARE, frame(), frame(), frame())
+    assert live.images == [JPEG] and bridge.frames == 1
+
+
+def test_the_full_second_is_enforced_before_a_frame_is_decoded(monkeypatch):
+    assert FRAME_GAP_SECONDS >= 1.0
+    decoded = []
+    real = base64.b64decode
+    monkeypatch.setattr("app.voice.bridge.base64.b64decode", lambda *a, **k: decoded.append(1) or real(*a, **k))
+    run_bridge(SHARE, frame(), frame(), frame())
+    assert len(decoded) == 1
+
+
+def test_frames_are_never_logged(caplog):
+    caplog.set_level(logging.DEBUG)
+    data = frame()["data"]
+    run_bridge(SHARE, frame())
+    assert data not in caplog.text
