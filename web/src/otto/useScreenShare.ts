@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isSensitiveField } from './awareness/collectPage'
-import { captureStop, FRAME_INTERVAL_MS, frameSize, maskBoxes, type Box, type CaptureSource, type CaptureStopReason } from './capture'
+import { CAMERA_REQUEST, captureStop, FRAME_INTERVAL_MS, frameSize, maskBoxes, type Box, type CaptureSource, type CaptureStopReason } from './capture'
 import { PRIVATE_SELECTOR } from './guidance/hidden'
 
 export type ScreenSharePhase = 'off' | 'notice' | 'starting' | 'on'
@@ -95,7 +95,7 @@ export function useScreenShare({ open, sendCapture, sendFrame }: Options) {
     try {
       if (what === 'camera') {
         if (!devices?.getUserMedia) throw new Error('unsupported')
-        stream = await devices.getUserMedia({ video: true, audio: false })
+        stream = await devices.getUserMedia(CAMERA_REQUEST)
       } else {
         devices?.setCaptureHandleConfig?.({ handle: HANDLE, permittedOrigins: [location.origin] })
         if (!devices?.getDisplayMedia) throw new Error('unsupported')
