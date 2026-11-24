@@ -72,6 +72,10 @@ def get_screen_context(tool_context: ToolContext) -> dict:
     for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks")):
         if isinstance(screens.get(key), dict):
             screens[key] = {**screens[key], field: list(_reported(tool_context, key, field).values())}
+    # So does the running task's id. A host can start a task it never registered, so this id is checked here too.
+    running = screens.get("guide_task_running")
+    if isinstance(running, dict) and "id" in running and not is_runtime_id(running["id"]):
+        screens["guide_task_running"] = {k: v for k, v in running.items() if k != "id"}
     return {"current_page": {"id": page, "title": PAGES.get(page, PAGES["home"])["title"]},
             **(screens or {"note": "The page has reported nothing else."})}
 
