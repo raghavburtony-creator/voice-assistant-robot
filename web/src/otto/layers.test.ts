@@ -11,6 +11,7 @@ const CORE = [
   'awareness/events.ts',
   'awareness/page.ts',
   'awareness/reactions.ts',
+  'capture.ts',
   'config.ts',
   'gemini/channels.ts',
   'gemini/prompt.ts',
