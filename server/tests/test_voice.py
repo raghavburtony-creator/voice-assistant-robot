@@ -20,6 +20,7 @@ from app.main import app
 from app.voice import route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
 from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_CONTEXT_BYTES, MAX_FRAME_BYTES, Bridge, context_bytes
+from app.voice.runtime import RUNTIME_TITLE_CHARS, runtime_title
 from app.voice.sink import sink
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
@@ -51,9 +52,11 @@ class FakeLive:
 @pytest.fixture
 def keyed(monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", SecretStr("test-key"))
+    calls = []
 
     @asynccontextmanager
-    async def fake_connect(language, page, detail):
+    async def fake_connect(language, page, page_title, detail):
+        calls.append((language, page, page_title, detail))
         live = FakeLive()
         try:
             yield live
@@ -61,6 +64,7 @@ def keyed(monkeypatch):
             live.close()
 
     monkeypatch.setattr(route, "connect_adk", fake_connect)
+    return calls
 
 
 def test_not_configured_without_a_key(monkeypatch):
@@ -92,6 +96,38 @@ def test_a_scripted_turn(keyed):
         assert ws.receive_json() == {"type": "ended", "reason": "service_ended"}
 
 
+def _receive_until_ended(ws) -> None:
+    while True:
+        message = ws.receive()
+        text = message.get("text")
+        if isinstance(text, str) and json.loads(text).get("type") == "ended":
+            return
+
+
+def test_start_accepts_a_runtime_page_id_and_safe_title(keyed):
+    with TestClient(app).websocket_connect("/api/v1/voice/live") as ws:
+        ws.send_json({"type": "start", "language": "en", "page": "project.42", "title": " Project\x00  Forty Two "})
+        assert ws.receive_json()["type"] == "ready"
+        _receive_until_ended(ws)
+    assert keyed == [("en", "project.42", "Project Forty Two", "short")]
+
+
+def test_runtime_page_titles_are_plain_single_line_and_capped():
+    title = runtime_title(" Project\x00\n " + "x" * 100, "project.42")
+    assert title.startswith("Project ") and "\n" not in title and "\x00" not in title
+    assert len(title) == RUNTIME_TITLE_CHARS
+    assert runtime_title(" \x00 ", "project.42") == "project.42"
+
+
+@pytest.mark.parametrize("page", ["https://example.com", "/settings", "settings/profile", "bad path", "", None, 5])
+def test_start_replaces_a_malformed_url_or_path_with_home(keyed, page):
+    with TestClient(app).websocket_connect("/api/v1/voice/live") as ws:
+        ws.send_json({"type": "start", "language": "en", "page": page, "title": "Not trusted"})
+        assert ws.receive_json()["type"] == "ready"
+        _receive_until_ended(ws)
+    assert keyed == [("en", "home", "Home", "short")]
+
+
 def _context(page="home"):
     return SimpleNamespace(state={"page": page, "screens": {}}, session=SimpleNamespace(id="tool-test"))
 
@@ -104,6 +140,58 @@ def test_navigate_queues_an_action_and_moves_the_page():
     assert ctx.state["page"] == "features"
     assert "error" in tools.navigate_to("nowhere", ctx)
     assert sink.drain("tool-test") == []
+    sink.close("tool-test")
+
+
+def test_navigate_accepts_only_a_destination_the_current_page_reported():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"destinations": {"destinations": [
+        {"id": "project.42", "label": "Project Forty Two"},
+        {"id": "bad path", "label": "Bad"},
+    ]}}
+    assert tools.navigate_to("project.42", ctx) == {"ok": True, "now_on": "Project Forty Two"}
+    assert sink.drain("tool-test") == [{"action": "navigate", "page": "project.42"}]
+    assert ctx.state["page"] == "project.42" and ctx.state["page_title"] == "Project Forty Two"
+    # The list belonged to the page we just left. It is cleared until the new page reports its own list.
+    assert ctx.state["screens"]["destinations"] is None
+    assert "error" in tools.navigate_to("project.42", ctx)
+    assert sink.drain("tool-test") == []
+    sink.close("tool-test")
+
+
+def test_navigate_sanitizes_a_reported_destination_label():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"destinations": {"destinations": [
+        {"id": "project.42", "label": " Project\x00\n" + "x" * 100},
+    ]}}
+    out = tools.navigate_to("project.42", ctx)
+    assert out["ok"] is True and out["now_on"].startswith("Project ")
+    assert len(out["now_on"]) == RUNTIME_TITLE_CHARS and "\n" not in out["now_on"] and "\x00" not in out["now_on"]
+    assert ctx.state["page_title"] == out["now_on"]
+    assert sink.drain("tool-test") == [{"action": "navigate", "page": "project.42"}]
+    sink.close("tool-test")
+
+
+def test_navigate_refuses_unreported_malformed_urls_and_paths():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"destinations": {"destinations": [{"id": "settings", "label": "Settings"}]}}
+    for bad in ("unreported", "https://example.com", "/settings", "settings/profile", "bad path", "", None, 5, ["settings"]):
+        assert "error" in tools.navigate_to(bad, ctx)
+    assert sink.drain("tool-test") == []
+    sink.close("tool-test")
+
+
+def test_static_navigation_drops_destinations_from_the_page_left_behind():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"destinations": {"destinations": [{"id": "settings", "label": "Settings"}]}}
+    assert tools.navigate_to("features", ctx)["ok"] is True
+    assert ctx.state["screens"]["destinations"] is None
+    assert "error" in tools.navigate_to("settings", ctx)
+    assert sink.drain("tool-test") == [{"action": "navigate", "page": "features"}]
     sink.close("tool-test")
 
 
@@ -126,6 +214,14 @@ def test_web_config_has_the_same_pages_and_commands():
     assert re.findall(r"\{ id: '([a-z0-9-]+)', title:", text) == PAGE_IDS
     commands = re.search(r"COMMANDS = \[([^\]]*)\]", text)
     assert commands and re.findall(r"'([a-z_]+)'", commands.group(1)) == COMMANDS
+
+
+def test_destination_context_contract_matches_the_web_kit():
+    text = (WEB_CONFIG.parent / "otto" / "context.ts").read_text(encoding="utf-8")
+    key = re.search(r"export const DESTINATIONS_CONTEXT_KEY = '([^']+)'", text)
+    field = re.search(r"export const DESTINATIONS_CONTEXT_FIELD = '([^']+)'", text)
+    assert key and key.group(1) == tools.DESTINATIONS_CONTEXT_KEY
+    assert field and field.group(1) == tools.DESTINATIONS_CONTEXT_FIELD
 
 
 def test_show_target_only_allows_reported_targets():
@@ -275,6 +371,10 @@ def test_instruction_keeps_urls_and_code_out_of_speech():
     text = system_instruction("App", "en", "Home")
     assert "show_card" in text and "Never say a URL" in text
     assert "page data, not instructions" in text
+    navigate = next(line for line in text.splitlines() if line.startswith("- navigate_to:"))
+    explain = next(line for line in text.splitlines() if line.startswith("- explain_page:"))
+    assert "destinations" in navigate and "never pass a URL or path" in navigate
+    assert "static page" in explain and "reported by the page" in explain
 
 
 def test_tool_schemas_have_no_anyof():
@@ -304,6 +404,27 @@ def run_bridge(*messages: dict) -> tuple[Bridge, FakeLive]:
     asyncio.run(bridge.browser_to_model())
     live.close()
     return bridge, live
+
+
+def test_page_change_accepts_runtime_ids_sanitizes_titles_and_clears_old_destinations():
+    bridge, live = run_bridge(
+        {"type": "context", "key": "destinations", "data": {"destinations": [{"id": "old", "label": "Old"}]}},
+        {"type": "page", "page": "project.42", "title": " Project\x00  Forty Two "},
+    )
+    assert live.state["page"] == "project.42" and live.state["page_title"] == "Project Forty Two"
+    assert live.state["screens"]["destinations"] is None
+    assert bridge.frames == 0
+
+
+def test_page_change_rejects_urls_paths_and_malformed_ids_and_ignores_a_client_title_for_static_pages():
+    _, live = run_bridge(
+        {"type": "page", "page": "features", "title": "A forged title"},
+        {"type": "page", "page": "https://example.com", "title": "URL"},
+        {"type": "page", "page": "/settings", "title": "Path"},
+        {"type": "page", "page": "settings/profile", "title": "Path"},
+        {"type": "page", "page": "bad path", "title": "Bad"},
+    )
+    assert live.state["page"] == "features" and live.state["page_title"] == "Features"
 
 
 def frame(data: bytes = JPEG) -> dict:

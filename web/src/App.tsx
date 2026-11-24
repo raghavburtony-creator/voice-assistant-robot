@@ -2,7 +2,7 @@
 // Replace this file with your own app; keep <Otto /> and the onAction handler.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
+import { isPage, PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
 import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
 
 function pageFromHash(): PageId {
@@ -42,7 +42,10 @@ export default function App() {
 
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
   const onAction = useCallback((action: AssistantAction) => {
-    if (action.action === 'navigate') goTo(action.page)
+    if (action.action === 'navigate') {
+      if (isPage(action.page)) goTo(action.page)
+      return
+    }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
     else if (action.action === 'guide' || action.action === 'task' || action.action === 'task_move' || action.action === 'card') return
     else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)

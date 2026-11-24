@@ -1,6 +1,7 @@
 // Otto's public parts. Most apps only need <Otto /> and useAssistantContext.
 export { default as Otto } from './Otto'
-export { useAssistantContext, publishContext } from './context'
+export { useAssistantContext, publishContext, findDestination, DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD } from './context'
+export type { Destination } from './context'
 export type { AssistantAction } from './messages'
 // Lower-level pieces, for building your own panel or dock.
 export { default as OttoRobot } from './robot/OttoRobot'

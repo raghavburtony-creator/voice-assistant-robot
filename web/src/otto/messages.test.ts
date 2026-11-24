@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { parseServerMessage, toAssistantAction } from './messages'
 
+describe('navigation actions', () => {
+  it('accepts a static page or a live reported destination, as an id only', () => {
+    const live = (id: string) => id === 'project.42'
+    expect(toAssistantAction({ action: 'navigate', page: 'home' })).toEqual({ action: 'navigate', page: 'home' })
+    expect(toAssistantAction({ action: 'navigate', page: 'project.42' }, undefined, undefined, live))
+      .toEqual({ action: 'navigate', page: 'project.42' })
+    expect(toAssistantAction({ action: 'navigate', page: 'old-project' }, undefined, undefined, live)).toBeNull()
+    expect(toAssistantAction({ action: 'navigate', page: 'https://example.com' }, undefined, undefined, () => true)).toBeNull()
+    expect(toAssistantAction({ action: 'navigate', page: '/settings' }, undefined, undefined, () => true)).toBeNull()
+    expect(toAssistantAction({ action: 'navigate', page: 42 }, undefined, undefined, () => true)).toBeNull()
+  })
+})
+
 describe('guide actions', () => {
   it('passes the target through the schema', () => {
     const m = parseServerMessage('{"type":"action","action":"guide","target":"save"}')

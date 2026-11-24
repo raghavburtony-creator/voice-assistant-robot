@@ -19,6 +19,7 @@ from fastapi import WebSocket
 
 from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
+from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,7 @@ class _AdkLiveSession:
 
 
 @asynccontextmanager
-async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[LiveSession]:
+async def connect_adk(language: str, page: str, page_title: str, detail: str) -> AsyncIterator[LiveSession]:
     """One ADK live session for one browser connection. ADK is imported here, so a server that never opens one never loads it."""
     from google.adk.agents import LlmAgent
     from google.adk.agents.live_request_queue import LiveRequestQueue
@@ -123,7 +124,8 @@ async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[Li
     runner = Runner(app_name=APP_ID, agent=agent, session_service=service)
     session = await service.create_session(
         app_name=APP_ID, user_id=USER_ID, session_id=uuid.uuid4().hex,
-        state={"page": page, "page_title": PAGES[page]["title"], "language": language, "screens": {}},
+        state={"page": page, "page_title": PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page),
+               "language": language, "screens": {}},
     )
     run_config = RunConfig(
         streaming_mode=StreamingMode.BIDI,
@@ -147,9 +149,15 @@ async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[Li
             pass
 
 
-def _set_page(state: dict, page: str) -> None:
+def _set_page(state: dict, page: object, title: object = None) -> None:
+    if not isinstance(page, str) or (page not in PAGES and not is_runtime_id(page)):
+        return
     state["page"] = page
-    state["page_title"] = PAGES[page]["title"]
+    state["page_title"] = PAGES[page]["title"] if page in PAGES else runtime_title(title, page)
+    # Lists are page-scoped (D-23); do not let a page update carry the previous page's destinations forward.
+    screens = state.get("screens")
+    if isinstance(screens, dict):
+        screens["destinations"] = None
 
 
 class Bridge:
@@ -224,8 +232,8 @@ class Bridge:
             except ValueError:
                 continue
             kind = event.get("type") if isinstance(event, dict) else None
-            if kind == "page" and event.get("page") in PAGES:
-                _set_page(self.live.state, event["page"])
+            if kind == "page":
+                _set_page(self.live.state, event.get("page"), event.get("title"))
             elif kind == "context":
                 await self.update_context(event)
             elif kind == "text" and isinstance(event.get("text"), str) and event["text"].strip():

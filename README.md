@@ -40,9 +40,9 @@ Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the ges
 
 ## Using it in a new project
 
-The two files you edit every time are the two config files. Their page and command lists must match (a server test checks it).
+The two files you edit every time are the two config files. Their static page and command lists must match (a server test checks it).
 
-What Otto only shows or walks the visitor through (guide targets and guided tasks) is reported by the page at runtime instead, as ids checked on both ends. Commands, which change something in your app, always stay in both lists. The page can't add one (D-23).
+What Otto only shows, walks the visitor through or opens for them (guide targets, guided tasks and destinations) can be reported by the page at runtime instead, as ids checked on both ends. Commands, which change something in your app, always stay in both config lists. The page can't add one (D-23).
 
 | What | Web | Server |
 |---|---|---|
@@ -53,17 +53,36 @@ What Otto only shows or walks the visitor through (guide targets and guided task
 In your app:
 
 ```tsx
-import { Otto, useAssistantContext, type AssistantAction } from './otto'
+import { useEffect } from 'react'
+import { Otto, publishContext, useAssistantContext, type AssistantAction } from './otto'
+
+// Routes stay in host code. Otto receives ids and labels, never these URLs.
+const routes: Record<string, string> = {
+  home: '/', features: '/features', about: '/about',
+  'project.42': '/projects/42',
+}
 
 // Once, near the top of the app. `page` is the visitor's current page id.
 <Otto page={page} onAction={(action: AssistantAction) => {
-  if (action.action === 'navigate') router.push(action.page)
-  else if (action.name === 'toggle_theme') toggleTheme()
+  if (action.action === 'navigate') {
+    const route = routes[action.page]
+    if (route) router.push(route) // keep `page` equal to action.page when that view is current
+  } else if (action.action === 'command' && action.name === 'toggle_theme') toggleTheme()
 }} />
 
 // In any component: tell Otto what is on screen. It reads this with get_screen_context.
 useAssistantContext('cart', { items: 3, total: 'Rs 450' })
+
+// While this view is current, offer a runtime destination. Clear it when the view leaves.
+useEffect(() => {
+  publishContext('destinations', { destinations: [{ id: 'project.42', label: 'Project Forty Two' }] })
+  return () => publishContext('destinations', null)
+}, [])
 ```
+
+A destination has only an `id` and a page-data `label`. Its id follows the shared runtime-id rule: 1 to 64 characters from `A-Z a-z 0-9 _ . : -`, beginning with a letter or digit. The kit caps the list to the context budget. `navigate_to` accepts a static page id or an id in the current `destinations` list; the browser checks the id against that live list again immediately before `onAction`. An old, unreported id, a URL and a path are refused. The host maps the accepted id to a route, as above; neither the model nor the reported context supplies a URL.
+
+After the host opens a runtime view, it passes that destination id back as `<Otto page={page}>` for as long as the view is current (the example router derives `page` from its current route). On session start and every page change, the browser validates the value and sends `{ page, title }`: a runtime title uses the destination's capped, plain-text label when it is available, otherwise its id, while a static page title always comes from the deployment config. A URL, path or malformed host value is never sent as the page id; it falls back to the first static page, and the server validates the message again. `explain_page` remains limited to static pages because their explanatory text comes from the deployment.
 
 Copy `web/src/otto/`, `web/src/otto.config.ts`, `web/public/otto/` and `server/app/voice/` into the new project, or start from this repository. Otto's colours are `ROBOT_COLORS` in `otto.config.ts`.
 

@@ -14,6 +14,7 @@ from typing import Literal, get_args
 from google.adk.tools import FunctionTool, ToolContext
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
+from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.sink import sink
 
 logger = logging.getLogger(__name__)
@@ -23,13 +24,10 @@ PageId = Literal["home", "features", "about"]
 Command = Literal["show_message", "toggle_theme"]
 #: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
 TaskMove = Literal["stop", "back", "next"]
-#: The id rule for lists the page reports (D-23): 1 to 64 of A-Z a-z 0-9 _ . : -, starting with a letter or a digit, so an id
-#: can't carry a sentence to the model. A test checks it equals RUNTIME_ID in web/src/otto/runtimeId.ts.
-RUNTIME_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}")
-
-
-def is_runtime_id(value: object) -> bool:
-    return isinstance(value, str) and RUNTIME_ID.fullmatch(value) is not None
+#: RUNTIME_ID is imported from runtime.py: one server rule for tools and page/current-view messages. A test checks it equals
+#: RUNTIME_ID in web/src/otto/runtimeId.ts.
+DESTINATIONS_CONTEXT_KEY = "destinations"
+DESTINATIONS_CONTEXT_FIELD = "destinations"
 
 
 def _reported(tool_context: ToolContext, key: str, field: str) -> dict[str, dict]:
@@ -45,15 +43,23 @@ def _send(tool_context: ToolContext, action: dict) -> None:
     sink.put(tool_context.session.id, action)
 
 
-def navigate_to(page: PageId, tool_context: ToolContext) -> dict:
-    """Take the user to a page of the app."""
-    if page not in PAGES:
-        return {"error": f"Unknown page. Valid pages: {', '.join(PAGE_IDS)}"}
+def navigate_to(page: str, tool_context: ToolContext) -> dict:
+    """Take the user to a static page, or to a destination the current page reported. page is an id, never a URL or path."""
+    destinations = _reported(tool_context, DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD)
+    if not isinstance(page, str) or (page not in PAGES and (not is_runtime_id(page) or page not in destinations)):
+        return {"error": "Unknown destination. Use a static page id or one of the ids the current page reported.",
+                "known": [*PAGE_IDS, *destinations]}
+    reported_label = destinations.get(page, {}).get("label")
+    title = PAGES[page]["title"] if page in PAGES else runtime_title(reported_label, page)
     _send(tool_context, {"action": "navigate", "page": page})
     # Later tools in this turn see the new page.
     tool_context.state["page"] = page
-    tool_context.state["page_title"] = PAGES[page]["title"]
-    return {"ok": True, "now_on": PAGES[page]["title"]}
+    tool_context.state["page_title"] = title
+    # Runtime lists belong only to the page that reported them (D-23). The browser will report the new page's list later.
+    screens = tool_context.state.get("screens")
+    if isinstance(screens, dict):
+        screens[DESTINATIONS_CONTEXT_KEY] = None
+    return {"ok": True, "now_on": title}
 
 
 def explain_page(page: PageId, tool_context: ToolContext) -> dict:
@@ -67,16 +73,20 @@ def get_screen_context(tool_context: ToolContext) -> dict:
     """What the user has open right now: the current page and whatever the page reported about itself."""
     state = tool_context.state
     page = state.get("page", "home")
+    title = state.get("page_title")
+    if not isinstance(title, str):
+        title = PAGES.get(page, PAGES["home"])["title"]
     screens = {key: value for key, value in (state.get("screens") or {}).items() if value is not None}
     # The page's lists reach the model only with ids that fit the rule (D-23), whoever published them.
-    for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks")):
+    for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks"),
+                       (DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD)):
         if isinstance(screens.get(key), dict):
             screens[key] = {**screens[key], field: list(_reported(tool_context, key, field).values())}
     # So does the running task's id. A host can start a task it never registered, so this id is checked here too.
     running = screens.get("guide_task_running")
     if isinstance(running, dict) and "id" in running and not is_runtime_id(running["id"]):
         screens["guide_task_running"] = {k: v for k, v in running.items() if k != "id"}
-    return {"current_page": {"id": page, "title": PAGES.get(page, PAGES["home"])["title"]},
+    return {"current_page": {"id": page, "title": title},
             **(screens or {"note": "The page has reported nothing else."})}
 
 
