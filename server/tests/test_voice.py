@@ -19,7 +19,7 @@ from app.config import settings
 from app.main import app
 from app.voice import route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
-from app.voice.bridge import JPEG_MAGIC, MAX_FRAME_BYTES, Bridge
+from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_FRAME_BYTES, Bridge
 from app.voice.sink import sink
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
@@ -326,6 +326,15 @@ def test_frames_that_are_not_jpeg_too_big_or_not_base64_are_dropped():
 def test_frames_faster_than_one_a_second_are_dropped():
     bridge, live = run_bridge(SHARE, frame(), frame(), frame())
     assert live.images == [JPEG] and bridge.frames == 1
+
+
+def test_the_full_second_is_enforced_before_a_frame_is_decoded(monkeypatch):
+    assert FRAME_GAP_SECONDS >= 1.0
+    decoded = []
+    real = base64.b64decode
+    monkeypatch.setattr("app.voice.bridge.base64.b64decode", lambda *a, **k: decoded.append(1) or real(*a, **k))
+    run_bridge(SHARE, frame(), frame(), frame())
+    assert len(decoded) == 1
 
 
 def test_frames_are_never_logged(caplog):

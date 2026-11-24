@@ -34,10 +34,10 @@ CONTEXT_KEY_CHARS = 40
 #: At least this long between two unprompted event prompts, so a busy page cannot make Otto talk non-stop.
 ANNOUNCE_GAP_SECONDS = 4.0
 #: A shared camera or screen frame (D-21): a JPEG still, at most this big, at most one per second. The browser sends one
-#: per second; the gap allows for its timer running a little early.
+#: per 1.1 seconds, so network jitter doesn't squeeze two of them under the full second this side enforces.
 CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
-FRAME_GAP_SECONDS = 0.9
+FRAME_GAP_SECONDS = 1.0
 JPEG_MAGIC = b"\xff\xd8\xff"
 
 
@@ -175,14 +175,17 @@ class Bridge:
 
     async def send_frame(self, data: Any) -> None:
         """D-21's limits, again on this side: a share is on, the data is a JPEG within the cap, and not too soon."""
-        if self.capture is None or not isinstance(data, str) or len(data) > MAX_FRAME_BYTES * 4 // 3 + 4:
+        now = asyncio.get_running_loop().time()
+        # The gap is checked first: a client that floods frames costs no decoding.
+        if self.capture is None or now - self.last_frame < FRAME_GAP_SECONDS:
+            return
+        if not isinstance(data, str) or len(data) > MAX_FRAME_BYTES * 4 // 3 + 4:
             return
         try:
             jpeg = base64.b64decode(data, validate=True)
         except ValueError:
             return
-        now = asyncio.get_running_loop().time()
-        if not 0 < len(jpeg) <= MAX_FRAME_BYTES or not jpeg.startswith(JPEG_MAGIC) or now - self.last_frame < FRAME_GAP_SECONDS:
+        if not 0 < len(jpeg) <= MAX_FRAME_BYTES or not jpeg.startswith(JPEG_MAGIC):
             return
         self.last_frame = now
         self.frames += 1

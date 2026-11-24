@@ -5,8 +5,9 @@ export type CaptureSource = 'camera' | 'screen'
 /** "stop": the visitor pressed Stop. "ended": the conversation ended (the time limit too). "track_ended": the browser's own Stop sharing, or a lost device. */
 export type CaptureStopReason = 'stop' | 'ended' | 'hidden' | 'track_ended'
 
-/** At most one frame a second, at most this many pixels on the long side. The server checks the rate and size again. */
-export const FRAME_INTERVAL_MS = 1000
+/** At most one frame a second, at most this many pixels on the long side. The server checks the rate and size again.
+ *  The extra 100 ms keeps network jitter from putting two frames under the server's full second. */
+export const FRAME_INTERVAL_MS = 1100
 export const MAX_FRAME_SIDE = 768
 
 export interface CaptureState {
