@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { ASSISTANT_NAME } from '../otto.config'
 import type { AnswerLength } from './consent'
 import type { AssistantCard } from './messages'
+import ScreenShare, { canShareScreen } from './ScreenShare'
 import { Button, Icon, IconButton, Notice } from './ui'
 import { NO_RETRY_CODES, type useVoiceAssistant } from './useVoiceAssistant'
 import { recognitionCtor, useWakeSetting } from './wakeWord'
@@ -186,6 +187,8 @@ export default function VoiceAssistant({ assistant, onClose }: { assistant: Assi
     {micSilent && status === 'listening' && micSending && <Notice variant="warning">
       We cannot hear your microphone. Check which microphone your computer is using in its sound settings, or type your question below.
     </Notice>}
+
+    {canShareScreen() && <ScreenShare open={connected} sendCapture={assistant.sendCapture} sendFrame={assistant.sendFrame} />}
 
     <ol className="voice-assistant__log" ref={log} aria-label="Conversation">
       {transcript.length === 0 && <li className="voice-assistant__hint">Ask what a page does, how to use it, or say where you want to go.</li>}
