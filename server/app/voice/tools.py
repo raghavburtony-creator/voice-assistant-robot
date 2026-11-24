@@ -1,8 +1,9 @@
 """Otto's tools. Model output is untrusted, so every argument is checked here, and the browser checks every action again.
 
-A tool that should change something in the browser returns a `client_action`; it is queued in the sink and sent to the browser.
-To add a tool: write the function below, add it to TOOLS, and (if it sends an action) handle that action in
-web/src/otto.config.ts `isAllowedAction` and in App's `onAction`.
+A tool that should change something in the browser queues an action with `_send`; the sink holds it and the bridge sends it.
+This is the server's link in the authority chain (D-22). To add a tool: write the function below, add it to TOOLS, and (if it
+sends an action) accept that action in `toAssistantAction` (web/src/otto/messages.ts) and handle it in App's `onAction`.
+`test_action_kinds_match_on_both_ends` fails until both ends name it.
 """
 from __future__ import annotations
 
