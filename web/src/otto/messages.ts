@@ -4,6 +4,7 @@
 import { z } from 'zod'
 import { COMMANDS, isPage, type CommandName, type PageId } from '../otto.config'
 import { GUIDE_TASK_MOVES, type GuideTaskMove } from './guidance/task'
+import { isRuntimeId } from './runtimeId'
 
 const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), limitSeconds: z.number().finite().positive().optional().catch(undefined) }),
@@ -60,8 +61,9 @@ export function toAssistantAction(message: { action: string; page?: unknown; nam
   isTarget?: (id: string) => boolean, isTask?: (id: string) => boolean): AssistantAction | null {
   if (message.action === 'navigate' && isPage(message.page)) return { action: 'navigate', page: message.page }
   if (message.action === 'command' && isCommand(message.name)) return { action: 'command', name: message.name }
-  if (message.action === 'guide' && typeof message.target === 'string' && isTarget?.(message.target)) return { action: 'guide', target: message.target }
-  if (message.action === 'task' && typeof message.task === 'string' && isTask?.(message.task)) return { action: 'task', task: message.task }
+  // A target or task id must fit the runtime id rule (D-23) and still be in the page's own live registry.
+  if (message.action === 'guide' && isRuntimeId(message.target) && isTarget?.(message.target)) return { action: 'guide', target: message.target }
+  if (message.action === 'task' && isRuntimeId(message.task) && isTask?.(message.task)) return { action: 'task', task: message.task }
   if (message.action === 'task_move' && isMove(message.move)) return { action: 'task_move', move: message.move }
   if (message.action === 'card') { const card = toAssistantCard(message.card); return card ? { action: 'card', card } : null }
   return null
