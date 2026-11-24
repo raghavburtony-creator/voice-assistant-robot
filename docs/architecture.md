@@ -29,15 +29,28 @@ In the web kit, **core** files hold the rules and **shell** files hold the adapt
 
 ### Who decides at runtime
 
-No single "orchestrator" module exists. Authority is a chain, and each link can only narrow what the one before it proposed:
+Authority is a chain, not one component (D-22). Each link can only narrow what the one before it allowed:
 
-1. **The model proposes.** It calls a tool, or it speaks.
-2. **The server checks.** `tools.py` refuses any argument outside its `Literal`s or the ids the page reported (D-02, D-03, D-14, D-16).
-3. **The browser checks again.** `toAssistantAction` and `toAssistantCard` in `messages.ts` (D-02, D-18).
-4. **The host executes.** `onAction` in the app does the work, and its own rules apply.
-5. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets (D-14, D-16).
+1. **The model proposes.** It calls a tool. What it says carries no authority: speech, transcripts, and what a frame or the page snapshot shows are never turned into an action (D-17, D-18, D-21).
+2. **The server checks.** `tools.py` refuses any argument outside its `Literal`s or the ids the page reported (D-02, D-03, D-14, D-16). Per-session limits live here too: session state, and the sink's cap of 16 queued actions.
+3. **The browser checks again.** `toAssistantAction` and `toAssistantCard` in `messages.ts` (D-02, D-18). A test keeps the action kinds the tools send equal to the ones the browser accepts.
+4. **The action is carried out.** Page actions (`navigate`, `command`) by the host's `onAction`, under its own rules. Otto's own actions (`guide`, `task`, `task_move`) by the guide, in `Otto.tsx`, and `card` by the panel; each is then passed to `onAction` too. The host controls Otto's own actions upstream, through the targets and tasks it reports.
+5. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets, and hold back what doesn't deserve it (D-14, D-16).
 
-Issue #6 calls this "Otto's orchestrator". Q-04 asks whether to keep it as a chain or name one component. Until that is answered, a new capability adds a link to this chain or extends an existing one. It never adds a path around it.
+**The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed.
+
+**Every action path has every link.** `otto-mascot/gemini` has no action path: its proxy transport drops `action` messages, and its live transport declares no tools. The live transport has no server between the model and the browser, so it can't gain a tool that acts until a decision says what replaces the server's check.
+
+Issue #6 called this chain "Otto's orchestrator". Q-04 asked whether it should become one component, and D-22 keeps it a chain. A new capability adds a link to the chain or extends an existing one. It never adds a path around it. How each planned capability fits:
+
+| Capability | Who proposes | Which links decide | Anything the chain can't express? |
+|---|---|---|---|
+| Task awareness and voice moves (E1) | the model, via `start_guided_task` and `move_guided_task` | server (reported ids, fixed moves), browser (the same again), Otto (the task machine) | No. It shipped this way |
+| Continuity (E2) | no one: a saved task resumes by a core rule | Otto (`resumeFrom`, D-20) | Across devices or apps, an identity is needed. That is Q-03, not a question of authority |
+| Cross-application (E2) | the model, with a different allow-list per app | server and browser, against lists each app reports; the host routes to the app | Allow-lists not known at build time are Q-08. A limit across apps needs Q-03 |
+| Model-proposed reactions (not filed) | the model, via a tool with a `Literal` of reactions | server, browser, then Otto's own judgement, which may hold the reaction back | No. Adding the tool needs its own decision, since D-18 refused a celebrate tool |
+| Multimodal, sign language, environment (E3 to E5) | the visitor starts the input; frames are data | the visitor (D-21); any action they lead to still goes through links 1 to 5 | No |
+| Spatial / AR (E6) | no new proposer | Otto, through the same robot state | No. The renderer is Q-06
 
 Engineering agents (`.claude/agents/`) have no runtime authority and no architectural authority. They work inside the decisions in [decisions.md](decisions.md), and a person reviews their pull requests.
 

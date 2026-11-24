@@ -218,6 +218,19 @@ def test_task_moves_match_the_web_kit():
     assert moves and re.findall(r"'([a-z]+)'", moves.group(1)) == list(get_args(tools.TaskMove))
 
 
+def test_action_kinds_match_on_both_ends():
+    """D-22: the server link and the browser link name the same actions. A tool that sends a kind the browser drops, or a
+    browser variant no tool sends, means one of the two checks (D-02) is missing for it."""
+    sent = set(re.findall(r'_send\(tool_context, \{"action": "([a-z_]+)"', Path(tools.__file__).read_text(encoding="utf-8")))
+    text = (WEB_CONFIG.parent / "otto" / "messages.ts").read_text(encoding="utf-8")
+    union = re.search(r"export type AssistantAction = (.*?)\n\n", text, flags=re.S)
+    assert union
+    declared = set(re.findall(r"action: '([a-z_]+)'", union.group(1)))
+    body = text[text.index("export function toAssistantAction"):]
+    checked = set(re.findall(r"message\.action === '([a-z_]+)'", body))
+    assert sent and sent == declared == checked, (sent, declared, checked)
+
+
 def test_show_target_refuses_hidden_and_flags_disabled_targets():
     sink.open("tool-test")
     ctx = _context()
