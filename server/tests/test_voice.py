@@ -19,7 +19,7 @@ from app.config import settings
 from app.main import app
 from app.voice import route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
-from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_FRAME_BYTES, Bridge
+from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_CONTEXT_BYTES, MAX_FRAME_BYTES, Bridge, context_bytes
 from app.voice.sink import sink
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
@@ -355,3 +355,44 @@ def test_frames_are_never_logged(caplog):
     data = frame()["data"]
     run_bridge(SHARE, frame())
     assert data not in caplog.text
+
+
+def test_context_budget_and_measure_match_the_web_kit():
+    text = (WEB_CONFIG.parent / "otto" / "contextBudget.ts").read_text(encoding="utf-8")
+    found = re.search(r"export const MAX_CONTEXT_BYTES = (\d+) \* (\d+)", text)
+    assert found and int(found.group(1)) * int(found.group(2)) == MAX_CONTEXT_BYTES
+    # The same values as contextBudget.test.ts (a lone surrogate aside: the browser counts it larger, see there).
+    cases = [({"a": 1, "b": [True, None]}, 23), ({"t": "é"}, 10), ({"t": "नमस्ते"}, 26), ({"t": "🤖"}, 12), ({"t": "a\nb"}, 12)]
+    assert [context_bytes(value) for value, _ in cases] == [size for _, size in cases]
+
+
+def _targets(count: int, description: str = "") -> dict:
+    return {"targets": [{"id": f"t{i}", "label": f"Target {i}", "description": description} for i in range(count)]}
+
+
+def test_a_refused_context_update_clears_the_key_and_never_keeps_a_stale_list(caplog):
+    over = _targets(100, "d" * 200)
+    assert context_bytes(over) > MAX_CONTEXT_BYTES
+    with caplog.at_level(logging.WARNING):
+        _, live = run_bridge({"type": "context", "key": "guide_targets", "data": _targets(2)},
+                             {"type": "context", "key": "guide_targets", "data": over})
+    assert live.state["screens"]["guide_targets"] is None
+    assert "d" * 200 not in caplog.text and "guide_targets" in caplog.text
+    ctx = _context()
+    ctx.state["screens"] = live.state["screens"]
+    assert tools.show_target("t0", ctx)["ok"] is False  # the old list is gone, so its ids are too
+    assert "guide_targets" not in tools.get_screen_context(ctx)
+    # Not an object: cleared the same way.
+    _, live = run_bridge({"type": "context", "key": "guide_targets", "data": _targets(2)},
+                         {"type": "context", "key": "guide_targets", "data": ["t0"]})
+    assert live.state["screens"]["guide_targets"] is None
+
+
+def test_a_context_update_exactly_at_the_budget_is_kept():
+    data = {"note": ""}
+    data["note"] = "x" * (MAX_CONTEXT_BYTES - context_bytes(data))
+    assert context_bytes(data) == MAX_CONTEXT_BYTES
+    _, live = run_bridge({"type": "context", "key": "page", "data": data})
+    assert live.state["screens"]["page"] == data
+    _, live = run_bridge({"type": "context", "key": "page", "data": {"note": data["note"] + "x"}})
+    assert "page" not in live.state["screens"]  # never set, so nothing to clear
