@@ -361,8 +361,9 @@ def test_context_budget_and_measure_match_the_web_kit():
     text = (WEB_CONFIG.parent / "otto" / "contextBudget.ts").read_text(encoding="utf-8")
     found = re.search(r"export const MAX_CONTEXT_BYTES = (\d+) \* (\d+)", text)
     assert found and int(found.group(1)) * int(found.group(2)) == MAX_CONTEXT_BYTES
-    # The same values as contextBudget.test.ts (a lone surrogate aside: the browser counts it larger, see there).
-    cases = [({"a": 1, "b": [True, None]}, 23), ({"t": "é"}, 10), ({"t": "नमस्ते"}, 26), ({"t": "🤖"}, 12), ({"t": "a\nb"}, 12)]
+    # The same values as contextBudget.test.ts.
+    cases = [({"a": 1, "b": [True, None]}, 23), ({"t": "é"}, 10), ({"t": "नमस्ते"}, 26), ({"t": "🤖"}, 12), ({"t": "\ud800"}, 14),
+             ({"t": "a\nb"}, 12)]
     assert [context_bytes(value) for value, _ in cases] == [size for _, size in cases]
 
 
@@ -396,3 +397,11 @@ def test_a_context_update_exactly_at_the_budget_is_kept():
     assert live.state["screens"]["page"] == data
     _, live = run_bridge({"type": "context", "key": "page", "data": {"note": data["note"] + "x"}})
     assert "page" not in live.state["screens"]  # never set, so nothing to clear
+
+
+def test_lone_surrogates_count_at_their_size_on_the_wire():
+    # 3000 lone surrogates: 18 KB as the browser sends them (\ud800 each). Counted raw, they would pass as 9 KB.
+    data = {"t": "\ud800" * 3000}
+    assert len(json.dumps(data, separators=(",", ":"))) > MAX_CONTEXT_BYTES
+    _, live = run_bridge({"type": "context", "key": "page", "data": data})
+    assert "page" not in live.state["screens"]

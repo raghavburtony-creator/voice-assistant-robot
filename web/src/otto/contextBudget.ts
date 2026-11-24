@@ -9,8 +9,8 @@ export const MAX_CONTEXT_BYTES = 16 * 1024
 
 /**
  * The UTF-8 length of `JSON.stringify(value)`, as the server's `context_bytes` counts it, for data made of strings,
- * integers, booleans and null (what the lists hold). A lone surrogate is escaped here (6 bytes) and counted raw there (3),
- * so this counts more. A float can count less: JS writes 1e-7, Python 1e-07. Keep floats out of capped lists.
+ * integers, booleans and null (what the lists hold). A lone surrogate counts as its 6-byte escape on both ends. A float
+ * can count less here: JS writes 1e-7, Python 1e-07. Keep floats out of capped lists.
  */
 export function contextBytes(value: unknown): number {
   const text = JSON.stringify(value) ?? ''

@@ -46,8 +46,11 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 
 
 def context_bytes(data: object) -> int:
-    """The UTF-8 length of `data` as compact JSON, as `contextBytes` in web/src/otto/contextBudget.ts measures it."""
-    return len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "surrogatepass"))
+    """The UTF-8 length of `data` as compact JSON, as `contextBytes` in web/src/otto/contextBudget.ts measures it.
+
+    A lone surrogate arrives escaped (`\\ud800`, 6 bytes) and json.loads makes it one character. It is counted as that
+    escape again, so a client can't fit twice the budget into an update with them."""
+    return len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "backslashreplace"))
 
 
 class LiveSession(Protocol):

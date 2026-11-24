@@ -12,7 +12,7 @@ describe('contextBytes', () => {
     expect(contextBytes({ t: 'é' })).toBe(10)
     expect(contextBytes({ t: 'नमस्ते' })).toBe(26)
     expect(contextBytes({ t: '🤖' })).toBe(12)
-    // A lone surrogate: JSON.stringify escapes it (14 bytes), the server counts it raw (11). The browser never counts less.
+    // A lone surrogate counts as its escape, \ud800, on both ends.
     expect(contextBytes({ t: '\ud800' })).toBe(14)
     expect(contextBytes({ t: 'a\nb' })).toBe(12)
   })
