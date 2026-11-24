@@ -101,7 +101,8 @@ test('cancelling the notice shares nothing, and ending the conversation ends a s
 
 test('the camera asks first, says it is on, sends frames, and only one share runs at a time', async ({ page }) => {
   await page.addInitScript(() => {
-    navigator.mediaDevices.getUserMedia = async () => {
+    navigator.mediaDevices.getUserMedia = async (constraints?: MediaStreamConstraints) => {
+      (window as unknown as { __cameraAsked: unknown }).__cameraAsked = constraints
       const canvas = Object.assign(document.createElement('canvas'), { width: 640, height: 480 })
       const ctx = canvas.getContext('2d')!
       window.setInterval(() => { ctx.fillStyle = '#a63'; ctx.fillRect(0, 0, 640, 480) }, 100)
@@ -116,6 +117,8 @@ test('the camera asks first, says it is on, sends frames, and only one share run
   await notice.getByRole('button', { name: 'Show camera' }).click()
   await expect(panel).toContainText('Camera on')
   await expect(panel).toContainText('Otto sees what your camera sees.')
+  // The camera never brings the microphone with it: the voice has its own consent.
+  expect(await page.evaluate(() => (window as unknown as { __cameraAsked: unknown }).__cameraAsked)).toEqual({ video: true, audio: false })
   await expect(panel.getByRole('button', { name: 'Share screen' })).toBeHidden() // one share at a time
   await expectShare(page, /sharing: camera, [1-9]\d* frames$/)
 
