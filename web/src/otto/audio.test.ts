@@ -96,12 +96,12 @@ describe('SpeechPlayer', () => {
     expect(player.activeSources).toBe(0)
     expect(player.playing).toBe(false)
     expect(idle).toBe(1)
-    // The server is still sending the interrupted turn: none of it plays.
-    player.play(chunk(0.1))
+    // The server is still sending the interrupted turn: none of it plays, and play() says so.
+    expect(player.play(chunk(0.1))).toBe(false)
     expect(context.sources).toHaveLength(5)
     // The server ends the turn ("interrupted" or "turn_complete"): the next reply plays.
     player.endTurn()
-    player.play(chunk(0.1))
+    expect(player.play(chunk(0.1))).toBe(true)
     expect(context.sources).toHaveLength(6)
     player.close()
   })

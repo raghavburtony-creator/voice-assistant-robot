@@ -18,10 +18,13 @@ from typing import Any, AsyncIterator, Protocol
 from fastapi import WebSocket
 
 from app.config import settings
+from app.voice.events import Action, EventTranslator, Interrupted, Speech, Transcript, TurnComplete, VoiceEvent
+from app.voice.output import OutputChannel
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
+from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
 
 logger = logging.getLogger(__name__)
 
@@ -168,10 +171,15 @@ class Bridge:
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
         self.capture: str | None = None
+        self.perception = PerceptionGateway()
+        # Browser/page context is an explicit conversation input, not camera/screen capture.
+        self.perception.set_consent("browser", True)
         self.last_frame = float("-inf")
         self.frames = 0
-        # Gemini sends transcript chunks and then the whole text again; per role, did a chunk of this turn go out?
-        self._chunked = {"user": False, "assistant": False}
+        # The model side only queues on `out`; `output_pump` is its one writer (output.py), so a slow browser never stalls
+        # the model's events. `translator` names what each ADK event means (events.py).
+        self.out = OutputChannel(ws)
+        self.translator = EventTranslator()
 
     # ---- browser to model ----
 
@@ -193,6 +201,10 @@ class Bridge:
             return
         screens[key] = data
         self.live.state["screens"] = screens
+        try:
+            self.perception.ingest_context("browser", {key: data})
+        except PerceptionRejected:
+            pass
         announce = event.get("announce")
         prompt = event_prompt(announce) if isinstance(announce, str) else None
         now = asyncio.get_running_loop().time()
@@ -214,9 +226,16 @@ class Bridge:
             return
         if not 0 < len(jpeg) <= MAX_FRAME_BYTES or not jpeg.startswith(JPEG_MAGIC):
             return
+        try:
+            observation = self.perception.ingest_frame(self.capture, jpeg, timestamp=now)
+        except PerceptionRejected:
+            return
         self.last_frame = now
         self.frames += 1
-        await self.live.send_image(jpeg)
+        self.live.state["perception"] = {"latest": self.perception.summary(), "last_observation_id": observation.id}
+        await self.live.send_image(observation.data or b"")
+        # D-21: once the frame has been forwarded successfully, retain only metadata.
+        self.perception.drop_frame_data(self.capture, observation.id)
 
     async def browser_to_model(self) -> None:
         while True:
@@ -241,6 +260,10 @@ class Bridge:
                 await self.live.send_text(event["text"][:MAX_TEXT_CHARS])
             elif kind == "capture" and (event.get("source") in CAPTURE_SOURCES or event.get("source") is None):
                 self.capture = event.get("source")
+                for source in CAPTURE_SOURCES:
+                    self.perception.set_consent(source, source == self.capture)
+                if self.capture is None:
+                    self.live.state["perception"] = {"latest": self.perception.summary()}
             elif kind == "frame":
                 await self.send_frame(event.get("data"))
             elif kind == "mic_off":
@@ -261,32 +284,28 @@ class Bridge:
         self.out.control({"type": "avatar", "event": clean})
         return True
 
-    async def _transcript(self, role: str, transcription: Any) -> None:
-        text = getattr(transcription, "text", None)
-        if not text:
-            return
-        if getattr(transcription, "finished", False):
-            already, self._chunked[role] = self._chunked[role], False
-            if already:
-                return
-        else:
-            self._chunked[role] = True
-        await self.ws.send_json({"type": "transcript", "role": role, "text": text})
+    def _deliver(self, event: VoiceEvent) -> None:
+        """Queues one event for the browser. Never waits on the socket."""
+        if isinstance(event, Speech):
+            self.out.audio(event.pcm)
+        elif isinstance(event, Interrupted):
+            self.out.interrupt()
+        elif isinstance(event, Transcript):
+            self.out.control({"type": "transcript", "role": event.role, "text": event.text})
+        elif isinstance(event, TurnComplete):
+            self.out.control({"type": "turn_complete"})
+        elif isinstance(event, Action):
+            self.out.control({"type": "action", **event.payload})
 
     async def model_to_browser(self) -> None:
         async for event in self.live.events():
             # A tool runs between its call and response events, so drain after every event, before this event's audio.
             for action in sink.drain(self.live.session_id):
-                await self.ws.send_json({"type": "action", **action})
-            if getattr(event, "interrupted", None):
-                await self.ws.send_json({"type": "interrupted"})
-            content = getattr(event, "content", None)
-            for part in (getattr(content, "parts", None) or []):
-                blob = getattr(part, "inline_data", None)
-                if blob is not None and getattr(blob, "data", None):
-                    await self.ws.send_bytes(blob.data)
-            await self._transcript("user", getattr(event, "input_transcription", None))
-            await self._transcript("assistant", getattr(event, "output_transcription", None))
-            if getattr(event, "turn_complete", None):
-                self._chunked = {"user": False, "assistant": False}
-                await self.ws.send_json({"type": "turn_complete"})
+                self._deliver(Action(action))
+            for item in self.translator.translate(event):
+                self._deliver(item)
+        await self.out.flush()  # the model is done: everything it said goes out before `ended`
+
+    async def output_pump(self) -> None:
+        """The one writer to the browser (output.py)."""
+        await self.out.run()
