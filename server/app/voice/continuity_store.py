@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Protocol
 
 RETENTION_SECONDS = 7 * 24 * 60 * 60
-MAX_ID_CHARS = 128
+MAX_ID_CHARS = 64
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,8 @@ class ContinuityStore(Protocol):
     def load(self, scope: str, identity: str, *, now: int | None = None) -> ContinuityRecord | None: ...
     def save(self, record: ContinuityRecord, identity: str) -> None: ...
     def delete(self, scope: str, identity: str) -> None: ...
+    def disable(self, scope: str, identity: str) -> None: ...
+    def enable(self, scope: str, identity: str) -> None: ...
 
 
 def _key(scope: str, identity: str) -> str:
@@ -39,7 +41,7 @@ def _key(scope: str, identity: str) -> str:
 
 
 def _valid_id(value: object) -> bool:
-    return isinstance(value, str) and 0 < len(value) <= MAX_ID_CHARS and all(c.isascii() and (c.isalnum() or c in "_.:-") for c in value)
+    return isinstance(value, str) and 0 < len(value) <= MAX_ID_CHARS and value[0].isascii() and value[0].isalnum() and all(c.isascii() and (c.isalnum() or c in "_.:-") for c in value)
 
 
 class SQLiteContinuityStore:
@@ -51,6 +53,7 @@ class SQLiteContinuityStore:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS continuity (record_key TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS continuity_disabled (record_key TEXT PRIMARY KEY)")
 
     def _connect(self):
         return sqlite3.connect(self.path, timeout=5)
@@ -82,14 +85,32 @@ class SQLiteContinuityStore:
     def save(self, record: ContinuityRecord, identity: str) -> None:
         if not identity or not record.scope or not _valid_id(record.task) or not _valid_id(record.step):
             return
+        key = _key(record.scope, identity)
+        with self._connect() as db:
+            if db.execute("SELECT 1 FROM continuity_disabled WHERE record_key = ?", (key,)).fetchone():
+                return
         payload = json.dumps(record.payload(), separators=(",", ":"), ensure_ascii=True)
         with self._connect() as db:
             db.execute("INSERT INTO continuity(record_key, payload) VALUES(?, ?) "
                        "ON CONFLICT(record_key) DO UPDATE SET payload=excluded.payload",
-                       (_key(record.scope, identity), payload))
+                       (key, payload))
 
     def delete(self, scope: str, identity: str) -> None:
         if not scope or not identity:
             return
         with self._connect() as db:
             db.execute("DELETE FROM continuity WHERE record_key = ?", (_key(scope, identity),))
+
+    def disable(self, scope: str, identity: str) -> None:
+        if not scope or not identity:
+            return
+        key = _key(scope, identity)
+        with self._connect() as db:
+            db.execute("DELETE FROM continuity WHERE record_key = ?", (key,))
+            db.execute("INSERT OR IGNORE INTO continuity_disabled(record_key) VALUES(?)", (key,))
+
+    def enable(self, scope: str, identity: str) -> None:
+        if not scope or not identity:
+            return
+        with self._connect() as db:
+            db.execute("DELETE FROM continuity_disabled WHERE record_key = ?", (_key(scope, identity),))
