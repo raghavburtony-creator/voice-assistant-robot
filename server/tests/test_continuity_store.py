@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import json
+
 from app.voice.continuity_store import (
     RETENTION_SECONDS,
     ContinuityRecord,
