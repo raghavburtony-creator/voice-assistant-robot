@@ -89,6 +89,7 @@ export class FakeVoiceServer {
   speaking = false
   private log: ServerLog
   private contexts = new Map<string, unknown>()
+  private continuitySaved: { task: string; step: string; savedAt: number } | null = null
   constructor(log: ServerLog = () => {}) { this.log = log }
 
   /** What the page last sent under `key` (null when cleared, undefined when never sent). */
@@ -111,7 +112,23 @@ export class FakeVoiceServer {
     if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
     if (message.type === 'capture') this.capture = message.source === 'camera' || message.source === 'screen' ? message.source : null
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
-    else if (typeof message.key === 'string') this.contexts.set(message.key, message.data ?? null)
+    else if (typeof message.key === 'string') {
+      this.contexts.set(message.key, message.data ?? null)
+      if (message.key === 'guide_task_running') {
+        const running = message.data as { id?: unknown; stepId?: unknown } | null
+        this.continuitySaved = running && typeof running.id === 'string' && typeof running.stepId === 'string'
+          ? { task: running.id, step: running.stepId, savedAt: Date.now() } : null
+      }
+      if (message.key === 'guide_tasks' && this.continuitySaved) {
+        const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
+        const match = tasks?.find(task => task.id === this.continuitySaved?.task)
+        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(this.continuitySaved.step)) this.continuitySaved = null
+        else {
+          this.send({ type: 'action', action: 'task_resume', task: this.continuitySaved.task, step: this.continuitySaved.step })
+          this.continuitySaved = null
+        }
+      }
+    }
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
     else if (message.type === 'text') {
       // A new message while Otto is mid-sentence ends that turn: Gemini reports it as `interrupted` ([verify], Q-01).
