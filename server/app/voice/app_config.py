@@ -48,6 +48,7 @@ COMMANDS = ["show_message", "toggle_theme"]
 EVENTS = {
     "message_shown": "A message has just appeared on screen.",
     "desktop_movement_finished": "Otto has finished the requested desktop movement. Check app_tasks for whether it succeeded or failed, then report that outcome briefly.",
+    "desktop_action_finished": "The requested desktop action has ended. Check app_tasks for its result and verification status, then report the actual outcome briefly. Do not describe an unverified process launch as a ready application window.",
 }
 
 
