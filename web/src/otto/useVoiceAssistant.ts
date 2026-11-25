@@ -42,6 +42,7 @@ function describeAction(action: AssistantAction, before: string): { label: strin
   if (action.action === 'task_resume') return { label: `Resumed: ${findGuideTask(action.task)?.title ?? action.task}`, inverse: null }
   if (action.action === 'task_move') return { label: TASK_MOVE_LABELS[action.move], inverse: null }
   if (action.action === 'card') return { label: `Put a card in the panel: ${action.card.title}`, inverse: null }
+  if (action.action === 'desktop_action') return { label: `Desktop action: ${action.desktop_action.replaceAll('_', ' ')}`, inverse: null }
   return { label: COMMAND_LABELS[action.name], inverse: null }
 }
 
