@@ -244,13 +244,14 @@ class Bridge:
     def _persist_running_task(self, data: object) -> None:
         identity = self.live.continuity
         if identity is None or self.continuity_withdrawn:
+            self.live.state.pop("continuity_handoff", None)
             return
         if data is None:
             # The first null is a new session's empty browser state. A one-shot marker also
             # distinguishes source-interface unmount during an accepted navigation handoff
             # from task completion/cancellation.
+            handoff = self.live.state.pop("continuity_handoff", False) is True
             if self.seen_running_task:
-                handoff = self.live.state.pop("continuity_handoff", False) is True
                 self.seen_running_task = False
                 if handoff:
                     return
