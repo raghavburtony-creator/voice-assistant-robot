@@ -9,11 +9,11 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, get_args
 
 EnvironmentalTopic = Literal["object", "activity", "scene_change", "potential_hazard"]
 EnvironmentalConfidence = Literal["sufficient", "uncertain"]
-TOPICS = ("object", "activity", "scene_change", "potential_hazard")
+TOPICS = get_args(EnvironmentalTopic)
 MAX_MESSAGE_CHARS = 120
 MAX_OBSERVATION_AGE_SECONDS = 5.0
 MIN_PROPOSAL_GAP_SECONDS = 15.0
