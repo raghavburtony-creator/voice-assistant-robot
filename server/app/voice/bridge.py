@@ -229,6 +229,8 @@ class Bridge:
         self.frames += 1
         self.live.state["perception"] = {"latest": self.perception.summary(), "last_observation_id": observation.id}
         await self.live.send_image(observation.data or b"")
+        # D-21: once the frame has been forwarded successfully, retain only metadata.
+        self.perception.drop_frame_data(self.capture, observation.id)
 
     async def browser_to_model(self) -> None:
         while True:
