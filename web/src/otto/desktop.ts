@@ -125,13 +125,14 @@ export function verifyDesktopMovement(action: DesktopAction, context: DesktopCon
   const maxY = Math.max(minY, top + context.monitor.height - context.otto.height - margin)
   const centreX = left + Math.max(0, context.monitor.width) / 2 - context.otto.width / 2
   const centreY = top + Math.max(0, context.monitor.height) / 2 - context.otto.height / 2
-  const expected: [number, number] = {
+  const expectedByDestination: Record<DesktopDestination, [number, number]> = {
     home: [centreX, centreY],
     'desktop-left': [minX, centreY],
     'desktop-right': [maxX, centreY],
     top: [centreX, minY],
     bottom: [centreX, maxY],
-  }[destination]
+  }
+  const expected = expectedByDestination[destination]
   const targetX = Math.min(maxX, Math.max(minX, expected[0]))
   const targetY = Math.min(maxY, Math.max(minY, expected[1]))
   return Math.abs(context.otto.x - targetX) <= 5 && Math.abs(context.otto.y - targetY) <= 5
