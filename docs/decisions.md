@@ -291,19 +291,6 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
 
 
-## D-25 Desktop actions require per-action approval and a closed native allow-list
-
-**Decision:**
-- Desktop actions are proposed by the existing ADK tool layer and pass through the existing server sink and browser action validation. No second orchestrator or autonomous native decision-maker is introduced.
-- The desktop UI must ask the visitor to approve each exact action before invoking the native command. Declining performs no action; approval is scoped to that one request.
-- The native command accepts only a closed enum: minimize Otto, restore Otto, move Otto to one of five named positions, launch Calculator, or launch Text Editor. Unknown actions are rejected by native deserialization.
-- Application launching uses fixed platform-specific application identifiers with no caller-provided executable, URL, path or arguments. No shell command, arbitrary application, filesystem operation, keystroke or general input automation is exposed.
-- Results distinguish verified window state, movement accepted/completed by the native window API, and a process successfully spawned. A spawned process is not described as a verified, ready application window.
-
-**Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
-
-**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
-
 ## D-24 Desktop context is opt-in, metadata-only and limited to the active conversation
 
 **Decision:**
@@ -316,3 +303,16 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 **Why:** Desktop awareness is useful for positioning and high-level context, but a desktop window title and cursor position can still reveal personal information. Explicit, visible, session-scoped consent keeps the capability bounded and revocable without adding a second observation pipeline.
 
 **Where:** web/src/otto/VoiceAssistant.tsx (visible opt-in), web/src/otto/Otto.tsx (session lifecycle and context publication), web/src/otto/desktop.ts, web/src-tauri/src/lib.rs (native metadata boundary), server/app/voice/tools.py (get_desktop_context), and server/tests/test_voice.py.
+
+## D-25 Desktop actions require per-action approval and a closed native allow-list
+
+**Decision:**
+- Desktop actions are proposed by the existing ADK tool layer and pass through the existing server sink and browser action validation. No second orchestrator or autonomous native decision-maker is introduced.
+- The desktop UI must ask the visitor to approve each exact action before invoking the native command. Declining performs no action; approval is scoped to that one request.
+- The native command accepts only a closed enum: minimize Otto, restore Otto, move Otto to one of five named positions, launch Calculator, or launch Text Editor. Unknown actions are rejected by native deserialization.
+- Application launching uses fixed platform-specific application identifiers with no caller-provided executable, URL, path or arguments. No shell command, arbitrary application, filesystem operation, keystroke or general input automation is exposed.
+- Results distinguish verified window state, movement accepted/completed by the native window API, and a process successfully spawned. A spawned process is not described as a verified, ready application window.
+
+**Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
+
+**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
