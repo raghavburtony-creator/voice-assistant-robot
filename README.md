@@ -38,6 +38,35 @@ To try the robot without a key or a server, open http://localhost:5173/lab.html.
 
 Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the gesture engine and the lifecycle rules) and `cd web && npm run build`. Browser tests: `cd web && npm run test:e2e` (Playwright, Chromium, against the lab and the mascot; the first time, run `npx playwright install chromium`).
 
+## Run Otto as a desktop companion
+
+The desktop host is a Tauri v2 shell around the same React application. It does not create a second avatar or voice runtime: the existing Otto UI continues to connect to the FastAPI/Google ADK server.
+
+Prerequisites: the web and server prerequisites above, Rust (stable), and the native build tools required by Tauri for your operating system (for Windows, the Microsoft C++ Build Tools and WebView2; for macOS, Xcode Command Line Tools; for Linux, the Tauri system packages).
+
+```bash
+cd web
+npm install
+npm run desktop:dev
+```
+
+The first run downloads the Tauri CLI through `npx` and builds the Rust host. To create release bundles:
+
+```bash
+cd web
+npm run desktop:build
+```
+
+For a packaged desktop build, set `VITE_API_URL` to the reachable Otto server origin before building (for example, `https://otto-api.example.com`). In development, Vite continues to proxy `/api` to the local server. The desktop window is transparent, frameless and always on top; it reuses the web app's React/robot implementation.
+
+The native/web boundary is intentionally narrow in this first slice:
+- the webview may query read-only runtime information with `getDesktopStatus()`;
+- the host announces `otto://desktop-ready` and `otto://desktop-page-loaded` lifecycle events;
+- `onDesktopError()` is the reserved error subscription;
+- no arbitrary shell, filesystem, input or window-control command is exposed. Future desktop actions must be added through the permissioned gateway in DESKTOP-04, not as model-accessible Tauri commands.
+
+Browser mode remains unchanged: the bridge helpers return a browser-safe fallback when the Tauri runtime is absent.
+
 ## Using it in a new project
 
 The two files you edit every time are the two config files. Their static page and command lists must match (a server test checks it).
