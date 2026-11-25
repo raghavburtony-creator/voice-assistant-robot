@@ -27,7 +27,7 @@ describe('desktop bridge in browser mode', () => {
 describe('desktop movement bridge', () => {
   it('validates and sends only a named destination to the native command', async () => {
     const invoke = vi.fn().mockResolvedValue({
-      ok: true, destination: 'desktop-left', monitor: 'Display 1', x: 20, y: 40,
+      ok: true, destination: 'desktop-left',
     })
     window.__TAURI__ = {
       core: { invoke },
