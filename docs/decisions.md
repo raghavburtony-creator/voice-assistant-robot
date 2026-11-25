@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-29**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-30**, **Q-10**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -46,6 +46,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-26 | Continuity identity is supplied by the host; cross-session task state is opt-in and bounded | continuity, privacy | current |
 | D-27 | The server voice layer is not a pure core/shell architecture | layers | current |
 | D-28 | Defer spatial/AR renderer selection until a target is specified | robot, architecture | current |
+| D-29 | Sign recognition uses a dedicated temporal adapter and text-only handoff | accessibility, privacy | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | answered by D-26 |
@@ -54,6 +55,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | answered by D-28 |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
+| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | open |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
 
@@ -280,6 +282,20 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 
 **Where:** Today, the reported lists are `listGuideTargets` and `listGuideTasks` in `web/src/otto/guidance/targets.ts`, published in `web/src/otto/Otto.tsx`. The server checks are `show_target` and `start_guided_task` in `server/app/voice/tools.py`, and the context budget is `Bridge.update_context` in `bridge.py`. The browser checks are `toAssistantAction` in `web/src/otto/messages.ts`. The static lists are D-03's. The tests are `test_show_target_only_allows_reported_targets`, `test_start_guided_task_only_allows_reported_tasks` and the D-03 parity tests in `server/tests/test_voice.py`. The caps and the clearing of a refused key are `capList` and `MAX_CONTEXT_BYTES` in `web/src/otto/contextBudget.ts` and `context_bytes` and `update_context` in `bridge.py`, tested in `contextBudget.test.ts`, `test_a_refused_context_update_clears_the_key_and_never_keeps_a_stale_list` and `test_context_budget_and_measure_match_the_web_kit` (#61). The id rule is `RUNTIME_ID` in `web/src/otto/runtimeId.ts` and in `tools.py`, applied in `listGuideTargets`, `listGuideTasks`, `toAssistantAction`, `get_screen_context`, `show_target` and `start_guided_task`, and tested in `runtimeId.test.ts`, `test_runtime_id_rule_matches_the_web_kit` and `test_guide_tools_refuse_ids_that_break_the_rule_and_never_offer_them_back` (#62). Reported destinations (#63) are filed as a task citing this decision.
 
+## D-29 Sign recognition uses a dedicated temporal adapter and text-only handoff
+
+**Decision:**
+- **Do not use the existing D-21 still-frame feed as the sign recognizer.** The current camera path deliberately sends at most one 768-pixel still per 1,100 ms to Gemini Live. That is a useful visual-context path, not a validated continuous sign-language input path. Sign recognition depends on motion over time and may also depend on hand shape, body position and non-manual signals. A one-frame-per-second feed cannot be assumed to preserve those features.
+- **Keep recognition provider-neutral.** Sign recognition belongs behind a dedicated adapter that can consume a bounded, visitor-started temporal capture and return typed recognition updates. The adapter may be local or remote; provider/model selection remains out of scope until the language and dataset requirements in Q-09 are resolved and candidate evidence is evaluated.
+- **Reuse the existing conversation and presentation paths.** Recognition results enter Otto as ordinary, clearly identified text input through the existing voice/session boundary. They do not create a parallel conversation, event bus, tool path or runtime authority. Otto's replies remain in the existing panel text channel (D-06, D-18, D-19).
+- **Treat recognition as uncertain input, not authority.** The adapter reports partial, final and unrecognized/unsupported outcomes. It must not silently turn uncertainty into fluent text. The panel distinguishes provisional from final text and gives the visitor a way to correct, confirm or discard a result. A recognition result never invokes an action; any resulting action still passes through D-02 and D-22.
+- **Consent is specific to this mode and destination.** D-21's existing camera-share notice authorises still frames to Google for visual context; it does not authorise a higher-rate temporal stream or a different recognition provider. Sign mode needs its own visitor-initiated, plain-language notice naming what is captured, the configured recipient, whether processing is local or remote, the capture limits and the no-retention rule. A persistent visible indicator and a visitor-controlled Stop are required. No automatic restart or remembered sign-capture consent.
+- **No raw-video retention by Otto.** The capture buffer is bounded in memory and discarded on Stop, conversation end, hidden-tab stop, failure or session limit. No raw frames or clips enter logs, analytics, continuity storage, browser storage or the lab. A provider's handling must be disclosed and verified before it is enabled; the kit must not claim provider-side deletion or non-retention without evidence.
+
+**Why:** The current camera path is explicitly designed for sparse visual context and Gemini Live's documented video input is one frame per second. Sign-language recognition is a temporal language task, not a generic image-description prompt. Keeping a provider-neutral temporal adapter separate from the existing still-frame path avoids promising unsupported recognition, while the text-only handoff preserves Otto's existing conversation, accessibility and authority boundaries. The language, task and data requirements must be established with the signing community before choosing a model.
+
+**Where:** Existing capture limits and lifecycle: `web/src/otto/capture.ts`, `useScreenShare.ts`, `ScreenShare.tsx`, `useVoiceAssistant.ts` and `server/app/voice/bridge.py` (D-21). Existing text/session path: `useVoiceAssistant.ts`, `messages.ts`, `bridge.py` and the panel transcript in `VoiceAssistant.tsx`. The sign adapter and its tests are to be added by the SIG-02 implementation issue.
+
 ## Open questions
 
 | ID | Question | Blocks | Owner | Status |
@@ -292,6 +308,7 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? D-28 answers this by deferring renderer selection until a target device/runtime and concrete rendering and interaction requirements are specified; issue #12 is the place to define them before implementation. | Spatial / AR epic | unassigned | answered by D-28 |
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
+| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? Confirm the language with Deaf/signing community partners; define whether the first pilot is a small, bounded vocabulary or continuous conversational signing; identify an appropriate consented dataset or a community-governed collection plan; and agree who validates annotations and signer-independent evaluation. Do not infer the language from deployment geography or treat a dictionary as a video training corpus. | Sign-language recognition model and pilot scope | unassigned | open |
 
 
 ## D-24 Desktop context is opt-in, metadata-only and limited to the active conversation
