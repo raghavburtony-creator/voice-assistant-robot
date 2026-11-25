@@ -17,6 +17,7 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.context import clear_page_context
 from app.voice.sink import sink
+from app.voice.environmental import accept_environmental_proposal
 
 logger = logging.getLogger(__name__)
 
@@ -310,5 +311,37 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, desktop_action, show_card)]
+EnvironmentalTopic = Literal["object", "activity", "scene_change", "potential_hazard"]
+EnvironmentalConfidence = Literal["sufficient", "uncertain"]
+
+
+def notice_environmental_observation(
+    topic: EnvironmentalTopic,
+    message: str,
+    confidence: EnvironmentalConfidence,
+    tool_context: ToolContext,
+) -> dict:
+    """Propose a small environmental attention event from the visitor's actively shared camera.
+
+    Use only for a notable visible object, activity, scene change or potential hazard.
+    Do not infer identity, faces, emotion, health or sensitive traits. Use confidence
+    'uncertain' to abstain. This never performs an action; Otto may only give a minor
+    attention reaction after server and browser checks. It works only while a fresh
+    camera frame is being shared in this voice session.
+    """
+    proposal = accept_environmental_proposal(
+        tool_context.state,
+        {"topic": topic, "message": message, "confidence": confidence},
+    )
+    if proposal is None:
+        return {"accepted": False, "note": "No environmental event was emitted. The camera share, fresh frame, confidence or proposal limits may not permit it."}
+    queued = sink.put(tool_context.session.id, {
+        "environmental": {"topic": proposal.topic, "message": proposal.message},
+    })
+    if not queued:
+        return {"accepted": False, "note": "The proposal could not be delivered in this session."}
+    return {"accepted": True, "event": "attention", "topic": proposal.topic, "note": "A minor attention proposal was sent to Otto's existing awareness system. No action was taken."}
+
+
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, desktop_action, show_card, notice_environmental_observation)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
