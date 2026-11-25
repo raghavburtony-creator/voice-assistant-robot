@@ -116,7 +116,12 @@ export class FakeVoiceServer {
     const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown; source?: unknown; generation?: unknown; proposal?: unknown }
     if (message.type === 'continuity_clear') { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }; return }
     if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
-    if (message.type === 'capture' && (message.source === 'camera' || message.source === 'screen' || message.source === null)) {\n      if (typeof message.generation === 'number' && Number.isSafeInteger(message.generation) && message.generation > this.captureGeneration) {\n        this.captureGeneration = message.generation\n        this.capture = message.source\n      }\n    }
+    if (message.type === 'capture' && (message.source === 'camera' || message.source === 'screen' || message.source === null)) {
+      if (typeof message.generation === 'number' && Number.isSafeInteger(message.generation) && message.generation > this.captureGeneration) {
+        this.captureGeneration = message.generation
+        this.capture = message.source
+      }
+    }
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
     else if (typeof message.key === 'string') {
       this.contexts.set(message.key, message.data ?? null)
@@ -228,7 +233,15 @@ export class FakeVoiceServer {
     return true
   }
 
-  /** Emit the bounded environmental message from the same server protocol used by Bridge.model_to_browser. */\n  environmental(generation: number, proposal: Record<string, unknown>) {\n    if (!this.socket || !this.connected || this.capture !== 'camera' || generation !== this.captureGeneration) return false\n    this.send({ type: 'environmental', generation, proposal })\n    this.log(`environmental: ${JSON.stringify(proposal)}`)\n    return true\n  }\n\n  /** The server says how things are going (server/app/voice/avatar.py): working, asking permission, success... */
+  /** Emit the bounded environmental message from the same server protocol used by Bridge.model_to_browser. */
+  environmental(generation: number, proposal: Record<string, unknown>) {
+    if (!this.socket || !this.connected || this.capture !== 'camera' || generation !== this.captureGeneration) return false
+    this.send({ type: 'environmental', generation, proposal })
+    this.log(`environmental: ${JSON.stringify(proposal)}`)
+    return true
+  }
+
+  /** The server says how things are going (server/app/voice/avatar.py): working, asking permission, success... */
   avatar(event: Record<string, unknown>) {
     if (!this.socket || !this.connected) return false
     this.send({ type: 'avatar', event })

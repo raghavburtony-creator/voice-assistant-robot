@@ -57,7 +57,7 @@ cd web
 npm run desktop:build
 ```
 
-For a packaged desktop build, set `VITE_API_URL` to the reachable Otto server origin before building (for example, `https://otto-api.example.com`). In development, Vite continues to proxy `/api` to the local server. The desktop window is transparent, frameless and always on top; it reuses the web app's React/robot implementation.
+For a packaged desktop build, set `VITE_API_URL` to the reachable Otto server origin before building (for example, `https://otto-api.example.com`). See [`docs/desktop.md`](docs/desktop.md) for native checks, CI packaging and troubleshooting. In development, Vite continues to proxy `/api` to the local server. The desktop window is transparent, frameless and always on top; it reuses the web app's React/robot implementation.
 
 The native/web boundary stays intent-based:
 - the webview may query read-only runtime information with `getDesktopStatus()`;

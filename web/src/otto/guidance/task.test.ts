@@ -142,8 +142,8 @@ describe('taskProgress', () => {
   it('says nothing before start, names the step while active, and clears once done or cancelled', () => {
     const t = createGuideTask(SPEC)
     expect(last(t.complete())).toBeUndefined() // before start: no event, so nothing is published
-    expect(last(t.start())).toEqual({ id: 'theme', title: 'Change the theme', step: 1, total: 3, say: 'Open Settings.' })
-    expect(last(t.complete())).toEqual({ id: 'theme', title: 'Change the theme', step: 2, total: 3, say: 'Pick a theme.' })
+    expect(last(t.start())).toEqual({ id: 'theme', title: 'Change the theme', step: 1, stepId: 'open', total: 3, say: 'Open Settings.' })
+    expect(last(t.complete())).toEqual({ id: 'theme', title: 'Change the theme', step: 2, stepId: 'pick', total: 3, say: 'Pick a theme.' })
     expect(last(t.back())).toMatchObject({ step: 1 })
     t.complete(); t.complete()
     expect(last(t.complete())).toBeNull()
