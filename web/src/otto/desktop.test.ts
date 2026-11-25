@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDesktopStatus, isDesktopRuntime, moveDesktopTo, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
+import { getDesktopContext, getDesktopStatus, isDesktopRuntime, moveDesktopTo, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -60,5 +60,27 @@ describe('desktop movement bridge', () => {
     })
     expect(toAssistantAction({ action: 'desktop_move', destination: 'C:\\\\temp' })).toBeNull()
     expect(toAssistantAction({ action: 'desktop_move', destination: 12 })).toBeNull()
+  })
+})
+
+
+describe('desktop awareness bridge', () => {
+  it('does not expose desktop metadata in browser mode', async () => {
+    delete window.__TAURI__
+    await expect(getDesktopContext()).resolves.toBeNull()
+  })
+
+  it('requests desktop metadata from the native host', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      platform: 'windows',
+      monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+      otto: { x: -1800, y: 100, width: 420, height: 640, visible: true },
+      cursor: { x: -1500, y: 400 },
+      activeWindow: { application: 'browser.exe', title: 'Example page' },
+    })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+    await expect(getDesktopContext()).resolves.toMatchObject({ platform: 'windows', activeWindow: { application: 'browser.exe' } })
+    expect(invoke).toHaveBeenCalledWith('desktop_context')
+    delete window.__TAURI__
   })
 })
