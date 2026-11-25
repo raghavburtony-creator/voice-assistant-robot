@@ -111,6 +111,7 @@ export class FakeVoiceServer {
     if (data instanceof ArrayBuffer) { this.micFrames++; return }
     if (typeof data !== 'string') return
     const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown; source?: unknown }
+    if (message.type === 'continuity_clear') { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }; return }
     if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
     if (message.type === 'capture') this.capture = message.source === 'camera' || message.source === 'screen' ? message.source : null
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
