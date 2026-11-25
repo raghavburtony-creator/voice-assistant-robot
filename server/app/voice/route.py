@@ -33,6 +33,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import settings
 from app.voice.app_config import LANGUAGE_NAMES, PAGES
+from app.voice.continuity import ContinuityContext, from_headers
 from app.voice.runtime import is_runtime_id, runtime_title
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -78,9 +79,12 @@ async def _wait(tasks: set[asyncio.Task]) -> str:
     return reason
 
 
-async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail: str) -> str:
+async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail: str, continuity: ContinuityContext | None) -> str:
     from app.voice.bridge import Bridge
     async with connect_adk(language, page, page_title, detail) as live:
+        # Keep the host identity outside browser messages and ADK session state. CI-2 will use this
+        # server-side seam for persistence; the model never receives the identity as context.
+        live.continuity = continuity  # type: ignore[attr-defined]
         bridge = Bridge(ws, live)
         await ws.send_json({"type": "ready", "limitSeconds": settings.max_session_seconds})
         return await _wait({
@@ -119,10 +123,11 @@ async def voice_live(ws: WebSocket) -> None:
     page = page if isinstance(page, str) and (page in PAGES or is_runtime_id(page)) else next(iter(PAGES))
     page_title = PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page)
     detail = "detailed" if detail == "detailed" else "short"
+    continuity = from_headers(ws.headers, trusted_proxy=settings.continuity_trust_proxy, scope=settings.app_name)
 
     _active += 1
     try:
-        reason = await _run(ws, language, page, page_title, detail)
+        reason = await _run(ws, language, page, page_title, detail, continuity)
     except WebSocketDisconnect:
         return
     except Exception as exc:
