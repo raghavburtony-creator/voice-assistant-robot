@@ -20,11 +20,12 @@ describe("environmental proposal validation", () => {
 
   it("maps only an active camera proposal to a minor attention event", () => {
     const proposal = { topic: "potential_hazard", message: "A cable is across the walkway." }
-    expect(toEnvironmentalAttention("camera", proposal)).toEqual({
+    expect(toEnvironmentalAttention("camera", 4, 3, proposal)).toBeNull()
+    expect(toEnvironmentalAttention("camera", 4, 4, proposal)).toEqual({
       type: "attention", importance: "minor", ...proposal,
     })
-    expect(toEnvironmentalAttention("screen", proposal)).toBeNull()
-    expect(toEnvironmentalAttention(null, proposal)).toBeNull()
-    expect(toEnvironmentalAttention("camera", { ...proposal, topic: "navigate" })).toBeNull()
+    expect(toEnvironmentalAttention("screen", 4, 4, proposal)).toBeNull()
+    expect(toEnvironmentalAttention(null, 4, 4, proposal)).toBeNull()
+    expect(toEnvironmentalAttention("camera", 4, 4, { ...proposal, topic: "navigate" })).toBeNull()
   })
 })
