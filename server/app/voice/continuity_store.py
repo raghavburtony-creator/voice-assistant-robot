@@ -39,7 +39,7 @@ def _key(scope: str, identity: str) -> str:
 
 
 def _valid_id(value: object) -> bool:
-    return isinstance(value, str) and 0 < len(value) <= MAX_ID_CHARS and all(c.isalnum() or c in "_.:-" for c in value)
+    return isinstance(value, str) and 0 < len(value) <= MAX_ID_CHARS and all(c.isascii() and (c.isalnum() or c in "_.:-") for c in value)
 
 
 class SQLiteContinuityStore:
