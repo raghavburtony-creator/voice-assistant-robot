@@ -142,7 +142,7 @@ def get_screen_context(tool_context: ToolContext) -> dict:
     title = state.get("page_title")
     if not isinstance(title, str):
         title = PAGES.get(page, PAGES["home"])["title"]
-    screens = {key: value for key, value in (state.get("screens") or {}).items() if value is not None}
+    screens = {key: value for key, value in (state.get("screens") or {}).items() if value is not None and key != "desktop_context"}
     # The page's lists reach the model only with ids that fit the rule (D-23), whoever published them.
     for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks"),
                        (DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD)):
