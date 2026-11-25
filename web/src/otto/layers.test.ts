@@ -10,6 +10,7 @@ const CORE = [
   'awareness/avatar.ts',
   'awareness/busy.ts',
   'awareness/events.ts',
+  'awareness/environmental.ts',
   'awareness/page.ts',
   'awareness/reactions.ts',
   'capture.ts',

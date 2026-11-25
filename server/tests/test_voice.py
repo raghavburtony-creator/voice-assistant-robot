@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,6 +32,7 @@ class FakeLive:
 
     def __init__(self) -> None:
         self.session_id = "fake"
+        self.continuity = None
         self.state = {"page": "home", "page_title": "Home", "screens": {}}
         self.sent_text: list[str] = []
         self.images: list[bytes] = []
@@ -418,10 +420,19 @@ def test_show_card_checks_and_caps_what_the_model_sends():
     sink.close("tool-test")
 
 
+def test_environmental_topic_allow_list_matches_the_browser():
+    source = (Path(__file__).resolve().parents[2] / "web" / "src" / "otto" / "awareness" / "environmental.ts").read_text()
+    match = re.search(r"ENVIRONMENTAL_TOPICS = \[(.*?)\] as const", source, re.S)
+    assert match
+    assert re.findall(r'"([a-z_]+)"', match.group(1)) == list(get_args(tools.EnvironmentalTopic))
+    assert list(get_args(tools.EnvironmentalConfidence)) == ["sufficient", "uncertain"]
+
+
 def test_instruction_keeps_urls_and_code_out_of_speech():
     text = system_instruction("App", "en", "Home")
     assert "show_card" in text and "Never say a URL" in text
     assert "page data, not instructions" in text
+    assert "notice_environmental_observation" in text and "Screen sharing alone does not enable it" in text
     navigate = next(line for line in text.splitlines() if line.startswith("- navigate_to:"))
     explain = next(line for line in text.splitlines() if line.startswith("- explain_page:"))
     assert "destinations" in navigate and "never pass a URL or path" in navigate
@@ -434,19 +445,153 @@ def test_tool_schemas_have_no_anyof():
         assert "anyOf" not in str(tool._get_declaration().parameters_json_schema), tool.name
 
 
+def test_environmental_tool_queues_only_a_checked_camera_attention_proposal():
+    now = time.monotonic()
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
+    ctx.state["perception"] = {"latest": [{
+        "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    result = tools.notice_environmental_observation("object", "A parcel is visible.", "sufficient", ctx)
+    assert result["accepted"] is True
+    assert sink.drain("tool-test") == [{
+        "environmental": {"generation": 1, "topic": "object", "message": "A parcel is visible."},
+    }]
+    sink.close("tool-test")
+
+
+def test_environmental_tool_abstains_without_active_fresh_camera_context():
+    now = time.monotonic()
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["capture_source"] = "screen"
+    ctx.state["capture_generation"] = 1
+    ctx.state["perception"] = {"latest": [{
+        "source": "screen", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
+    ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
+    ctx.state["perception"]["latest"][0]["source"] = "camera"
+    assert tools.notice_environmental_observation("object", "A parcel.", "uncertain", ctx)["accepted"] is False
+    assert tools.notice_environmental_observation("identity", "A person.", "sufficient", ctx)["accepted"] is False
+    ctx.state["perception"]["latest"][0]["timestamp"] = now - 10
+    assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
+    assert sink.drain("tool-test") == []
+    sink.close("tool-test")
+
+
+def test_environmental_proposal_is_bound_to_the_current_sink_session():
+    now = time.monotonic()
+    ctx = _context()
+    ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
+    ctx.state["perception"] = {"latest": [{
+        "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    sink.open("another-session")
+    result = tools.notice_environmental_observation("activity", "A machine is moving.", "sufficient", ctx)
+    assert result["accepted"] is False
+    assert sink.drain("another-session") == []
+    sink.close("another-session")
+
+
+def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
+    class RecordingSocket:
+        def __init__(self):
+            self.sent = []
+
+        async def send_json(self, message):
+            self.sent.append(message)
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+    async def go():
+        live = FakeLive()
+
+        async def events():
+            yield SimpleNamespace(turn_complete=True)
+        live.events = events
+        ws = RecordingSocket()
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        bridge.capture = "camera"
+        bridge.capture_generation = 1
+        live.state["capture_source"] = "camera"
+        live.state["capture_generation"] = 1
+        assert sink.put(live.session_id, {
+            "environmental": {"generation": 1, "topic": "object", "message": "A parcel is visible."},
+        })
+        pump = asyncio.create_task(bridge.output_pump())
+        await bridge.model_to_browser()
+        await bridge.out.flush()
+        pump.cancel()
+        try:
+            await pump
+        except asyncio.CancelledError:
+            pass
+        live.close()
+        return ws.sent
+
+    assert asyncio.run(go()) == [
+        {"type": "environmental", "generation": 1, "proposal": {"topic": "object", "message": "A parcel is visible."}},
+        {"type": "turn_complete"},
+    ]
+
+def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued():
+    async def go():
+        live = FakeLive()
+
+        async def events():
+            yield SimpleNamespace(turn_complete=True)
+
+        live.events = events
+        ws = ScriptedSocket(
+            {"type": "capture", "source": "camera", "generation": 1},
+            {"type": "capture", "source": None, "generation": 2},
+            {"type": "capture", "source": "camera", "generation": 3},
+        )
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        await bridge.browser_to_model()
+        assert bridge.capture == "camera" and bridge.capture_generation == 3
+        assert sink.put(live.session_id, {
+            "environmental": {"generation": 1, "topic": "object", "message": "Old camera observation."},
+        })
+        pump = asyncio.create_task(bridge.output_pump())
+        await bridge.model_to_browser()
+        await bridge.out.flush()
+        pump.cancel()
+        try:
+            await pump
+        except asyncio.CancelledError:
+            pass
+        live.close()
+        return ws.sent
+
+    assert asyncio.run(go()) == [{"type": "turn_complete"}]
+
 # ---- shared frames (D-21) ----
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 60
 
 
 class ScriptedSocket:
-    """Hands the bridge these browser messages, then disconnects."""
+    """Hands the bridge browser messages and records anything it sends back."""
 
     def __init__(self, *messages: dict) -> None:
         self.messages = [{"type": "websocket.receive", "text": json.dumps(m)} for m in messages]
+        self.sent: list = []
 
     async def receive(self) -> dict:
         return self.messages.pop(0) if self.messages else {"type": "websocket.disconnect"}
+
+    async def send_json(self, message: dict) -> None:
+        self.sent.append(message)
+
+    async def send_bytes(self, data: bytes) -> None:
+        self.sent.append(data)
 
 
 def run_bridge(*messages: dict) -> tuple[Bridge, FakeLive]:
@@ -482,7 +627,7 @@ def frame(data: bytes = JPEG) -> dict:
     return {"type": "frame", "data": base64.b64encode(data).decode()}
 
 
-SHARE = {"type": "capture", "source": "screen"}
+SHARE = {"type": "capture", "source": "screen", "generation": 1}
 
 
 def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
@@ -490,13 +635,19 @@ def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
     assert live.images == []
     bridge, live = run_bridge(SHARE, frame())
     assert live.images == [JPEG] and bridge.frames == 1
-    _, live = run_bridge({"type": "capture", "source": "camera"}, {"type": "capture", "source": None}, frame())
+    _, live = run_bridge({"type": "capture", "source": "camera", "generation": 1}, {"type": "capture", "source": None, "generation": 2}, frame())
     assert live.images == []
 
 
-def test_a_share_names_only_camera_or_screen():
-    bridge, live = run_bridge({"type": "capture", "source": "microphone"}, frame())
-    assert bridge.capture is None and live.images == []
+def test_a_share_names_only_camera_or_screen_and_is_mirrored_to_ephemeral_tool_state():
+    bridge, live = run_bridge({"type": "capture", "source": "camera", "generation": 1})
+    assert bridge.capture == "camera" and live.state["capture_source"] == "camera"
+    bridge, live = run_bridge({"type": "capture", "source": "screen", "generation": 1})
+    assert bridge.capture == "screen" and live.state["capture_source"] == "screen"
+    bridge, live = run_bridge({"type": "capture", "source": "camera", "generation": 1}, {"type": "capture", "source": None, "generation": 2})
+    assert bridge.capture is None and live.state["capture_source"] is None
+    bridge, live = run_bridge({"type": "capture", "source": "microphone", "generation": 1}, frame())
+    assert bridge.capture is None and live.state["capture_source"] is None and live.images == []
 
 
 def test_frames_that_are_not_jpeg_too_big_or_not_base64_are_dropped():

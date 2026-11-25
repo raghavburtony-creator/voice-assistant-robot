@@ -62,6 +62,14 @@ describe('task moves', () => {
   })
 })
 
+describe("environmental proposal messages", () => {
+  it("accepts the dedicated proposal envelope for independent validation", () => {
+    expect(parseServerMessage(JSON.stringify({
+      type: "environmental", generation: 1, proposal: { topic: "object", message: "A parcel is visible." },
+    }))).toMatchObject({ type: "environmental", proposal: { topic: "object" } })
+  })
+})
+
 describe('avatar messages', () => {
   it('pass the schema; the event inside is checked by parseAvatarEvent, not trusted here', () => {
     expect(parseServerMessage('{"type":"avatar","event":{"kind":"working","id":"r1"}}')).toMatchObject({ type: 'avatar', event: { kind: 'working', id: 'r1' } })

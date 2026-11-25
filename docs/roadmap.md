@@ -71,4 +71,4 @@ D-30 answers Q-10. Environmental observations may propose only a bounded `attent
 
 | Slice | Outcome | Blocked by | Decisions |
 |---|---|---|---|
-| **ENV-01** | Add a provider-neutral, typed environmental proposal contract and deterministic adapter; validate session/camera lifecycle, allow-listed topics, rate and duplicates on server and browser; map accepted proposals to the existing `attention` event | none | D-02, D-18, D-19, D-21, D-22, D-30 |
+| **ENV-01** ([#98](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/98)) | Add a provider-neutral, typed environmental proposal contract and deterministic adapter; validate session/camera lifecycle generations, allow-listed topics, rate and duplicates on server and browser; map accepted proposals to the existing `attention` event | none | D-02, D-18, D-19, D-21, D-22, D-30 |
