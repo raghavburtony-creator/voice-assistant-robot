@@ -46,7 +46,7 @@ struct DesktopPoint { x: i32, y: i32 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DesktopWindowContext { x: i32, y: i32, width: u32, height: u32, visible: bool }
+struct DesktopWindowContext { x: Option<i32>, y: Option<i32>, width: u32, height: u32, visible: bool }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -184,7 +184,9 @@ fn desktop_context(app: AppHandle) -> Result<DesktopContext, String> {
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "Otto's current monitor could not be identified.".to_string())?;
     let area = monitor.work_area();
-    let position = window.outer_position().map_err(|error| error.to_string())?;
+    // Wayland compositors may intentionally withhold a window's global position.
+    // Keep the rest of the desktop context useful and represent that field as unavailable.
+    let position = window.outer_position().ok();
     let size = window.outer_size().map_err(|error| error.to_string())?;
     let cursor = window.cursor_position().map_err(|error| error.to_string())?;
     let visible = window.is_visible().map_err(|error| error.to_string())?;
@@ -192,7 +194,7 @@ fn desktop_context(app: AppHandle) -> Result<DesktopContext, String> {
     Ok(DesktopContext {
         platform: std::env::consts::OS,
         monitor: DesktopRect { x: area.position.x, y: area.position.y, width: area.size.width, height: area.size.height },
-        otto: DesktopWindowContext { x: position.x, y: position.y, width: size.width, height: size.height, visible },
+        otto: DesktopWindowContext { x: position.map(|point| point.x), y: position.map(|point| point.y), width: size.width, height: size.height, visible },
         cursor: DesktopPoint { x: cursor.x.round() as i32, y: cursor.y.round() as i32 },
         active_window: active_window_context(),
     })
