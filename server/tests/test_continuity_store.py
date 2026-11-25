@@ -1,12 +1,39 @@
-from __future__ import annotations
-
-import json
-
 from app.voice.continuity_store import (
     RETENTION_SECONDS,
     ContinuityRecord,
     SQLiteContinuityStore,
 )
+
+
+class FakeContinuityStore:
+    """Small in-memory implementation of the continuity-store contract for bridge tests."""
+
+    def __init__(self):
+        self.records = {}
+        self.disabled = set()
+
+    def load(self, scope, identity, *, now=None):
+        record = self.records.get((scope, identity))
+        if record is None or (scope, identity) in self.disabled:
+            return None
+        current = 0 if now is None else now
+        return record if 0 <= current - record.savedAt <= RETENTION_SECONDS else None
+
+    def save(self, record, identity):
+        key = (record.scope, identity)
+        if key not in self.disabled:
+            self.records[key] = record
+
+    def delete(self, scope, identity):
+        self.records.pop((scope, identity), None)
+
+    def disable(self, scope, identity):
+        self.delete(scope, identity)
+        self.disabled.add((scope, identity))
+
+    def enable(self, scope, identity):
+        self.disabled.discard((scope, identity))
+
 
 
 def test_store_round_trips_only_the_four_allowed_fields(tmp_path):
@@ -66,3 +93,12 @@ def test_withdrawal_deletes_and_blocks_saves_until_explicit_reenable(tmp_path):
     store.enable("app", "visitor")
     store.save(ContinuityRecord("app", "new-task", "new-step", 104), "visitor")
     assert store.load("app", "visitor", now=105).task == "new-task"
+
+
+def test_fake_store_implements_the_narrow_store_contract():
+    store = FakeContinuityStore()
+    record = ContinuityRecord("app", "task", "step", 100)
+    store.save(record, "visitor")
+    assert store.load("app", "visitor", now=101) == record
+    store.delete("app", "visitor")
+    assert store.load("app", "visitor", now=101) is None
