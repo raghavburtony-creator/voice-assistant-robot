@@ -53,3 +53,16 @@ def test_invalid_ids_are_not_saved(tmp_path):
     store = SQLiteContinuityStore(tmp_path / "continuity.sqlite3")
     store.save(ContinuityRecord("app", "bad task", "step", 100), "visitor")
     assert store.load("app", "visitor", now=101) is None
+
+
+def test_withdrawal_deletes_and_blocks_saves_until_explicit_reenable(tmp_path):
+    store = SQLiteContinuityStore(tmp_path / "continuity.sqlite3")
+    record = ContinuityRecord("app", "task", "step", 100)
+    store.save(record, "visitor")
+    store.disable("app", "visitor")
+    assert store.load("app", "visitor", now=101) is None
+    store.save(ContinuityRecord("app", "new-task", "new-step", 102), "visitor")
+    assert store.load("app", "visitor", now=103) is None
+    store.enable("app", "visitor")
+    store.save(ContinuityRecord("app", "new-task", "new-step", 104), "visitor")
+    assert store.load("app", "visitor", now=105).task == "new-task"
