@@ -126,7 +126,8 @@ export class FakeVoiceServer {
       const saved = this.continuitySaved
       if (message.key === 'guide_tasks' && saved) {
         const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
-        const match = tasks?.find(task => task.id === saved.task)
+        if (!tasks?.length) return
+        const match = tasks.find(task => task.id === saved.task)
         if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(saved.step)) {
           this.continuitySaved = null
           try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
