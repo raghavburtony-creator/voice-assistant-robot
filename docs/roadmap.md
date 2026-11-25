@@ -11,16 +11,16 @@ Otto's product epics, how they depend on each other, and what is filed for the f
 | **E3 Multimodal input** ([#9](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/9)) | Otto can take camera or screen input, with consent and a visible indicator. | none (Q-07 answered by D-21) | not scheduled |
 | **E4 Sign-language support** ([#10](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/10)) | A visitor can sign to Otto, and what Otto understands appears as text. | E3 (Q-07 answered by D-21) | not scheduled |
 | **E5 Environmental intelligence** ([#11](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/11)) | Otto reacts to what is around the visitor, through the existing awareness vocabulary. | E3 (Q-07 answered by D-21) | not scheduled |
-| **E6 Spatial / AR presence** ([#12](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/12)) | Otto appears in spatial or AR interfaces, using the same robot state. | Q-06 | not scheduled |
+| **E6 Spatial / AR presence** ([#12](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/12)) | Otto appears in spatial or AR interfaces, using the same robot state. | A named target device/runtime and user-facing rendering and interaction requirements (D-28) | not scheduled |
 
 ```
 E1 Task-aware ──► E2 Continuity across interfaces
 E3 Multimodal ──► E4 Sign language
              └──► E5 Environmental intelligence
-E6 Spatial / AR (independent; waits on Q-06)
+E6 Spatial / AR (independent; waits for a target and requirements to be specified in issue #12, per D-28)
 ```
 
-Only E1 is broken down. Each later epic gets its tasks once its blocking questions are answered. Its first issue is then the investigation of the question (**Architecture question** template), not code.
+Only E1 is broken down. Each later epic gets its tasks once its blocking questions are answered. Its first issue is then the investigation of the question (**Architecture question** template), not code. For E6, Q-06 is answered by D-28; issue #12 must first name the target device/runtime and user-facing requirements.
 
 ## E1 Task-aware Otto: the first slices
 
