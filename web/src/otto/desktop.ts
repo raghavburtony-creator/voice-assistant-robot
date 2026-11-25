@@ -49,7 +49,12 @@ export async function getDesktopStatus(): Promise<DesktopStatus | null> {
 export async function onDesktopReady(handler: (status: DesktopStatus) => void): Promise<Unlisten> {
   const runtime = host()
   if (!runtime) return () => undefined
-  return runtime.event.listen<DesktopStatus>('otto://desktop-ready', event => handler(event.payload))
+  // The native startup event may have fired before the webview module loaded.
+  // Subscribe first, then query the host so callers never miss the initial state.
+  const unlisten = await runtime.event.listen<DesktopStatus>('otto://desktop-ready', event => handler(event.payload))
+  const status = await runtime.core.invoke<DesktopStatus>('desktop_status')
+  handler(status)
+  return unlisten
 }
 
 /** Subscribe to host-reported errors without treating them as successful actions. */
