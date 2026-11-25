@@ -567,6 +567,13 @@ def test_guide_tools_refuse_ids_that_break_the_rule_and_never_offer_them_back():
     sink.close("tool-test")
 
 
+def test_desktop_action_allowlist_matches_the_browser_contract():
+    text = (WEB_CONFIG.parent / "otto" / "desktop.ts").read_text(encoding="utf-8")
+    found = re.search(r"DESKTOP_ACTIONS = \[(.*?)\] as const", text, flags=re.S)
+    assert found
+    assert re.findall(r"'([a-z_]+)'", found.group(1)) == list(get_args(tools.DesktopAction))
+
+
 def test_desktop_action_gateway_queues_only_allowlisted_actions_for_approval():
     sink.open("tool-test")
     ctx = _context()
