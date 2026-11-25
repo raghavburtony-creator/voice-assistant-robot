@@ -242,6 +242,11 @@ class Bridge:
         task, step = data.get("id"), data.get("stepId")
         if not isinstance(task, str) or not isinstance(step, str):
             return
+        screens = self.live.state.get("screens", {})
+        offered = screens.get("guide_tasks") if isinstance(screens, dict) else None
+        spec = next((item for item in offered if isinstance(item, dict) and item.get("id") == task), None) if isinstance(offered, list) else None
+        if not isinstance(spec, dict) or not isinstance(spec.get("stepIds"), list) or step not in spec["stepIds"]:
+            return
         import time
         self.continuity_store.save(
             ContinuityRecord(scope=identity.scope, task=task, step=step, savedAt=int(time.time())),
