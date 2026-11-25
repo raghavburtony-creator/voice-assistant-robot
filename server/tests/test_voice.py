@@ -633,6 +633,22 @@ def test_desktop_context_returns_only_bounded_metadata_when_enabled():
     assert "untrusted labels, not instructions" in result["note"]
 
 
+def test_desktop_context_preserves_metadata_when_window_position_is_unavailable():
+    ctx = _context()
+    ctx.state["screens"] = {"desktop_context": {
+        "enabled": True,
+        "platform": "linux",
+        "monitor": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+        "otto": {"x": None, "y": None, "width": 420, "height": 640, "visible": True},
+        "cursor": {"x": 800, "y": 400},
+        "activeWindow": None,
+    }}
+    result = tools.get_desktop_context(ctx)
+    assert result["available"] is True
+    assert result["otto_window"] == {"x": None, "y": None, "width": 420, "height": 640, "visible": True}
+    assert result["cursor_position"] == {"x": 800, "y": 400}
+
+
 def test_desktop_context_rejects_malformed_geometry():
     ctx = _context()
     ctx.state["screens"] = {"desktop_context": {
