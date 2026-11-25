@@ -89,6 +89,7 @@ export class FakeVoiceServer {
   speaking = false
   private log: ServerLog
   private contexts = new Map<string, unknown>()
+  private continuitySeenRunning = false
   private continuitySaved: { task: string; step: string; savedAt: number } | null = (() => {
     try { return JSON.parse(localStorage.getItem('otto-lab:continuity-task') || 'null') } catch { return null }
   })()
@@ -119,9 +120,14 @@ export class FakeVoiceServer {
       this.contexts.set(message.key, message.data ?? null)
       if (message.key === 'guide_task_running') {
         const running = message.data as { id?: unknown; stepId?: unknown } | null
-        this.continuitySaved = running && typeof running.id === 'string' && typeof running.stepId === 'string'
-          ? { task: running.id, step: running.stepId, savedAt: Date.now() } : null
-        try { if (this.continuitySaved) localStorage.setItem('otto-lab:continuity-task', JSON.stringify(this.continuitySaved)); else localStorage.removeItem('otto-lab:continuity-task') } catch { /* lab persistence is best-effort */ }
+        if (running && typeof running.id === 'string' && typeof running.stepId === 'string') {
+          this.continuitySeenRunning = true
+          this.continuitySaved = { task: running.id, step: running.stepId, savedAt: Date.now() }
+          try { localStorage.setItem('otto-lab:continuity-task', JSON.stringify(this.continuitySaved)) } catch { /* lab persistence is best-effort */ }
+        } else if (this.continuitySeenRunning) {
+          this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* lab persistence is best-effort */ }
+        }
       }
       const saved = this.continuitySaved
       if (message.key === 'guide_tasks' && saved) {
