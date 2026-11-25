@@ -74,8 +74,8 @@ export default function App() {
     }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
     else if (action.action === 'guide' || action.action === 'task' || action.action === 'task_move' || action.action === 'card') return
-    else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
-    else if (action.name === 'toggle_theme') setDark(value => !value)
+    else if (action.action === 'command' && action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
+    else if (action.action === 'command' && action.name === 'toggle_theme') setDark(value => !value)
   }, [events])
 
   // Tell Otto when a message appears (by the button or by his own command); he reacts, and a guided task can see it.
