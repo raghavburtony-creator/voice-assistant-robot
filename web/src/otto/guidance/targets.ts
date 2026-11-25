@@ -134,7 +134,7 @@ export function registerGuideTask(spec: GuideTaskSpec): () => void {
 }
 export function findGuideTask(id: string): GuideTaskSpec | null { return tasks.get(id) ?? null }
 /** What the voice model is told: id, title (cleaned, capped) and how many steps. A task whose id breaks the rule is left out. */
-export function listGuideTasks(): { id: string; title: string; steps: number }[] {
+export function listGuideTasks(): { id: string; title: string; steps: number; stepIds: string[] }[] {
   return [...tasks.values()].filter(t => fitsRule(t.id, 'task')).map(t => ({ id: t.id, title: clean(t.title, 80), steps: t.steps.length, stepIds: t.steps.map(step => step.id) }))
 }
 export function onGuideTasksChange(listener: () => void): () => void {
