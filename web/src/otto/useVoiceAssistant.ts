@@ -17,7 +17,7 @@ import { BargeInGate, OpenMicGate, type DiagnosticSink, type OpenMicStep } from 
 import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
-import { parseEnvironmentalProposal } from './awareness/environmental'
+import { toEnvironmentalAttention } from './awareness/environmental'
 import type { OttoEvent } from './awareness/events'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
 import { isRuntimeId } from './runtimeId'
@@ -508,9 +508,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
         case 'environmental':
           {
             // Stop/hidden-tab/session teardown clears this ref before any late proposal can reach Otto.
-            if (sharing.current !== 'camera') break
-            const proposal = parseEnvironmentalProposal(message.proposal)
-            if (proposal) environmentalRef.current?.({ type: 'attention', importance: 'minor', ...proposal })
+            const event = toEnvironmentalAttention(sharing.current, message.proposal)
+            if (event) environmentalRef.current?.(event)
           }
           break
         case 'action':
