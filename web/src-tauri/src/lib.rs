@@ -190,22 +190,6 @@ fn launch_allowlisted_application(action: DesktopAction) -> Result<&'static str,
     }
 }
 
-/// Move Otto to one of a small set of named positions on the monitor he currently
-/// occupies. Coordinates stay inside the native host and are clamped to the
-/// monitor work area, which may have a negative desktop origin.
-#[tauri::command]
-async fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
-    let result = move_desktop_window_inner(&app, destination.clone()).await;
-    if let Err(message) = &result {
-        let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
-            status: "failed",
-            destination,
-            message: Some(message.clone()),
-        });
-    }
-    result
-}
-
 async fn move_desktop_window_inner(app: &AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
     if !matches!(destination.as_str(), "home" | "desktop-left" | "desktop-right" | "top" | "bottom") {
         return Err("Unsupported desktop destination.".to_string());
@@ -368,7 +352,7 @@ fn active_window_context() -> Option<ActiveWindowContext> { None }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, move_desktop_window, desktop_action])
+        .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, desktop_action])
         .setup(|app| {
             // Informational lifecycle event only; it grants no desktop action.
             app.emit("otto://desktop-ready", DesktopStatus::current())?;
