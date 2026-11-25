@@ -27,7 +27,7 @@ def test_contract_cleans_text_caps_message_and_drops_extra_fields():
     parsed = clean_environmental_proposal(candidate(message="  A\x00 parcel\n is here  ", action="navigate", where="#save"))
     assert parsed is not None
     assert parsed.topic == "object"
-    assert parsed.message == "A parcel is here"
+    assert parsed.message == "A parcel is here"\n    assert clean_environmental_proposal(candidate(message="See https://example.test now." )).message == "See  now."
     long = clean_environmental_proposal(candidate(message="x" * 500))
     assert long is not None and len(long.message) == MAX_MESSAGE_CHARS
 
