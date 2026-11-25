@@ -22,6 +22,7 @@ from app.voice.events import Action, EventTranslator, Interrupted, Speech, Trans
 from app.voice.output import OutputChannel
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.continuity import ContinuityContext
+from app.voice.continuity_store import ContinuityRecord, ContinuityStore, SQLiteContinuityStore
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
@@ -49,6 +50,8 @@ CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
 JPEG_MAGIC = b"\xff\xd8\xff"
+
+continuity_store: ContinuityStore = SQLiteContinuityStore(settings.continuity_store_path)
 
 
 def context_bytes(data: object) -> int:
@@ -169,9 +172,15 @@ def _set_page(state: dict, page: object, title: object = None) -> None:
 
 
 class Bridge:
-    def __init__(self, ws: WebSocket, live: LiveSession) -> None:
+    def __init__(self, ws: WebSocket, live: LiveSession, store: ContinuityStore | None = None) -> None:
         self.ws = ws
         self.live = live
+        self.continuity_store = store or continuity_store
+        self.continuity_resumed = False
+        self.continuity_withdrawn = False
+        self.pending_continuity = None
+        if live.continuity is not None:
+            self.pending_continuity = self.continuity_store.load(live.continuity.scope, live.continuity.identity)
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
         self.capture: str | None = None
@@ -205,6 +214,10 @@ class Bridge:
             return
         screens[key] = data
         self.live.state["screens"] = screens
+        if key == "guide_task_running":
+            self._persist_running_task(data)
+        elif key == "guide_tasks":
+            self._resume_saved_task(data)
         try:
             self.perception.ingest_context("browser", {key: data})
         except PerceptionRejected:
@@ -215,6 +228,48 @@ class Bridge:
         if prompt and now - self.last_announce >= ANNOUNCE_GAP_SECONDS:
             self.last_announce = now
             await self.live.send_text(prompt)
+
+    def _persist_running_task(self, data: object) -> None:
+        identity = self.live.continuity
+        if identity is None or self.continuity_withdrawn:
+            return
+        if data is None:
+            self.continuity_store.delete(identity.scope, identity.identity)
+            self.pending_continuity = None
+            return
+        if not isinstance(data, dict):
+            return
+        task, step = data.get("id"), data.get("stepId")
+        if not isinstance(task, str) or not isinstance(step, str):
+            return
+        import time
+        self.continuity_store.save(
+            ContinuityRecord(scope=identity.scope, task=task, step=step, savedAt=int(time.time())),
+            identity.identity,
+        )
+
+    def _resume_saved_task(self, data: object) -> None:
+        if self.continuity_resumed or self.pending_continuity is None or not isinstance(data, list):
+            return
+        self.continuity_resumed = True
+        record = self.pending_continuity
+        offered = next((item for item in data if isinstance(item, dict) and item.get("id") == record.task), None)
+        step_ids = offered.get("stepIds") if isinstance(offered, dict) else None
+        if not isinstance(step_ids, list) or record.step not in step_ids:
+            identity = self.live.continuity
+            if identity is not None:
+                self.continuity_store.delete(identity.scope, identity.identity)
+            self.pending_continuity = None
+            return
+        self.out.control({"type": "action", "action": "task_resume", "task": record.task, "step": record.step})
+        self.pending_continuity = None
+
+    def withdraw_continuity(self) -> None:
+        identity = self.live.continuity
+        self.continuity_withdrawn = True
+        self.pending_continuity = None
+        if identity is not None:
+            self.continuity_store.delete(identity.scope, identity.identity)
 
     async def send_frame(self, data: Any) -> None:
         """D-21's limits, again on this side: a share is on, the data is a JPEG within the cap, and not too soon."""
@@ -272,6 +327,8 @@ class Bridge:
                 await self.send_frame(event.get("data"))
             elif kind == "mic_off":
                 await self.live.audio_end()
+            elif kind == "continuity_clear":
+                self.withdraw_continuity()
             elif kind == "stop":
                 return
 
