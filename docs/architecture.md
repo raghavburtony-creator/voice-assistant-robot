@@ -89,7 +89,7 @@ When this review was done, all 18 decisions were **current**: each one was enfor
 |---|---|---|---|
 | D-01 to D-02, D-04 to D-11, D-14 to D-16, D-18 | current | | |
 | D-03 static page and command lists | amended by D-23 | Cross-application needs lists that aren't known at build time | Q-08, answered by D-23: destinations may be reported, commands stay static |
-| D-12 one shader, no 3D library | current | Spatial / AR presence | Q-06 |
+| D-12 one shader, no 3D library | current | Spatial / AR presence | Q-06, answered by D-28: defer renderer selection until a target and requirements are specified |
 | D-13 layers | current, partly enforced | The server isn't covered by a test | Q-05 |
 | D-17 snapshot only while talking, never stored | current | Continuity stores task state (within a tab, as ids, by D-20), and multimodal input adds camera and screen frames, sent while shared and never kept (D-21) | Q-03 |
 
