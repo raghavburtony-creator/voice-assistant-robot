@@ -125,7 +125,7 @@ export function verifyDesktopMovement(action: DesktopAction, context: DesktopCon
   const maxY = Math.max(minY, top + context.monitor.height - context.otto.height - margin)
   const centreX = left + Math.max(0, context.monitor.width) / 2 - context.otto.width / 2
   const centreY = top + Math.max(0, context.monitor.height) / 2 - context.otto.height / 2
-  const expected = {
+  const expected: Record<DesktopDestination, [number, number]> = {
     home: [centreX, centreY],
     'desktop-left': [minX, centreY],
     'desktop-right': [maxX, centreY],
@@ -147,6 +147,10 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
   }
   try {
+    const isMovement = action === 'move_home' || action === 'move_left' || action === 'move_right' || action === 'move_top' || action === 'move_bottom'
+    // Observe the current desktop before asking the native gateway to act. If the host
+    // cannot provide a baseline, fail closed rather than executing an unverifiable move.
+    if (isMovement) await runtime.core.invoke<DesktopContext>('desktop_context')
     const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action })
     if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
 
