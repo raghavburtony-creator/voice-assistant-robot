@@ -25,6 +25,11 @@ Command = Literal["show_message", "toggle_theme"]
 #: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
 TaskMove = Literal["stop", "back", "next"]
 DesktopDestination = Literal["home", "desktop-left", "desktop-right", "top", "bottom"]
+DesktopAction = Literal[
+    "minimize_otto", "restore_otto",
+    "move_home", "move_left", "move_right", "move_top", "move_bottom",
+    "launch_calculator", "launch_text_editor",
+]
 #: RUNTIME_ID is imported from runtime.py: one server rule for tools and page/current-view messages. A test checks it equals
 #: RUNTIME_ID in web/src/otto/runtimeId.ts.
 DESTINATIONS_CONTEXT_KEY = "destinations"
@@ -208,22 +213,39 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
 
 
 
-def move_desktop(destination: DesktopDestination, tool_context: ToolContext) -> dict:
-    """Move Otto's native desktop window to a named position: home, desktop-left, desktop-right, top or bottom.
-
-    Use only when the user explicitly asks Otto to move around the desktop. Never pass pixel coordinates,
-    monitor identifiers, application targets or arbitrary window commands. The native desktop host performs
-    the bounded movement and reports completion or failure separately; do not claim it succeeded merely
-    because this request was queued.
+def desktop_action(action: DesktopAction, tool_context: ToolContext) -> dict:
+    """Request one permission-gated desktop action: minimize or restore Otto, move Otto to a named position,
+    or launch the allow-listed Calculator or Text Editor. The user must approve the exact action in the desktop UI.
+    Never request arbitrary applications, shell commands, coordinates, paths or arguments. Wait for the native
+    result and its verification status before claiming the action completed.
     """
-    if destination not in get_args(DesktopDestination):
-        return {"ok": False, "error": "Unknown desktop destination. Use home, desktop-left, desktop-right, top or bottom."}
-    _send(tool_context, {"action": "desktop_move", "destination": destination})
+    if action not in get_args(DesktopAction):
+        return {"ok": False, "error": "Unsupported desktop action."}
+    _send(tool_context, {"action": "desktop_action", "desktop_action": action})
     return {
         "ok": True,
-        "requested": destination,
-        "note": "The named movement request was queued. Wait for the desktop runtime's completion or failure event before claiming it finished.",
+        "requested": action,
+        "status": "awaiting_user_approval",
+        "note": "The request is waiting for the user to approve it in the desktop UI. Do not claim it has executed.",
     }
+
+
+def move_desktop(destination: DesktopDestination, tool_context: ToolContext) -> dict:
+    """Request a permission-gated move of Otto to a named desktop position.
+
+    Use only when the user explicitly asks Otto to move. The user must approve the request in the desktop UI.
+    Never pass pixel coordinates or monitor identifiers.
+    """
+    mapping = {
+        "home": "move_home",
+        "desktop-left": "move_left",
+        "desktop-right": "move_right",
+        "top": "move_top",
+        "bottom": "move_bottom",
+    }
+    if destination not in mapping:
+        return {"ok": False, "error": "Unknown desktop destination."}
+    return desktop_action(mapping[destination], tool_context)
 
 
 def move_guided_task(move: TaskMove, tool_context: ToolContext) -> dict:
@@ -282,5 +304,5 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, show_card)]
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, desktop_action, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
