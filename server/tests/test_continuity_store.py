@@ -238,3 +238,30 @@ def test_destination_interface_drops_a_task_or_step_it_does_not_offer():
 
         assert actions == []
         assert store.load("app", "visitor", now=101) is None
+
+
+def test_task_cancellation_still_deletes_saved_task_without_handoff():
+    store = FakeContinuityStore()
+    store.save(ContinuityRecord("app", "checkout", "payment", 100), "visitor")
+    bridge = _bridge_for_null_update(store, {})
+
+    # The guide emits the same null running-task update for an explicit stop/cancel.
+    bridge._persist_running_task(None)
+
+    assert store.load("app", "visitor", now=101) is None
+
+
+def test_handoff_marker_and_destination_registry_resume_as_one_flow():
+    store = FakeContinuityStore()
+    record = ContinuityRecord("app", "checkout", "payment", 100)
+    store.save(record, "visitor")
+
+    source = _bridge_for_null_update(store, {"continuity_handoff": True})
+    source._persist_running_task(None)
+    assert store.load("app", "visitor", now=101) == record
+
+    destination, actions = _bridge_for_resume(store, record)
+    destination._resume_saved_task({"tasks": [
+        {"id": "checkout", "stepIds": ["details", "payment"]},
+    ]})
+    assert actions == [{"type": "action", "action": "task_resume", "task": "checkout", "step": "payment"}]
