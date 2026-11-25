@@ -42,7 +42,7 @@ Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the ges
 
 The desktop host is a Tauri v2 shell around the same React application. It does not create a second avatar or voice runtime: the existing Otto UI continues to connect to the FastAPI/Google ADK server.
 
-Prerequisites: the web and server prerequisites above, Rust (stable), and the native build tools required by Tauri for your operating system (for Windows, the Microsoft C++ Build Tools and WebView2; for macOS, Xcode Command Line Tools; for Linux, the Tauri system packages).
+Prerequisites: the web and server prerequisites above, Rust 1.90 or newer, and the native build tools required by Tauri for your operating system (for Windows, the Microsoft C++ Build Tools and WebView2; for macOS, Xcode Command Line Tools; for Linux, the Tauri system packages).
 
 ```bash
 cd web
