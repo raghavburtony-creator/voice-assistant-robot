@@ -196,6 +196,9 @@ class Bridge:
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
         self.capture: str | None = None
+        self.capture_generation = 0
+        self.live.state["capture_source"] = None
+        self.live.state["capture_generation"] = 0
         self.perception = PerceptionGateway()
         # Browser/page context is an explicit conversation input, not camera/screen capture.
         self.perception.set_consent("browser", True)
@@ -355,7 +358,15 @@ class Bridge:
             elif kind == "text" and isinstance(event.get("text"), str) and event["text"].strip():
                 await self.live.send_text(event["text"][:MAX_TEXT_CHARS])
             elif kind == "capture" and (event.get("source") in CAPTURE_SOURCES or event.get("source") is None):
+                generation = event.get("generation")
+                # Every start and Stop advances a client-owned generation. Late proposals from an earlier
+                # share cannot become valid again if the visitor starts a new camera share quickly.
+                if type(generation) is not int or generation <= self.capture_generation:
+                    continue
+                self.capture_generation = generation
                 self.capture = event.get("source")
+                self.live.state["capture_source"] = self.capture
+                self.live.state["capture_generation"] = generation
                 for source in CAPTURE_SOURCES:
                     self.perception.set_consent(source, source == self.capture)
                 if self.capture is None:
@@ -399,7 +410,19 @@ class Bridge:
         async for event in self.live.events():
             # A tool runs between its call and response events, so drain after every event, before this event's audio.
             for action in sink.drain(self.live.session_id):
-                self._deliver(Action(action))
+                environmental = action.get("environmental") if isinstance(action, dict) else None
+                if isinstance(environmental, dict):
+                    generation = environmental.get("generation")
+                    if (self.capture == "camera" and type(generation) is int
+                            and generation == self.capture_generation
+                            and self.live.state.get("capture_source") == "camera"):
+                        self.out.control({
+                            "type": "environmental",
+                            "generation": generation,
+                            "proposal": {"topic": environmental.get("topic"), "message": environmental.get("message")},
+                        })
+                else:
+                    self._deliver(Action(action))
             for item in self.translator.translate(event):
                 self._deliver(item)
         await self.out.flush()  # the model is done: everything it said goes out before `ended`
