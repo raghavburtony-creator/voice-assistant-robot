@@ -25,7 +25,7 @@ export type DesktopAction = typeof DESKTOP_ACTIONS[number]
 export type DesktopActionResult = {
   action: DesktopAction
   ok: boolean
-  status: 'completed' | 'started' | 'failed'
+  status: 'completed' | 'started' | 'failed' | 'denied'
   verification: 'verified' | 'native_api_completed' | 'process_spawned' | 'not_verified' | 'unavailable'
   message: string
 }
