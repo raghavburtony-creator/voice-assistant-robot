@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-30**, **Q-10**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-30**, **Q-11**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -47,6 +47,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-27 | The server voice layer is not a pure core/shell architecture | layers | current |
 | D-28 | Defer spatial/AR renderer selection until a target is specified | robot, architecture | current |
 | D-29 | Sign recognition uses a dedicated temporal adapter and text-only handoff | accessibility, privacy | current |
+
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | answered by D-26 |
@@ -295,6 +296,7 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
 | Q-09 | Which sign language and community-validated task should the first sign-input pilot support? Confirm the language with Deaf/signing community partners; define whether the first pilot is a small, bounded vocabulary or continuous conversational signing; identify an appropriate consented dataset or a community-governed collection plan; and agree who validates annotations and signer-independent evaluation. Do not infer the language from deployment geography or treat a dictionary as a video training corpus. | Sign-language recognition model and pilot scope | unassigned | open |
+| Q-10 | How may visitor-shared environmental observations produce Otto awareness/reaction events without turning model observations or speech into authority, bypassing the checked action chain, or introducing ambient capture? Define the permitted proposer, event vocabulary, checks, consent/session boundary and failure behaviour. | Environmental-intelligence event/reaction path | unassigned | open |
 
 
 ## D-24 Desktop context is opt-in, metadata-only and limited to the active conversation
