@@ -51,6 +51,18 @@ fn desktop_status() -> DesktopStatus {
 /// monitor work area, which may have a negative desktop origin.
 #[tauri::command]
 fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
+    let result = move_desktop_window_inner(&app, destination.clone());
+    if let Err(message) = &result {
+        let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
+            status: "failed",
+            destination,
+            message: Some(message.clone()),
+        });
+    }
+    result
+}
+
+fn move_desktop_window_inner(app: &AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
     if !matches!(destination.as_str(), "home" | "desktop-left" | "desktop-right" | "top" | "bottom") {
         return Err("Unsupported desktop destination.".to_string());
     }
@@ -90,11 +102,6 @@ fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMov
         let x = (start.x as f64 + (target_x as f64 - start.x as f64) * eased).round() as i32;
         let y = (start.y as f64 + (target_y as f64 - start.y as f64) * eased).round() as i32;
         if let Err(error) = window.set_position(PhysicalPosition::new(x, y)) {
-            let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
-                status: "failed",
-                destination: destination.clone(),
-                message: Some(error.to_string()),
-            });
             return Err(format!("Otto could not finish moving: {error}"));
         }
         thread::sleep(Duration::from_millis(MOVEMENT_FRAME_MS));
