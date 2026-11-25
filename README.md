@@ -67,7 +67,12 @@ The native/web boundary stays intent-based:
 - the native host calculates physical coordinates, clamps the window to the current monitor's work area and animates the transition;
 - movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`, available through `onDesktopMovement()`;
 - the ADK `move_desktop` tool accepts only those named destinations. Pixel coordinates and monitor details stay inside the native host;
+- `getDesktopContext()` reports monitor work area, Otto's window position/visibility and cursor position; on Windows it also reports the foreground application's executable name and window title only.
+- The voice panel has a session-only **Share desktop context with Otto** switch. Sampling runs only while a conversation is open and the switch is on, and stops immediately when disabled or the conversation ends.
+- No screenshots, application contents, keystrokes, process ids or executable paths are sent.
 - no arbitrary shell, filesystem, input automation or general window-control command is exposed. Broader desktop capabilities remain behind the permissioned gateway planned in DESKTOP-04.
+
+The desktop-awareness boundary is opt-in and metadata-only: no context is sent to the ADK unless the visitor enables the switch in the panel. The switch resets at the end of each conversation. Active-window metadata is currently available on Windows; other platforms report it as unavailable.
 
 The movement controller stays on the monitor Otto currently occupies; it uses that monitor's work area (including non-primary monitors with negative desktop origins) and does not silently jump Otto between displays. Browser mode remains unchanged: movement returns an explicit unavailable result when the Tauri runtime is absent.
 
