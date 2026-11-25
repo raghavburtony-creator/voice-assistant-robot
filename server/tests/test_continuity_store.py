@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from app.voice.continuity_store import (
     RETENTION_SECONDS,
@@ -20,7 +21,7 @@ class FakeContinuityStore:
         record = self.records.get((scope, identity))
         if record is None or (scope, identity) in self.disabled:
             return None
-        current = 0 if now is None else now
+        current = int(time.time()) if now is None else now
         return record if 0 <= current - record.savedAt <= RETENTION_SECONDS else None
 
     def save(self, record, identity):
