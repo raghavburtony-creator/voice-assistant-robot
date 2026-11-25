@@ -22,8 +22,13 @@ export function parseEnvironmentalProposal(value: unknown): EnvironmentalProposa
 }
 
 /** The browser's independent lifecycle gate: a screen share or a stopped camera cannot create an event. */
-export function toEnvironmentalAttention(source: string | null, value: unknown): EnvironmentalAttention | null {
-  if (source !== "camera") return null
+export function toEnvironmentalAttention(
+  source: string | null,
+  activeGeneration: number,
+  messageGeneration: number,
+  value: unknown,
+): EnvironmentalAttention | null {
+  if (source !== "camera" || !Number.isSafeInteger(activeGeneration) || messageGeneration !== activeGeneration) return null
   const proposal = parseEnvironmentalProposal(value)
   return proposal ? { type: "attention", importance: "minor", ...proposal } : null
 }
