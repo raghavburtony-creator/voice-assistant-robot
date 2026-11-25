@@ -8,6 +8,7 @@ import type { RobotExpression } from '../robot/robot'
 import type { SoundCue } from '../soundCues'
 import { SpeechPlayer, startRecorder, type Recorder } from '../audio'
 import { DEFAULT_VAD, VoiceActivityDetector, type VadSettings } from './vad'
+import type { VoiceDiagnostic } from '../speechGate'
 import { createChannelSplitter, type VisualPart } from './channels'
 import { openTransport, parseLiveMessage, assertNoApiKey, assertSecureProxyUrl, type BridgeEvent, type Transport, type TransportOptions } from './transports'
 
@@ -30,6 +31,9 @@ export type GeminiVoiceBridgeOptions = {
   showText?: boolean
   /** End-of-turn detection on the microphone; override any part. Pass `false` to leave turn-taking to the server. */
   vad?: Partial<VadSettings> | false
+  /** Privacy-safe voice events for your own log: speech start and end, the noise floor, turn complete, and why an interruption
+   *  was accepted or rejected. Levels, durations and reasons only, never audio. */
+  onDiagnostic?: (event: VoiceDiagnostic) => void
   /** Every frame's input level (RMS 0..1) while the detector listens, for a meter. */
   onLevel?: (rms: number) => void
   /** The visual channel: code blocks and links taken out of the model's words, for your own panel. Links are untrusted
@@ -90,6 +94,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   let recorder: Recorder | null = null
   let detector: VoiceActivityDetector | null = null
   let micAttempt = 0
+  let roomFloor: number | undefined // the noise floor the last detector learned: a reopened mic starts knowing the room
   let micWanted = false // set once the mic is open, cleared by stopMic() and a no-speech cancel; gates the reopen after a turn
   let said = ''
   const split = createChannelSplitter()
@@ -135,17 +140,21 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
   const startDetector = () => {
     if (!recorder || options.vad === false) return
     detector?.dispose()
+    // Text and the microphone are separate inputs: this only decides when the visitor's *voice* turn ends.
     const settings = { ...DEFAULT_VAD, ...options.vad }
     detector = new VoiceActivityDetector(recorder.stream, settings, {
       onLevel: options.onLevel,
+      onDiagnostic: options.onDiagnostic,
       // D-05: Otto's own voice leaks into the mic; it must not read as the visitor speaking.
       muted: () => !!player?.busy,
       onSpeechStart: () => apply({ do: 'state', state: 'listening' }),
       // Stop the mic first (the browser's recording light goes off), then tell the model; Otto thinks at once.
-      onSpeechEnd: () => { haltMic(); transport?.endTurn(); handle({ type: 'thinking' }) },
-      onNoSpeech: () => { micWanted = false; haltMic(); apply({ do: 'face', face: 'happy' }); apply({ do: 'state', state: 'idle' }) },
-    }, recorder.context)
+      onSpeechEnd: () => { remember(); haltMic(); transport?.endTurn(); handle({ type: 'thinking' }) },
+      onNoSpeech: () => { remember(); micWanted = false; haltMic(); apply({ do: 'face', face: 'happy' }); apply({ do: 'state', state: 'idle' }) },
+    }, recorder.context, roomFloor)
   }
+
+  const remember = () => { if (detector) roomFloor = detector.noiseFloor }
 
   const handle = (event: BridgeEvent) => {
     if (state === 'closed') return
@@ -171,6 +180,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
         visual(rest.visual)
         if (options.showText !== false && rest.spoken) { spoken(rest.spoken); void otto.speakText(said, { durationMs: remainingMs(), mouth: false }) }
         player?.endTurn(); said = ''
+        options.onDiagnostic?.({ type: 'turn_complete' })
         // The VAD closed the mic at the end of the visitor's turn; reopen it for the next one, unless the caller muted it.
         if (micWanted && !recorder && state === 'open') {
           bridge.startMic().catch(e => {
@@ -179,7 +189,7 @@ export function createGeminiVoiceBridge(otto: VoiceBridgeTarget, options: Gemini
             options.onError?.(e instanceof Error ? e : new Error(String(e)))
           })
         // The server answered before the client's silence timeout (its own VAD): that turn is over, so the detector starts afresh.
-        } else if (recorder) startDetector()
+        } else if (recorder) { remember(); startDetector() }
         break
       }
       case 'interrupted':

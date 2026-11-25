@@ -14,7 +14,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Add a tool | D-02, D-03, D-22, D-23 | "Adding a tool" | `server/app/voice/tools.py`, `sink.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `App.tsx` `onAction` |
 | Change the wire protocol (a message type) | D-02, D-04 | "How it works" | `server/app/voice/bridge.py`, `route.py`, `web/src/otto/messages.ts`, `web/src/otto/useVoiceAssistant.ts`, `web/src/lab/fakeServer.ts` |
 | Server: session, key, CORS, limits | D-01, D-04, D-09 | "Deploying" | `server/app/config.py`, `server/app/main.py`, `server/app/voice/route.py`, `model.py` |
-| Live audio, playback, barge-in, autoplay | D-05 | "How it works" (barge-in, autoplay) | `web/src/otto/audio.ts`, `useVoiceAssistant.ts`, `BARGE_IN` in `otto.config.ts` |
+| Live audio, playback, barge-in, autoplay | D-05 | "How it works" (barge-in, autoplay) | `web/src/otto/audio.ts`, `useVoiceAssistant.ts`, `speechGate.ts` and its test (turn gate, barge-in gate, noise floor), `BARGE_IN` and `VAD` in `otto.config.ts` |
 | Mouth and lip-sync, the speech bubble | D-07 | "How it works" (mouth, bubble) | `web/src/otto/mouth.ts`, `web/src/otto/robot/OttoRobot.tsx`, `web/src/otto/robot/ClayScene.tsx` |
 | Sound cues | D-11 | "Sound" | `web/src/otto/sound.ts`, `useGestureSounds.ts`, `SOUND_SETTINGS` |
 | Robot look, faces, the shader | D-06, D-10, D-12 | "Otto's robot" | `web/src/otto/robot/robot.ts`, `web/src/otto/robot/environment.ts`, `ClayScene.tsx`, `web/src/components/originkit/ui/clay-robot.tsx` |

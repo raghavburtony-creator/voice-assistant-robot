@@ -1,27 +1,15 @@
-// End-of-turn detection for the microphone: an RMS meter on the live MediaStream (Web Audio, no dependencies). Speech
-// counts once the level stays above `speechThreshold` for `speechOnsetMs`; the turn ends after `silenceTimeoutMs` of
-// quiet. No speech in `noSpeechTimeoutMs`, or a turn past `maxTurnDurationMs`, ends it too.
+// End-of-turn detection for the microphone: an RMS meter on the live MediaStream (Web Audio, no dependencies). The rules
+// are in ../speechGate.ts (adaptive noise floor, hysteresis, onset and hangover); this file only reads the level.
+// Speech counts once the level stays above the enter line for `speechOnsetMs`; the turn ends after `silenceTimeoutMs`
+// below the exit line. No speech in `noSpeechTimeoutMs`, or a turn past `maxTurnDurationMs`, ends it too.
 
-export type VadSettings = {
-  /** RMS level (0..1) above which a frame counts as speech. */
-  speechThreshold: number
-  /** The level must stay above the threshold this long before speech is confirmed (ignores clicks). */
-  speechOnsetMs: number
-  /** Trailing silence that ends the turn once speech has started. */
-  silenceTimeoutMs: number
-  /** Give up if no speech starts in this long. */
-  noSpeechTimeoutMs: number
-  /** Hard ceiling on one turn. */
-  maxTurnDurationMs: number
-}
+import { DEFAULT_GATE, SpeechGate, type DiagnosticSink, type SpeechGateSettings } from '../speechGate'
 
-export const DEFAULT_VAD: VadSettings = {
-  speechThreshold: 0.02,
-  speechOnsetMs: 180,
-  silenceTimeoutMs: 1000,
-  noSpeechTimeoutMs: 6000,
-  maxTurnDurationMs: 30_000,
-}
+/** `speechThreshold` is the lowest level that can count as speech (a silent room); in a noisy room the gate follows the
+ *  noise floor (`enterRatio`, `exitRatio`) instead of needing it raised. `initialFloor` is set by the bridge. */
+export type VadSettings = Omit<SpeechGateSettings, 'initialFloor'>
+
+export const DEFAULT_VAD: VadSettings = { ...DEFAULT_GATE }
 
 export type VadHandlers = {
   onSpeechStart?: () => void
@@ -29,6 +17,8 @@ export type VadHandlers = {
   onSpeechEnd: (reason: 'silence' | 'max') => void
   /** Nothing was said in time. Fires at most once per detector. */
   onNoSpeech: () => void
+  /** Privacy-safe events: speech start and end, the floor, reasons. No audio. */
+  onDiagnostic?: DiagnosticSink
   /** Every tick, for a meter. */
   onLevel?: (rms: number) => void
   /** While true the tick is skipped and the turn's clocks stand still (Otto's own voice must not count as the visitor's). */
@@ -45,20 +35,23 @@ export class VoiceActivityDetector {
   private analyser: AnalyserNode | null
   private buffer: Float32Array<ArrayBuffer>
   private timer: ReturnType<typeof setInterval> | undefined
-  private startedAt = performance.now()
-  private lastTick = this.startedAt
-  private loudSince: number | null = null
-  private quietSince: number | null = null
-  private speaking = false
+  private readonly gate: SpeechGate
   private done = false
 
-  private readonly settings: VadSettings
   private readonly handlers: VadHandlers
 
-  /** `context`: share a running one (the recorder's, made in the click) instead of making a new one that may start suspended. */
-  constructor(stream: MediaStream, settings: VadSettings, handlers: VadHandlers, context?: AudioContext) {
-    this.settings = settings
+  /**
+   * `context`: share a running one (the recorder's, made in the click) instead of making a new one that may start suspended.
+   * `initialFloor`: the noise floor of the detector before this one, so a reopened microphone starts knowing the room.
+   */
+  constructor(stream: MediaStream, settings: VadSettings, handlers: VadHandlers, context?: AudioContext, initialFloor?: number) {
     this.handlers = handlers
+    this.gate = new SpeechGate({ ...settings, initialFloor }, {
+      onSpeechStart: handlers.onSpeechStart,
+      onSpeechEnd: reason => this.end(() => handlers.onSpeechEnd(reason)),
+      onNoSpeech: () => this.end(() => handlers.onNoSpeech()),
+      onDiagnostic: handlers.onDiagnostic,
+    }, performance.now())
     this.ownsContext = !context
     this.context = context ?? new AudioContext()
     this.source = this.context.createMediaStreamSource(stream)
@@ -70,14 +63,14 @@ export class VoiceActivityDetector {
     this.timer = setInterval(this.tick, TICK_MS)
   }
 
+  /** The room's learned noise level (RMS), to hand to the next detector. */
+  get noiseFloor() { return this.gate.noiseFloor }
+
   private tick = () => {
     if (this.done || !this.analyser) return
     const now = performance.now()
-    const dt = now - this.lastTick
-    this.lastTick = now
     if (this.handlers.muted?.()) {
-      this.startedAt += dt
-      this.loudSince = this.quietSince = null
+      this.gate.hold(now)
       this.handlers.onLevel?.(0)
       return
     }
@@ -86,24 +79,7 @@ export class VoiceActivityDetector {
     for (const v of this.buffer) sum += v * v
     const rms = Math.sqrt(sum / this.buffer.length)
     this.handlers.onLevel?.(rms)
-    this.step(rms, now)
-  }
-
-  private step(rms: number, now: number) {
-    const s = this.settings
-    const loud = rms >= s.speechThreshold
-    const elapsed = now - this.startedAt
-    if (elapsed >= s.maxTurnDurationMs) return this.end(() => this.speaking ? this.handlers.onSpeechEnd('max') : this.handlers.onNoSpeech())
-    if (!this.speaking) {
-      this.loudSince = loud ? this.loudSince ?? now : null
-      if (this.loudSince !== null && now - this.loudSince >= s.speechOnsetMs) {
-        this.speaking = true
-        this.handlers.onSpeechStart?.()
-      } else if (elapsed >= s.noSpeechTimeoutMs) this.end(() => this.handlers.onNoSpeech())
-      return
-    }
-    this.quietSince = loud ? null : this.quietSince ?? now
-    if (this.quietSince !== null && now - this.quietSince >= s.silenceTimeoutMs) this.end(() => this.handlers.onSpeechEnd('silence'))
+    this.gate.step(rms, now)
   }
 
   /** Releases everything first, so a handler that starts a new detector or the next step finds no leftovers. */

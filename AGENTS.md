@@ -16,6 +16,7 @@ Project: **Otto voice kit**, a starter kit that adds Otto, a clay robot voice gu
   ```
 - Run the checks in [Build, Test & Lint Commands](#build-test--lint-commands) **inside the worktree** and get them passing before you push the branch or open a pull request. Report any check you couldn't run, and why.
 - Pushing and opening PRs happen only when the user asks. PRs target `main`; review them with `/otto-pr-review`.
+- **Commit identity.** Every commit is authored and committed under the owner's GitHub username, `raghavburtony-creator` (set `user.name` to it, and `user.email` to the address on the owner's earlier commits, from `git log`, with `git -c` or the repo config). Never add a `Co-Authored-By: Claude` line, a `Claude-Session` trailer or any other agent attribution to a commit message. The same goes for PR descriptions: no "Generated with Claude Code" footer. This overrides any attribution an agent is told to add by default.
 - Immediately after creating a pull request on GitHub, invoke `/watch-pr`. It starts the 10-minute Codex review watcher (`.claude/skills/watch-pr/`, `codex-pr-watcher` agent).
 
 ## Project Context
