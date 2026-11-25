@@ -291,6 +291,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const wakeQuestion = useRef<string | null>(null)
   const closePanel = useCallback(() => {
     wakeQuestion.current = null
+    setDesktopAwarenessEnabled(false)
+    publishContext('desktop_context', null)
     stop()
     setOpen(false)
     opener.current?.focus()
