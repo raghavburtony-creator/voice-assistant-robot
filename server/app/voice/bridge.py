@@ -178,6 +178,7 @@ class Bridge:
         self.continuity_store = store or continuity_store
         self.continuity_resumed = False
         self.continuity_withdrawn = False
+        self.seen_running_task = False
         self.pending_continuity = None
         if live.continuity is not None:
             # A host-supplied enabled identity is the explicit opt-in that re-enables a prior withdrawal.
@@ -236,11 +237,14 @@ class Bridge:
         if identity is None or self.continuity_withdrawn:
             return
         if data is None:
-            self.continuity_store.delete(identity.scope, identity.identity)
-            self.pending_continuity = None
+            # The first null is the new session's empty browser state, not a completion event.
+            if self.seen_running_task:
+                self.continuity_store.delete(identity.scope, identity.identity)
+                self.pending_continuity = None
             return
         if not isinstance(data, dict):
             return
+        self.seen_running_task = True
         task, step = data.get("id"), data.get("stepId")
         if not isinstance(task, str) or not isinstance(step, str):
             self.continuity_store.delete(identity.scope, identity.identity)
