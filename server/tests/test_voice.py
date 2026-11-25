@@ -642,3 +642,15 @@ def test_desktop_context_rejects_malformed_geometry():
     }}
     result = tools.get_desktop_context(ctx)
     assert result["available"] is False
+
+
+
+def test_screen_context_does_not_bypass_the_desktop_awareness_tool():
+    ctx = _context()
+    ctx.state["screens"] = {
+        "desktop_context": {"enabled": True, "activeWindow": {"title": "Private window"}},
+        "guide_targets": {"targets": []},
+    }
+    seen = tools.get_screen_context(ctx)
+    assert "desktop_context" not in seen
+    assert "Private window" not in json.dumps(seen)
