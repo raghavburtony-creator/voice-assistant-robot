@@ -4,7 +4,7 @@
                       binary 16 kHz mono PCM16 microphone audio
                       text   {"type":"page","page":...,"title":...} | {"type":"text","text":...} | {"type":"mic_off"}
                              | {"type":"context","key":...,"data":{...}|null,"announce":...} | {"type":"stop"}
-                             | {"type":"capture","source":"camera"|"screen"|null}   (a share starts or stops, D-21)
+                             | {"type":"capture","source":"camera"|"screen"|null,"generation":...}   (a share starts or stops; generation is monotonically increasing, D-21/D-30)
                              | {"type":"frame","data":<base64 JPEG>}   (while sharing: at most 1/s, 256 KB; others dropped)
                              | {"type":"continuity_clear"}   (visitor withdrawal: deletes the saved task and suppresses saves for this session)
     server -> client  text   {"type":"ready","limitSeconds":600} | {"type":"transcript","role":"user"|"assistant","text":...}
@@ -13,7 +13,7 @@
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
-                             {"type":"avatar","event":{"kind":"working","id":...,"topic"?:...,"message"?:...}}   (avatar.py: how things are
+                             {"type":"environmental","generation":...,"proposal":{"topic":"object"|"activity"|"scene_change"|"potential_hazard","message":...}}   (bounded camera awareness proposal, D-30)\n                             {"type":"avatar","event":{"kind":"working","id":...,"topic"?:...,"message"?:...}}   (avatar.py: how things are
                               going, for Otto's face and body; presentation only. Kinds: thinking, listening, speaking, working, waiting,
                               permission {id,state}, success, failure, interruption, emotion, gesture, movement)
                              (everything goes out in the order the model made it, through one writer. "interrupted" first
