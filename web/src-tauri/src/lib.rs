@@ -25,9 +25,6 @@ impl DesktopStatus {
 struct DesktopMovementEvent {
     status: &'static str,
     destination: String,
-    monitor: Option<String>,
-    x: Option<i32>,
-    y: Option<i32>,
     message: Option<String>,
 }
 
@@ -36,9 +33,6 @@ struct DesktopMovementEvent {
 struct DesktopMovementResult {
     ok: bool,
     destination: String,
-    monitor: Option<String>,
-    x: i32,
-    y: i32,
 }
 
 const MOVEMENT_MARGIN: i32 = 20;
@@ -81,13 +75,9 @@ fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMov
         destination.as_str(), area_left, area_top, area_right, area_bottom, width, height, MOVEMENT_MARGIN,
     )?;
 
-    let monitor_name = monitor.name().cloned();
     let started = DesktopMovementEvent {
         status: "started",
         destination: destination.clone(),
-        monitor: monitor_name.clone(),
-        x: Some(target_x),
-        y: Some(target_y),
         message: None,
     };
     let _ = app.emit("otto://desktop-movement", started);
@@ -96,15 +86,12 @@ fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMov
         let t = step as f64 / MOVEMENT_STEPS as f64;
         // Smoothstep easing: zero velocity at the beginning and end.
         let eased = t * t * (3.0 - 2.0 * t);
-        let x = start.x + ((target_x - start.x) as f64 * eased).round() as i32;
-        let y = start.y + ((target_y - start.y) as f64 * eased).round() as i32;
+        let x = (start.x as f64 + (target_x as f64 - start.x as f64) * eased).round() as i32;
+        let y = (start.y as f64 + (target_y as f64 - start.y as f64) * eased).round() as i32;
         if let Err(error) = window.set_position(PhysicalPosition::new(x, y)) {
             let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
                 status: "failed",
                 destination: destination.clone(),
-                monitor: monitor_name.clone(),
-                x: Some(x),
-                y: Some(y),
                 message: Some(error.to_string()),
             });
             return Err(format!("Otto could not finish moving: {error}"));
@@ -115,16 +102,10 @@ fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMov
     let result = DesktopMovementResult {
         ok: true,
         destination: destination.clone(),
-        monitor: monitor_name.clone(),
-        x: target_x,
-        y: target_y,
     };
     let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
         status: "completed",
         destination,
-        monitor: monitor_name,
-        x: Some(target_x),
-        y: Some(target_y),
         message: None,
     });
     Ok(result)
@@ -144,7 +125,7 @@ fn resolve_destination(
     let min_y = top.saturating_add(margin);
     let max_x = right.saturating_sub(width).saturating_sub(margin).max(min_x);
     let max_y = bottom.saturating_sub(height).saturating_sub(margin).max(min_y);
-    let centre_x = left.saturating_add((right - left).max(0) / 2).saturating_sub(width / 2);
+    let centre_x = left.saturating_add(right.saturating_sub(left).max(0) / 2).saturating_sub(width / 2);
     let raw = match destination {
         "home" | "desktop-right" => (max_x, max_y),
         "desktop-left" => (min_x, max_y),
