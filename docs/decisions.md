@@ -294,6 +294,17 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 
 **Why:** The current camera path is explicitly designed for sparse visual context and Gemini Live's documented video input is one frame per second. Sign-language recognition is a temporal language task, not a generic image-description prompt. Keeping a provider-neutral temporal adapter separate from the existing still-frame path avoids promising unsupported recognition, while the text-only handoff preserves Otto's existing conversation, accessibility and authority boundaries. The language, task and data requirements must be established with the signing community before choosing a model.
 
+**Options considered:**
+
+| Approach | Advantages | Constraints and decision |
+|---|---|---|
+| Browser/local inference | Raw frames can remain on the visitor's device; avoids uploading a video stream to a recognition service. | Requires a suitable language-specific model, browser-compatible runtime and sufficient device compute. No MSL model/runtime has been validated; keep as a candidate, not a selection. |
+| Otto-hosted server inference | One controlled model/runtime and consistent deployment; can reuse the existing authenticated session boundary. | Sends temporal frames to Otto's server, adding bandwidth, inference cost, access-control and operational responsibilities. Requires a separate explicit notice and strict ephemeral processing. |
+| Managed recognition API | Less model-serving infrastructure and potentially simpler scaling. | No verified MSL continuous-recognition support was established. Provider retention, training use, region, subprocessors and contractual terms must be checked before any frames are sent. |
+| Existing Gemini Live visual-context feed | Reuses the current D-21 camera-share path. | At most 1 FPS in this implementation and documented Live API path; not a suitable temporal sign-recognition contract. Rejected for sign recognition. |
+
+No provider is selected. Q-09 must establish the language, pilot task, community validation and lawful dataset before a meaningful model comparison or benchmark can be made.
+
 **Evidence reviewed:**
 - [Gemini Live API – send audio and video streams](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/live-api/send-audio-video-streams): documents discrete video frames at 1 FPS. This is provider documentation for the Live API, not a claim that it performs sign-language recognition.
 - [A comprehensive survey on recent advances and challenges in sign language recognition systems](https://link.springer.com/article/10.1007/s44163-025-00629-7): describes the importance of hand movement, facial/non-manual signals and temporal context, and the generalisation limits of controlled, signer-dependent evaluations.
