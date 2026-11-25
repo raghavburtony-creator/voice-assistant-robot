@@ -127,9 +127,11 @@ fn resolve_destination(
     let max_x = right.saturating_sub(width).saturating_sub(margin).max(min_x);
     let max_y = bottom.saturating_sub(height).saturating_sub(margin).max(min_y);
     let centre_x = left.saturating_add(right.saturating_sub(left).max(0) / 2).saturating_sub(width / 2);
+    let centre_y = top.saturating_add(bottom.saturating_sub(top).max(0) / 2).saturating_sub(height / 2);
     let raw = match destination {
-        "home" | "desktop-right" => (max_x, max_y),
-        "desktop-left" => (min_x, max_y),
+        "home" => (centre_x, centre_y),
+        "desktop-left" => (min_x, centre_y),
+        "desktop-right" => (max_x, centre_y),
         "top" => (centre_x, min_y),
         "bottom" => (centre_x, max_y),
         _ => return Err("Unsupported desktop destination.".to_string()),
@@ -162,9 +164,11 @@ mod tests {
         let left = resolve_destination("desktop-left", -1920, 0, 0, 1080, 420, 640, 20).unwrap();
         let right = resolve_destination("desktop-right", -1920, 0, 0, 1080, 420, 640, 20).unwrap();
         let top = resolve_destination("top", -1920, 0, 0, 1080, 420, 640, 20).unwrap();
-        assert_eq!(left, (-1900, 420));
-        assert_eq!(right, (-440, 420));
+        let bottom = resolve_destination("bottom", -1920, 0, 0, 1080, 420, 640, 20).unwrap();
+        assert_eq!(left, (-1900, 220));
+        assert_eq!(right, (-440, 220));
         assert_eq!(top, (-1170, 20));
+        assert_eq!(bottom, (-1170, 420));
     }
 
     #[test]
