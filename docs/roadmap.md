@@ -10,13 +10,13 @@ Otto's product epics, how they depend on each other, and what is filed for the f
 | **E2 Continuity across interfaces** ([#8](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/8)) | A task started in one session, device or app can be picked up in another. | E1; Q-03 (Q-04 answered by D-22, Q-08 by D-23) | not scheduled |
 | **E3 Multimodal input** ([#9](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/9)) | Otto can take camera or screen input, with consent and a visible indicator. | none (Q-07 answered by D-21) | not scheduled |
 | **E4 Sign-language support** ([#10](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/10)) | A visitor can sign to Otto, and what Otto understands appears as text. | E3 shipped; Q-09 (language, pilot task and community validation) | not scheduled |
-| **E5 Environmental intelligence** ([#11](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/11)) | Otto reacts to what is around the visitor, through the existing awareness vocabulary. | E3 (Q-07 answered by D-21); Q-10 (environmental observation authority) | not scheduled |
+| **E5 Environmental intelligence** ([#11](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/11)) | Otto reacts to what is around the visitor, through the existing awareness vocabulary. | E3 (Q-07 answered by D-21); Q-10 answered by D-30 | not scheduled |
 | **E6 Spatial / AR presence** ([#12](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/12)) | Otto appears in spatial or AR interfaces, using the same robot state. | A named target device/runtime and user-facing rendering and interaction requirements (D-28) | not scheduled |
 
 ```
 E1 Task-aware ──► E2 Continuity across interfaces
 E3 Multimodal ──► E4 Sign language (Q-09)
-             └──► E5 Environmental intelligence (Q-10)
+             └──► E5 Environmental intelligence (D-30)
 E6 Spatial / AR (independent; waits for a target and requirements to be specified in issue #12, per D-28)
 ```
 
@@ -64,3 +64,11 @@ D-29 establishes that sign recognition cannot reuse the D-21 1 FPS still-frame f
 | **SIG-01** ([#90](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/90)) | Investigate the existing capture/session boundary and establish the provider-neutral recognition contract | none | D-06, D-19, D-21, D-29 |
 | **SIG-02** ([#92](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/92)) | Add typed recognition updates and a deterministic test adapter, then hand confirmed text into the existing conversation path; no live model or camera capture | SIG-01 | D-02, D-06, D-19, D-22, D-29 |
 | **Q-09** ([#91](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91)) | Confirm the first sign language, community-validated pilot task and dataset/collection rights | community consultation | D-29 |
+
+## E5 Environmental intelligence: first slice
+
+D-30 answers Q-10. Environmental observations may propose only a bounded `attention` event while the visitor's camera share is active in the current voice session. The server and browser validate the proposal; accepted events reuse `createOttoEvents` and Otto's existing reaction policy. No speech-triggered events, ambient capture, new event bus or direct action path.
+
+| Slice | Outcome | Blocked by | Decisions |
+|---|---|---|---|
+| **ENV-01** | Add a provider-neutral, typed environmental proposal contract and deterministic adapter; validate session/camera lifecycle, allow-listed topics, rate and duplicates on server and browser; map accepted proposals to the existing `attention` event | none | D-02, D-18, D-19, D-21, D-22, D-30 |
