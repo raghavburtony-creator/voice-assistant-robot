@@ -65,7 +65,7 @@ describe('task moves', () => {
 describe("environmental proposal messages", () => {
   it("accepts the dedicated proposal envelope for independent validation", () => {
     expect(parseServerMessage(JSON.stringify({
-      type: "environmental", proposal: { topic: "object", message: "A parcel is visible." },
+      type: "environmental", generation: 1, proposal: { topic: "object", message: "A parcel is visible." },
     }))).toMatchObject({ type: "environmental", proposal: { topic: "object" } })
   })
 })
