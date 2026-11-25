@@ -53,7 +53,9 @@ def clean_environmental_proposal(value: object) -> EnvironmentalProposal | None:
     topic, message, confidence = value.get("topic"), value.get("message"), value.get("confidence")
     if topic not in TOPICS or confidence != "sufficient" or not isinstance(message, str):
         return None
-    clean = " ".join(_CONTROL.sub(" ", message).split())[:MAX_MESSAGE_CHARS].strip()
+    clean = " ".join(_CONTROL.sub(" ", message).split())
+    clean = re.sub(r"(?:https?://|www\\.)\\S+", "", clean)
+    clean = " ".join(clean.split())[:MAX_MESSAGE_CHARS].strip()
     if not clean:
         return None
     return EnvironmentalProposal(topic=topic, message=clean)  # type: ignore[arg-type]
