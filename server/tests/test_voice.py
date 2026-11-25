@@ -541,20 +541,12 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
     ]
 
 def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued():
-    class RecordingSocket:
-        def __init__(self):
-            self.sent = []
-
-        async def send_json(self, message):
-            self.sent.append(message)
-
-        async def send_bytes(self, data):
-            self.sent.append(data)
-
     async def go():
         live = FakeLive()
+
         async def events():
             yield SimpleNamespace(turn_complete=True)
+
         live.events = events
         ws = ScriptedSocket(
             {"type": "capture", "source": "camera", "generation": 1},
@@ -579,7 +571,6 @@ def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued(
         return ws.sent
 
     assert asyncio.run(go()) == [{"type": "turn_complete"}]
-
 
 # ---- shared frames (D-21) ----
 
