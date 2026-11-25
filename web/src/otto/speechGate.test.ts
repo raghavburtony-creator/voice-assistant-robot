@@ -140,7 +140,9 @@ describe('BargeInGate: interrupting Otto', () => {
   const settings = DEFAULT_BARGE
   const make = () => {
     const diagnostics: VoiceDiagnostic[] = []
-    return { gate: new BargeInGate(settings, e => diagnostics.push(e)), diagnostics }
+    const gate = new BargeInGate(settings, e => diagnostics.push(e))
+    run(gate, repeat(0.001, settings.calibrationMs), false) // the room, learned while Otto was silent
+    return { gate, diagnostics }
   }
   const run = (gate: BargeInGate, levels: number[], audible = true) => levels.map(l => gate.frame(l, FRAME, audible))
 
@@ -148,7 +150,7 @@ describe('BargeInGate: interrupting Otto', () => {
     const { gate, diagnostics } = make()
     const out = run(gate, repeat(0.5, 200))
     expect(out.indexOf(true)).toBe(3) // 4 frames = 200 ms
-    expect(diagnostics[0]).toMatchObject({ type: 'interruption', accepted: true, reason: 'sustained_speech' })
+    expect(diagnostics.at(-1)).toMatchObject({ type: 'interruption', accepted: true, reason: 'sustained_speech' })
   })
 
   it('a brief noise does not interrupt, and is reported as too brief', () => {
@@ -180,6 +182,25 @@ describe('BargeInGate: interrupting Otto', () => {
   it('echo under the fixed line never interrupts', () => {
     const { gate } = make()
     expect(run(gate, repeat(0.2, 3000)).some(Boolean)).toBe(false)
+  })
+
+  it('a loud room cannot interrupt before the floor is learned (Otto spoke as soon as the mic opened)', () => {
+    const diagnostics: VoiceDiagnostic[] = []
+    const gate = new BargeInGate(settings, e => diagnostics.push(e))
+    run(gate, repeat(0.3, 100), false) // 100 ms of room only: not calibrated
+    expect(gate.calibrated).toBe(false)
+    expect(run(gate, repeat(0.3, 1000)).some(Boolean)).toBe(false) // the room, above the fixed line, while he speaks
+    expect(diagnostics.some(d => d.type === 'interruption' && !d.accepted && d.reason === 'calibrating')).toBe(true)
+  })
+
+  it("calibrates from Otto's silences, however short each is", () => {
+    const gate = new BargeInGate(settings)
+    for (let i = 0; i < 8; i++) { run(gate, repeat(0.01, 50), false); run(gate, [0.01], true) }
+    expect(gate.calibrated).toBe(true)
+  })
+
+  it('a carried floor needs no calibration', () => {
+    expect(new BargeInGate(settings, undefined, 0.05).calibrated).toBe(true)
   })
 
   it('when Otto falls silent a run in progress is forgotten', () => {

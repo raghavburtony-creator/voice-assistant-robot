@@ -77,7 +77,7 @@ export const SOUND_SETTINGS = OTTO_CONFIG.sound
  * frame peak of at least `level` (0..1) AND `floorRatio` times the noise floor learned while he was silent (a fan sets that
  * floor, so it cannot cut him off), held for `holdMs`. A dip shorter than `gapMs` does not restart the run. A burst shorter
  * than `holdMs` is rejected. Raise `level` if Otto cuts himself off on loud speakers; lower it if talking over him does
- * not work. Pressing Talk (push-to-talk) or "Stop speaking" always cuts him off.
+ * not work. Right after the microphone opens (before `calibrationMs` of his silence) a voice cannot cut him off yet. Pressing Talk (push-to-talk) or "Stop speaking" always cuts him off.
  */
 export const BARGE_IN = {
   enabled: true,
@@ -85,6 +85,8 @@ export const BARGE_IN = {
   holdMs: 200,
   floorRatio: 4,
   gapMs: 100,
+  /** No interruption is accepted until the room's floor has been learned from this much of Otto's silence. */
+  calibrationMs: 400,
   /** The last frames held back (50 ms each) that are sent once he is cut off, so the first words reach the server. */
   keepFrames: 8,
 }

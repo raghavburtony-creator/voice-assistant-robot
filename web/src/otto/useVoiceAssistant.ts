@@ -325,7 +325,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     // Barge-in: frames held back while Otto is audible, judged against the room's noise floor (BargeInGate).
     const held: ArrayBuffer[] = []
     const diagnose: DiagnosticSink = event => diagnosticRef.current?.(event)
-    const barge = new BargeInGate({ level: BARGE_IN.level, holdMs: BARGE_IN.holdMs, floorRatio: BARGE_IN.floorRatio, gapMs: BARGE_IN.gapMs }, diagnose)
+    const barge = new BargeInGate({ level: BARGE_IN.level, holdMs: BARGE_IN.holdMs, floorRatio: BARGE_IN.floorRatio, gapMs: BARGE_IN.gapMs, calibrationMs: BARGE_IN.calibrationMs }, diagnose)
     // The open mic's turn gate: only a validated turn reaches the server (OpenMicGate). Between turns a fan's noise is
     // dropped here, not streamed and billed; the last frames are kept so the start of a turn is not lost. Push-to-talk is
     // the visitor's own gate.

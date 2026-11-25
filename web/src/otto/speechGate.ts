@@ -24,6 +24,7 @@ export type VoiceDiagnostic =
   | { type: 'turn_complete' }
   | { type: 'interruption'; accepted: true; reason: 'sustained_speech'; level: number; floor: number }
   | { type: 'interruption'; accepted: false; reason: 'too_brief'; durationMs: number; level: number; floor: number }
+  | { type: 'interruption'; accepted: false; reason: 'calibrating'; level: number; floor: number }
 
 export type DiagnosticSink = (event: VoiceDiagnostic) => void
 
@@ -196,9 +197,12 @@ export type BargeInSettings = {
   floorRatio: number
   /** A dip this short inside the run does not restart it: speech has gaps between syllables. */
   gapMs: number
+  /** No interruption is accepted until the floor has been learned from this much of Otto's silence: before that the
+   *  line is only the fixed level, and a loud room could meet it. Stop speaking and Talk still work meanwhile. */
+  calibrationMs: number
 }
 
-export const DEFAULT_BARGE: BargeInSettings = { level: 0.22, holdMs: 200, floorRatio: 4, gapMs: 100 }
+export const DEFAULT_BARGE: BargeInSettings = { level: 0.22, holdMs: 200, floorRatio: 4, gapMs: 100, calibrationMs: 400 }
 
 /**
  * Cutting Otto off by talking over him. Evidence is a level that stays above both the fixed line (his echo) and a multiple
@@ -210,16 +214,19 @@ export class BargeInGate {
   private credibleMs = 0
   private gapMs = 0
   private peak = 0
+  /** How much silence of Otto's the floor has been learned from. */
+  private learnedMs = 0
   private readonly settings: BargeInSettings
   private readonly onDiagnostic?: DiagnosticSink
 
-  constructor(settings: BargeInSettings = DEFAULT_BARGE, onDiagnostic?: DiagnosticSink, initialFloor = 0) {
+  constructor(settings: BargeInSettings = DEFAULT_BARGE, onDiagnostic?: DiagnosticSink, initialFloor?: number) {
     this.settings = settings
     this.onDiagnostic = onDiagnostic
-    this.floor.value = Math.min(initialFloor, DEFAULT_FLOOR.maxFloor)
+    if (initialFloor !== undefined) { this.floor.value = Math.min(initialFloor, DEFAULT_FLOOR.maxFloor); this.learnedMs = settings.calibrationMs }
   }
 
   get noiseFloor() { return this.floor.value }
+  get calibrated() { return this.learnedMs >= this.settings.calibrationMs }
   get line() { return Math.max(this.settings.level, this.floor.value * this.settings.floorRatio) }
 
   /** Forget a run in progress (Otto stopped being audible, the mic stopped sending). */
@@ -232,6 +239,7 @@ export class BargeInGate {
   frame(level: number, frameMs: number, audible: boolean): boolean {
     if (!audible) {
       this.floor.update(level, frameMs, false)
+      this.learnedMs += frameMs
       this.reset()
       return false
     }
@@ -240,6 +248,11 @@ export class BargeInGate {
       this.credibleMs += frameMs + this.gapMs
       this.gapMs = 0
       this.peak = Math.max(this.peak, level)
+      if (this.credibleMs >= this.settings.holdMs && !this.calibrated) {
+        this.onDiagnostic?.({ type: 'interruption', accepted: false, reason: 'calibrating', level: this.peak, floor: this.floor.value })
+        this.reset()
+        return false
+      }
       if (this.credibleMs >= this.settings.holdMs) {
         this.onDiagnostic?.({ type: 'interruption', accepted: true, reason: 'sustained_speech', level: this.peak, floor: this.floor.value })
         this.reset()
