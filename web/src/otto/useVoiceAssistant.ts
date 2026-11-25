@@ -652,6 +652,12 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     return true
   }, [])
 
+  /** Visitor withdrawal: delete the host-scoped saved task and suppress saves for this session. */
+  const clearContinuity = useCallback(() => {
+    const ws = socket.current
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'continuity_clear' }))
+  }, [])
+
   /** Sends one base64 JPEG frame of the running share; a frame with no share, or sooner than a second after the last, is dropped. */
   const sendFrame = useCallback((data: string) => {
     const ws = socket.current
@@ -677,6 +683,6 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     mouth, speech, interrupt, interruptions,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }
