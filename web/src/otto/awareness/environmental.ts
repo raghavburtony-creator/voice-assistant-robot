@@ -7,7 +7,8 @@ export type EnvironmentalAttention = { type: 'attention'; importance: 'minor'; t
 // eslint-disable-next-line no-control-regex
 const cleanText = (value: unknown): string | null => {
   if (typeof value !== "string") return null
-  const clean = value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)
+  const clean = value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim()
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, "").replace(/\s+/g, " ").trim().slice(0, 120)
   return clean || null
 }
 
@@ -19,7 +20,6 @@ export function parseEnvironmentalProposal(value: unknown): EnvironmentalProposa
   const message = cleanText(proposal.message)
   return topic && message ? { topic, message } : null
 }
-
 
 /** The browser's independent lifecycle gate: a screen share or a stopped camera cannot create an event. */
 export function toEnvironmentalAttention(source: string | null, value: unknown): EnvironmentalAttention | null {
