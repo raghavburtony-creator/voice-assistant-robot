@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  currentContext, DESTINATIONS_CONTEXT_FIELD, DESTINATIONS_CONTEXT_KEY, findDestination, publishContext,
+  clearPageContext, currentContext, DESTINATIONS_CONTEXT_FIELD, DESTINATIONS_CONTEXT_KEY, findDestination, publishContext,
 } from './context'
 import { MAX_CONTEXT_BYTES, contextBytes } from './contextBudget'
 
@@ -34,5 +34,23 @@ describe('runtime destinations', () => {
     expect(contextBytes(sent)).toBeLessThanOrEqual(MAX_CONTEXT_BYTES)
     expect((sent?.destinations as unknown[]).length).toBeLessThan(destinations.length)
     expect(sent?.omitted).toBeGreaterThan(0)
+  })
+})
+
+
+describe('page-scoped context', () => {
+  it('clears old interface registries without clearing unrelated context', () => {
+    publishContext('guide_targets', { targets: [{ id: 'save' }] })
+    publishContext('guide_tasks', { tasks: [{ id: 'checkout' }] })
+    publishContext(DESTINATIONS_CONTEXT_KEY, { destinations: [{ id: 'project.42', label: 'Project' }] })
+    publishContext('app_tasks', { running: [{ id: 'upload' }] })
+
+    clearPageContext()
+
+    expect(currentContext()).not.toContainEqual(expect.objectContaining({ key: 'guide_targets' }))
+    expect(currentContext()).not.toContainEqual(expect.objectContaining({ key: 'guide_tasks' }))
+    expect(currentContext()).not.toContainEqual(expect.objectContaining({ key: DESTINATIONS_CONTEXT_KEY }))
+    expect(currentContext()).toContainEqual({ key: 'app_tasks', data: { running: [{ id: 'upload' }] } })
+    expect(findDestination('project.42')).toBeNull()
   })
 })
