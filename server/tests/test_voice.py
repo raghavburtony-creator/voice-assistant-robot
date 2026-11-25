@@ -457,7 +457,7 @@ def test_environmental_tool_queues_only_a_checked_camera_attention_proposal():
     result = tools.notice_environmental_observation("object", "A parcel is visible.", "sufficient", ctx)
     assert result["accepted"] is True
     assert sink.drain("tool-test") == [{
-        "environmental": {"topic": "object", "message": "A parcel is visible."},
+        "environmental": {"generation": 1, "topic": "object", "message": "A parcel is visible."},
     }]
     sink.close("tool-test")
 
@@ -467,11 +467,13 @@ def test_environmental_tool_abstains_without_active_fresh_camera_context():
     sink.open("tool-test")
     ctx = _context()
     ctx.state["capture_source"] = "screen"
+    ctx.state["capture_generation"] = 1
     ctx.state["perception"] = {"latest": [{
         "source": "screen", "kind": "frame", "consent": "granted", "timestamp": now,
     }]}
     assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
     ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
     ctx.state["perception"]["latest"][0]["source"] = "camera"
     assert tools.notice_environmental_observation("object", "A parcel.", "uncertain", ctx)["accepted"] is False
     assert tools.notice_environmental_observation("identity", "A person.", "sufficient", ctx)["accepted"] is False
@@ -485,6 +487,7 @@ def test_environmental_proposal_is_bound_to_the_current_sink_session():
     now = time.monotonic()
     ctx = _context()
     ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
     ctx.state["perception"] = {"latest": [{
         "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
     }]}
