@@ -132,6 +132,27 @@ class PerceptionGateway:
             if self.consent(item.source) == "granted"
         ]
 
+    def drop_frame_data(self, source: ObservationSource, observation_id: str) -> bool:
+        """Release frame bytes after a frame has been forwarded to the model.
+
+        The observation metadata remains available for audit/state reporting, but the
+        image payload is removed so the gateway does not retain the last shared frame.
+        """
+        observation = self._latest.get(source)
+        if observation is None or observation.id != observation_id or observation.kind != "frame":
+            return False
+        self._latest[source] = Observation(
+            id=observation.id,
+            source=observation.source,
+            kind=observation.kind,
+            timestamp=observation.timestamp,
+            consent=observation.consent,
+            size_bytes=observation.size_bytes,
+            metadata=observation.metadata,
+            data=None,
+        )
+        return True
+
     def clear(self) -> None:
         """Drop all in-memory perception data at session teardown."""
         self._latest.clear()
