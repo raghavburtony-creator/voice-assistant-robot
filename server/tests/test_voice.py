@@ -32,6 +32,7 @@ class FakeLive:
 
     def __init__(self) -> None:
         self.session_id = "fake"
+        self.continuity = None
         self.state = {"page": "home", "page_title": "Home", "screens": {}}
         self.sent_text: list[str] = []
         self.images: list[bytes] = []
