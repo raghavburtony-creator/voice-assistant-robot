@@ -511,6 +511,7 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
 
     async def go():
         live = FakeLive()
+
         async def events():
             yield SimpleNamespace(turn_complete=True)
         live.events = events
@@ -555,12 +556,12 @@ def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued(
         async def events():
             yield SimpleNamespace(turn_complete=True)
         live.events = events
-        ws = RecordingSocket()
-        bridge = Bridge(ScriptedSocket(
+        ws = ScriptedSocket(
             {"type": "capture", "source": "camera", "generation": 1},
             {"type": "capture", "source": None, "generation": 2},
             {"type": "capture", "source": "camera", "generation": 3},
-        ), live)  # type: ignore[arg-type]
+        )
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
         await bridge.browser_to_model()
         assert bridge.capture == "camera" and bridge.capture_generation == 3
         assert sink.put(live.session_id, {
@@ -586,13 +587,20 @@ JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 60
 
 
 class ScriptedSocket:
-    """Hands the bridge these browser messages, then disconnects."""
+    """Hands the bridge browser messages and records anything it sends back."""
 
     def __init__(self, *messages: dict) -> None:
         self.messages = [{"type": "websocket.receive", "text": json.dumps(m)} for m in messages]
+        self.sent: list = []
 
     async def receive(self) -> dict:
         return self.messages.pop(0) if self.messages else {"type": "websocket.disconnect"}
+
+    async def send_json(self, message: dict) -> None:
+        self.sent.append(message)
+
+    async def send_bytes(self, data: bytes) -> None:
+        self.sent.append(data)
 
 
 def run_bridge(*messages: dict) -> tuple[Bridge, FakeLive]:
