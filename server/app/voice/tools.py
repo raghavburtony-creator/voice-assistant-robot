@@ -69,6 +69,22 @@ def explain_page(page: PageId, tool_context: ToolContext) -> dict:
     return {"page": page, **PAGES[page]}
 
 
+def get_perception_context(tool_context: ToolContext) -> dict:
+    """Return the provider-independent perception metadata currently available to Otto.
+
+    Live camera/screen frames are delivered directly to the multimodal model through the
+    perception gateway. This tool exposes only metadata and consent state, never frame bytes.
+    """
+    perception = tool_context.state.get("perception")
+    latest = perception.get("latest") if isinstance(perception, dict) else None
+    if not isinstance(latest, list):
+        return {"observations": [], "note": "No camera or screen observation is currently available."}
+    return {
+        "observations": latest,
+        "note": "Frame content is delivered to the live multimodal session; this tool returns metadata only.",
+    }
+
+
 def get_screen_context(tool_context: ToolContext) -> dict:
     """What the user has open right now: the current page and whatever the page reported about itself."""
     state = tool_context.state
@@ -189,5 +205,5 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, run_command, show_target, start_guided_task, move_guided_task, show_card)]
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, run_command, show_target, start_guided_task, move_guided_task, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
