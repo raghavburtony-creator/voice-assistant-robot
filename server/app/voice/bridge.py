@@ -49,7 +49,7 @@ ANNOUNCE_GAP_SECONDS = 4.0
 CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
-JPEG_MAGIC = b"\xff\xd8\xff"
+JPEG_MAGIC = b"\\xff\\xd8\\xff"
 
 continuity_store: ContinuityStore = SQLiteContinuityStore(settings.continuity_store_path)
 
@@ -60,6 +60,14 @@ def context_bytes(data: object) -> int:
     A lone surrogate arrives escaped (`\\ud800`, 6 bytes) and json.loads makes it one character. It is counted as that
     escape again, so a client can't fit twice the budget into an update with them."""
     return len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "backslashreplace"))
+
+
+def _task_specs(data: object) -> list[object] | None:
+    """Extract the browser's published task registry ({tasks: [...]}) safely."""
+    if not isinstance(data, dict):
+        return None
+    tasks = data.get("tasks")
+    return tasks if isinstance(tasks, list) else None
 
 
 class LiveSession(Protocol):
@@ -251,8 +259,9 @@ class Bridge:
             self.pending_continuity = None
             return
         screens = self.live.state.get("screens", {})
-        offered = screens.get("guide_tasks") if isinstance(screens, dict) else None
-        spec = next((item for item in offered if isinstance(item, dict) and item.get("id") == task), None) if isinstance(offered, list) else None
+        registry = screens.get("guide_tasks") if isinstance(screens, dict) else None
+        offered_tasks = _task_specs(registry)
+        spec = next((item for item in offered_tasks if isinstance(item, dict) and item.get("id") == task), None) if offered_tasks is not None else None
         if not isinstance(spec, dict) or not isinstance(spec.get("stepIds"), list) or step not in spec["stepIds"]:
             self.continuity_store.delete(identity.scope, identity.identity)
             self.pending_continuity = None
@@ -264,13 +273,14 @@ class Bridge:
         )
 
     def _resume_saved_task(self, data: object) -> None:
-        if self.continuity_resumed or self.pending_continuity is None or not isinstance(data, list) or not data:
+        offered_tasks = _task_specs(data)
+        if self.continuity_resumed or self.pending_continuity is None or not offered_tasks:
             # A page may register its tasks in a parent effect after Otto mounts. Wait for a non-empty
             # registry update rather than treating the first empty snapshot as proof the task disappeared.
             return
         self.continuity_resumed = True
         record = self.pending_continuity
-        offered = next((item for item in data if isinstance(item, dict) and item.get("id") == record.task), None)
+        offered = next((item for item in offered_tasks if isinstance(item, dict) and item.get("id") == record.task), None)
         step_ids = offered.get("stepIds") if isinstance(offered, dict) else None
         if not isinstance(step_ids, list) or record.step not in step_ids:
             identity = self.live.continuity
