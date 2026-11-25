@@ -15,6 +15,7 @@ from google.adk.tools import FunctionTool, ToolContext
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
+from app.voice.context import clear_page_context
 from app.voice.sink import sink
 
 logger = logging.getLogger(__name__)
@@ -57,14 +58,19 @@ def navigate_to(page: str, tool_context: ToolContext) -> dict:
                 "known": [*PAGE_IDS, *destinations]}
     reported_label = destinations.get(page, {}).get("label")
     title = PAGES[page]["title"] if page in PAGES else runtime_title(reported_label, page)
+    screens = tool_context.state.get("screens")
+    if isinstance(screens, dict):
+        # A host-mapped runtime destination can be a handoff to another supported interface.
+        # Keep only the existing bounded task record; never store the destination or route.
+        running = screens.get("guide_task_running")
+        if (page not in PAGES and isinstance(running, dict)
+                and is_runtime_id(running.get("id")) and is_runtime_id(running.get("stepId"))):
+            tool_context.state["continuity_handoff"] = True
+        clear_page_context(screens)
     _send(tool_context, {"action": "navigate", "page": page})
     # Later tools in this turn see the new page.
     tool_context.state["page"] = page
     tool_context.state["page_title"] = title
-    # Runtime lists belong only to the page that reported them (D-23). The browser will report the new page's list later.
-    screens = tool_context.state.get("screens")
-    if isinstance(screens, dict):
-        screens[DESTINATIONS_CONTEXT_KEY] = None
     return {"ok": True, "now_on": title}
 
 
