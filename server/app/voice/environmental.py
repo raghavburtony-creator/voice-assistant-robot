@@ -29,6 +29,14 @@ class EnvironmentalProposal:
     message: str
 
 
+@dataclass(frozen=True)
+class AcceptedEnvironmentalProposal:
+    """A proposal bound to the exact visitor camera-share generation that authorised it."""
+
+    proposal: EnvironmentalProposal
+    generation: int
+
+
 class EnvironmentalAdapter(Protocol):
     """Provider-neutral seam: adapters return candidate data, never actions."""
 
@@ -66,7 +74,7 @@ def accept_environmental_proposal(
     value: object,
     *,
     now: float | None = None,
-) -> EnvironmentalProposal | None:
+) -> AcceptedEnvironmentalProposal | None:
     """Validate proposal, camera consent/freshness and per-session limits.
 
     The state is the current ephemeral ADK session state. Only a topic and
@@ -77,6 +85,9 @@ def accept_environmental_proposal(
     if proposal is None:
         return None
     if state.get("capture_source") != "camera":
+        return None
+    generation = state.get("capture_generation")
+    if type(generation) is not int or generation < 1:
         return None
 
     perception = state.get("perception")
@@ -104,4 +115,4 @@ def accept_environmental_proposal(
     state["_environmental_last_at"] = current
     state["_environmental_last_topic"] = proposal.topic
     state["_environmental_last_topic_at"] = current
-    return proposal
+    return AcceptedEnvironmentalProposal(proposal=proposal, generation=generation)
