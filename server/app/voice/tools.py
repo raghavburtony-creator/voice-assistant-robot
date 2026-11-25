@@ -104,13 +104,21 @@ def get_desktop_context(tool_context: ToolContext) -> dict:
         return result if all(item is not None for item in result.values()) else None
 
     monitor = geometry(raw.get("monitor"), ("x", "y", "width", "height"))
-    otto = geometry(raw.get("otto"), ("x", "y", "width", "height"))
     cursor = geometry(raw.get("cursor"), ("x", "y"))
     otto_data = raw.get("otto")
+    otto_size = geometry(otto_data, ("width", "height"))
     visible = otto_data.get("visible") if isinstance(otto_data, dict) else None
-    if (monitor is None or otto is None or cursor is None or type(visible) is not bool
-            or monitor["width"] <= 0 or monitor["height"] <= 0 or otto["width"] <= 0 or otto["height"] <= 0):
+    if (monitor is None or otto_size is None or cursor is None or type(visible) is not bool
+            or monitor["width"] <= 0 or monitor["height"] <= 0 or otto_size["width"] <= 0 or otto_size["height"] <= 0):
         return {"enabled": True, "available": False, "note": "Desktop metadata is temporarily unavailable."}
+
+    # Some window managers (notably Wayland compositors) do not expose global
+    # window coordinates. Preserve the rest of the metadata and mark them unavailable.
+    otto = {
+        "x": number(otto_data.get("x")),
+        "y": number(otto_data.get("y")),
+        **otto_size,
+    }
 
     active = raw.get("activeWindow")
     active_window = None
