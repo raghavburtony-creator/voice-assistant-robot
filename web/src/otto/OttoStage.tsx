@@ -135,7 +135,8 @@ export default function OttoStage({
   }, [stage, config.movement.noticeClicks])
 
   // The face: asleep, resting; in a conversation, the voice's; otherwise a passing mood or a task's look over the owner's.
-  const face = asleep ? 'resting' : conversing ? expression : aware.face ?? expression
+  // A question to the visitor (permission) shows even in a conversation: it is the one thing the voice's face must not hide.
+  const face = asleep ? 'resting' : aware.asking ? 'alert' : conversing ? expression : aware.face ?? expression
   // A long task: think hard, if nothing else has a pose for him.
   const shownPose = pose === 'idle' && aware.thinking && !conversing ? 'thinking' : pose
 

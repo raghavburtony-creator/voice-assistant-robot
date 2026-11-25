@@ -16,6 +16,7 @@ import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, isPage, PAGES, VAD }
 import { BargeInGate, OpenMicGate, type DiagnosticSink, type OpenMicStep } from './speechGate'
 import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
+import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
 import { isRuntimeId } from './runtimeId'
 
@@ -79,6 +80,8 @@ type Options = {
   createSocket?: (url: string) => WebSocket
   /** Privacy-safe voice events (speech start and end, interruption accepted or rejected and why). Levels and reasons, never audio. */
   onDiagnostic?: DiagnosticSink
+  /** The server says how things are going (thinking, working, asking permission...): show it on Otto. Already checked. */
+  onAvatar?: (event: AvatarEvent) => void
 }
 
 const MAX_ENTRIES = 40
@@ -140,7 +143,7 @@ export function loadAssistantAudio(): Promise<AudioModule> {
   return audioLoad
 }
 
-export function useVoiceAssistant({ language, page, onAction, createSocket, onDiagnostic }: Options) {
+export function useVoiceAssistant({ language, page, onAction, createSocket, onDiagnostic, onAvatar }: Options) {
   const [status, setStatus] = useState<AssistantStatus>('idle')
   /** Counts barge-ins (the visitor cut Otto off), so the robot can react to each one. */
   const [interruptions, setInterruptions] = useState(0)
@@ -175,6 +178,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const nextId = useRef(0)
   const actionRef = useRef(onAction)
   const diagnosticRef = useRef(onDiagnostic)
+  const avatarRef = useRef(onAvatar)
   const pageRef = useRef(currentPageInfo(page).page)
   // Read by the recorder's frame callback and the timers, which outlive a render.
   const live = useRef(false)
@@ -191,6 +195,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   useEffect(() => {
     actionRef.current = onAction
     diagnosticRef.current = onDiagnostic
+    avatarRef.current = onAvatar
     pageRef.current = currentPageInfo(page).page
     socketFactory.current = createSocket
   })
@@ -467,6 +472,13 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           diagnosticRef.current?.({ type: 'turn_complete' })
           player.current?.endTurn()
           openEntry.current = null
+          break
+        case 'avatar':
+          {
+            // Presentation only: it changes how Otto looks, never what the page does, and it is checked like any server message.
+            const avatar = parseAvatarEvent(message.event)
+            if (avatar) avatarRef.current?.(avatar)
+          }
           break
         case 'action':
           {

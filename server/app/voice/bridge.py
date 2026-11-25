@@ -19,6 +19,7 @@ from fastapi import WebSocket
 
 from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
+from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 
@@ -248,6 +249,17 @@ class Bridge:
                 return
 
     # ---- model to browser ----
+
+    def avatar(self, event: object) -> bool:
+        """Tells Otto's character how things are going (avatar.py): thinking, working, asking permission, success...
+
+        For the orchestrator, task engine and policy layer to call; it is not a tool, so the model cannot. An event that
+        does not fit is dropped (and False returned). It queues like any message, never waiting on the browser."""
+        clean = clean_avatar_event(event)
+        if clean is None:
+            return False
+        self.out.control({"type": "avatar", "event": clean})
+        return True
 
     async def _transcript(self, role: str, transcription: Any) -> None:
         text = getattr(transcription, "text", None)

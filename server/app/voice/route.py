@@ -12,6 +12,9 @@
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
+                             {"type":"avatar","event":{"kind":"working","id":...,"topic"?:...,"message"?:...}}   (avatar.py: how things are
+                              going, for Otto's face and body; presentation only. Kinds: thinking, listening, speaking, working, waiting,
+                              permission {id,state}, success, failure, interruption, emotion, gesture, movement)
                              {"type":"ended","reason":"closed"|"service_ended"|"time_limit"}
                              {"type":"error","code":"not_configured"|"busy"|"bad_start"|"upstream","message":...}
                       binary 24 kHz mono PCM16 speech

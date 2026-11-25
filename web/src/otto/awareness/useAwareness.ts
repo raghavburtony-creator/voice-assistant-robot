@@ -32,6 +32,8 @@ export type AwarenessOutput = {
   face: RobotExpression | null
   /** A long task: think hard (the thinking pose). */
   thinking: boolean
+  /** Otto is asking the visitor's permission for something (held until it is answered): a face of its own. */
+  asking: boolean
   /** Words for the bubble (big reactions only). */
   bubble: string
   /** Words for screen readers. */
@@ -46,7 +48,7 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
   useEffect(() => { reactor.setSettings(settings) }, [reactor, settings])
 
   const [mood, setMood] = useState<RobotExpression | null>(null)
-  const [taskLook, setTaskLook] = useState<{ face: RobotExpression | null; thinking: boolean }>({ face: null, thinking: false })
+  const [taskLook, setTaskLook] = useState<{ face: RobotExpression | null; thinking: boolean; asking: boolean }>({ face: null, thinking: false, asking: false })
   const [bubble, setBubble] = useState('')
   const [announce, setAnnounce] = useState('')
 
@@ -113,13 +115,17 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
     window.clearInterval(taskTimer.current)
     let looked: string | null = null
     const check = () => {
-      const t = reactor.activeTask(performance.now())
-      const any = reactor.awareness(state(), performance.now()).app.tasks.length > 0
-      if (!any) { window.clearInterval(taskTimer.current); taskTimer.current = undefined; setTaskLook({ face: null, thinking: false }); return }
-      if (!t) return
+      const now = performance.now()
+      const ask = reactor.activeAsk(now)
+      const t = reactor.activeTask(now)
+      const any = ask !== null || reactor.awareness(state(), now).app.tasks.length > 0
+      if (!any) { window.clearInterval(taskTimer.current); taskTimer.current = undefined; setTaskLook({ face: null, thinking: false, asking: false }); return }
+      // A question to the visitor comes before anything else Otto is busy with.
+      if (ask) { setTaskLook(was => was.asking ? was : { face: 'alert', thinking: false, asking: true }); return }
+      if (!t) { setTaskLook(was => was.asking ? { face: null, thinking: false, asking: false } : was); return }
       if (looked !== t.id && t.where !== undefined && !live.current.talking) { looked = t.id; stage.lookAt(t.where, 1.5) }
       const thinking = t.ms >= live.current.settings.thinkingAfterMs
-      setTaskLook(was => (was.face === 'searching' && was.thinking === thinking ? was : { face: 'searching', thinking }))
+      setTaskLook(was => (was.face === 'searching' && was.thinking === thinking && !was.asking ? was : { face: 'searching', thinking, asking: false }))
     }
     taskTimer.current = window.setInterval(check, 200)
   }, [reactor, state, stage])
@@ -130,7 +136,7 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
     if (event.type === 'idle') live.current.idle.idleNow()
     const reaction = reactor.decide(event, state(), now)
     carryOut(event, reaction)
-    if (event.type === 'task') watchTasks()
+    if (event.type === 'task' || event.type === 'permission') watchTasks()
     // Back after missing something: the latest thing that went wrong or needed them, once.
     if (event.type === 'arrive') {
       const missed = reactor.takeMissed()
@@ -175,5 +181,5 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
   }, [robot, settings.enabled, handle])
 
   const awareness = useCallback(() => reactor.awareness(state(), performance.now()), [reactor, state])
-  return { face: mood ?? taskLook.face, thinking: taskLook.thinking, bubble, announce, awareness }
+  return { face: mood ?? taskLook.face, thinking: taskLook.thinking, asking: taskLook.asking, bubble, announce, awareness }
 }
