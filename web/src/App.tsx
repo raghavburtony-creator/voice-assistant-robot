@@ -60,7 +60,7 @@ export default function App() {
         launch_text_editor: 'launch Text Editor',
       } as const
       const description = labels[action.desktop_action]
-      if (!window.confirm(`Allow Otto to ${description}?\\n\\nThis action will run only if you approve it.`)) return
+      if (!window.confirm(`Allow Otto to ${description}?\n\nThis action will run only if you approve it.`)) return
 
       const desktopTask = events.task(`desktop-action-${Date.now()}`, {
         importance: 'normal',
