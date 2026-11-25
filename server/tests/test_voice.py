@@ -450,6 +450,7 @@ def test_environmental_tool_queues_only_a_checked_camera_attention_proposal():
     sink.open("tool-test")
     ctx = _context()
     ctx.state["capture_source"] = "camera"
+    ctx.state["capture_generation"] = 1
     ctx.state["perception"] = {"latest": [{
         "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
     }]}
@@ -512,8 +513,12 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
         live.events = events
         ws = RecordingSocket()
         bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        bridge.capture = "camera"
+        bridge.capture_generation = 1
+        live.state["capture_source"] = "camera"
+        live.state["capture_generation"] = 1
         assert sink.put(live.session_id, {
-            "environmental": {"topic": "object", "message": "A parcel is visible."},
+            "environmental": {"generation": 1, "topic": "object", "message": "A parcel is visible."},
         })
         pump = asyncio.create_task(bridge.output_pump())
         await bridge.model_to_browser()
@@ -527,7 +532,7 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
         return ws.sent
 
     assert asyncio.run(go()) == [
-        {"type": "environmental", "proposal": {"topic": "object", "message": "A parcel is visible."}},
+        {"type": "environmental", "generation": 1, "proposal": {"topic": "object", "message": "A parcel is visible."}},
         {"type": "turn_complete"},
     ]
 
@@ -580,7 +585,7 @@ def frame(data: bytes = JPEG) -> dict:
     return {"type": "frame", "data": base64.b64encode(data).decode()}
 
 
-SHARE = {"type": "capture", "source": "screen"}
+SHARE = {"type": "capture", "source": "screen", "generation": 1}
 
 
 def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
@@ -588,18 +593,18 @@ def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
     assert live.images == []
     bridge, live = run_bridge(SHARE, frame())
     assert live.images == [JPEG] and bridge.frames == 1
-    _, live = run_bridge({"type": "capture", "source": "camera"}, {"type": "capture", "source": None}, frame())
+    _, live = run_bridge({"type": "capture", "source": "camera", "generation": 1}, {"type": "capture", "source": None, "generation": 2}, frame())
     assert live.images == []
 
 
 def test_a_share_names_only_camera_or_screen_and_is_mirrored_to_ephemeral_tool_state():
-    bridge, live = run_bridge({"type": "capture", "source": "camera"})
+    bridge, live = run_bridge({"type": "capture", "source": "camera", "generation": 1})
     assert bridge.capture == "camera" and live.state["capture_source"] == "camera"
-    bridge, live = run_bridge({"type": "capture", "source": "screen"})
+    bridge, live = run_bridge({"type": "capture", "source": "screen", "generation": 1})
     assert bridge.capture == "screen" and live.state["capture_source"] == "screen"
-    bridge, live = run_bridge({"type": "capture", "source": "camera"}, {"type": "capture", "source": None})
+    bridge, live = run_bridge({"type": "capture", "source": "camera", "generation": 1}, {"type": "capture", "source": None, "generation": 2})
     assert bridge.capture is None and live.state["capture_source"] is None
-    bridge, live = run_bridge({"type": "capture", "source": "microphone"}, frame())
+    bridge, live = run_bridge({"type": "capture", "source": "microphone", "generation": 1}, frame())
     assert bridge.capture is None and live.state["capture_source"] is None and live.images == []
 
 
