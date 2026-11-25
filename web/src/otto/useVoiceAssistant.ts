@@ -17,6 +17,8 @@ import { BargeInGate, OpenMicGate, type DiagnosticSink, type OpenMicStep } from 
 import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
+import { parseEnvironmentalProposal } from './awareness/environmental'
+import type { OttoEvent } from './awareness/events'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
 import { isRuntimeId } from './runtimeId'
 
@@ -84,6 +86,8 @@ type Options = {
   onDiagnostic?: DiagnosticSink
   /** The server says how things are going (thinking, working, asking permission...): show it on Otto. Already checked. */
   onAvatar?: (event: AvatarEvent) => void
+  /** A validated, camera-session-scoped proposal for Otto's existing awareness event system. */
+  onEnvironmental?: (event: Pick<OttoEvent, 'type' | 'topic' | 'message' | 'importance'>) => void
 }
 
 const MAX_ENTRIES = 40
@@ -145,7 +149,7 @@ export function loadAssistantAudio(): Promise<AudioModule> {
   return audioLoad
 }
 
-export function useVoiceAssistant({ language, page, onAction, createSocket, onDiagnostic, onAvatar }: Options) {
+export function useVoiceAssistant({ language, page, onAction, createSocket, onDiagnostic, onAvatar, onEnvironmental }: Options) {
   const [status, setStatus] = useState<AssistantStatus>('idle')
   /** Counts barge-ins (the visitor cut Otto off), so the robot can react to each one. */
   const [interruptions, setInterruptions] = useState(0)
@@ -181,6 +185,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const actionRef = useRef(onAction)
   const diagnosticRef = useRef(onDiagnostic)
   const avatarRef = useRef(onAvatar)
+  const environmentalRef = useRef(onEnvironmental)
   const pageRef = useRef(currentPageInfo(page).page)
   // Read by the recorder's frame callback and the timers, which outlive a render.
   const live = useRef(false)
@@ -198,6 +203,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     actionRef.current = onAction
     diagnosticRef.current = onDiagnostic
     avatarRef.current = onAvatar
+    environmentalRef.current = onEnvironmental
     pageRef.current = currentPageInfo(page).page
     socketFactory.current = createSocket
   })
@@ -497,6 +503,14 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
               if (avatar.kind === 'permission' && avatar.state === 'asking' && avatar.message) addCard({ title: 'Asking your permission', body: avatar.message })
               avatarRef.current?.(avatar)
             }
+          }
+          break
+        case 'environmental':
+          {
+            // Stop/hidden-tab/session teardown clears this ref before any late proposal can reach Otto.
+            if (sharing.current !== 'camera') break
+            const proposal = parseEnvironmentalProposal(message.proposal)
+            if (proposal) environmentalRef.current?.({ type: 'attention', importance: 'minor', ...proposal })
           }
           break
         case 'action':
