@@ -395,7 +395,25 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_destination;
+    use super::{desktop_action_label, resolve_destination, DesktopAction};
+
+    #[test]
+    fn every_native_action_has_a_specific_confirmation_label() {
+        let actions = [
+            DesktopAction::MinimizeOtto,
+            DesktopAction::RestoreOtto,
+            DesktopAction::MoveHome,
+            DesktopAction::MoveLeft,
+            DesktopAction::MoveRight,
+            DesktopAction::MoveTop,
+            DesktopAction::MoveBottom,
+            DesktopAction::LaunchCalculator,
+            DesktopAction::LaunchTextEditor,
+        ];
+        for action in actions {
+            assert!(!desktop_action_label(action).is_empty());
+        }
+    }
 
     #[test]
     fn named_destinations_stay_inside_a_negative_origin_work_area() {
