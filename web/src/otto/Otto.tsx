@@ -120,7 +120,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     if (action.action === 'task_move') ottoGuide.move(action.move)
     onAction(action)
   }, [ottoGuide, onAction])
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket,
+    onEnvironmental: event => otto.notify(event) })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
   // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.
   useGestureTriggers(status, channel, interruptions)
