@@ -18,7 +18,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX } from '../otto.config'
 import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
-import { toOttoEvents, type AvatarEvent } from './awareness/avatar'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
 import { OttoConfigProvider, useOttoConfig } from './useOttoConfig'
@@ -111,9 +110,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     if (action.action === 'task_move') ottoGuide.move(action.move)
     onAction(action)
   }, [ottoGuide, onAction])
-  // What the server says about how things are going (working, asking permission...) goes onto Otto's one event path.
-  const handleAvatar = useCallback((avatar: AvatarEvent) => toOttoEvents(avatar).forEach(event => otto.notify(event)), [otto])
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket, onAvatar: handleAvatar })
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
   // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.
   useGestureTriggers(status, channel, interruptions)
@@ -223,7 +220,12 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     let busy = EMPTY_BUSY
     const off = otto.subscribe(event => {
       const next = nextBusy(busy, event)
-      if (next !== busy) publishContext('app_tasks', busyContext(busy = next))
+      if (next !== busy) {
+        const announce = event.topic === 'desktop-movement' && ['success', 'failure', 'complete'].includes(event.type)
+          ? 'desktop_movement_finished'
+          : undefined
+        publishContext('app_tasks', busyContext(busy = next), announce)
+      }
     })
     return () => { off(); publishContext('app_tasks', null) }
   }, [otto])

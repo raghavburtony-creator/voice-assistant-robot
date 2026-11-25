@@ -59,13 +59,17 @@ npm run desktop:build
 
 For a packaged desktop build, set `VITE_API_URL` to the reachable Otto server origin before building (for example, `https://otto-api.example.com`). In development, Vite continues to proxy `/api` to the local server. The desktop window is transparent, frameless and always on top; it reuses the web app's React/robot implementation.
 
-The native/web boundary is intentionally narrow in this first slice:
+The native/web boundary stays intent-based:
 - the webview may query read-only runtime information with `getDesktopStatus()`;
 - the host announces `otto://desktop-ready` and `otto://desktop-page-loaded` lifecycle events;
-- `onDesktopError()` is the reserved error subscription;
-- no arbitrary shell, filesystem, input or window-control command is exposed. Future desktop actions must be added through the permissioned gateway in DESKTOP-04, not as model-accessible Tauri commands.
+- `onDesktopError()` remains the reserved native error subscription;
+- `moveDesktopTo()` accepts only `home`, `desktop-left`, `desktop-right`, `top` or `bottom`;
+- the native host calculates physical coordinates, clamps the window to the current monitor's work area and animates the transition;
+- movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`, available through `onDesktopMovement()`;
+- the ADK `move_desktop` tool accepts only those named destinations. Pixel coordinates and monitor details stay inside the native host;
+- no arbitrary shell, filesystem, input automation or general window-control command is exposed. Broader desktop capabilities remain behind the permissioned gateway planned in DESKTOP-04.
 
-Browser mode remains unchanged: the bridge helpers return a browser-safe fallback when the Tauri runtime is absent.
+The movement controller stays on the monitor Otto currently occupies; it uses that monitor's work area (including non-primary monitors with negative desktop origins) and does not silently jump Otto between displays. Browser mode remains unchanged: movement returns an explicit unavailable result when the Tauri runtime is absent.
 
 ## Using it in a new project
 
