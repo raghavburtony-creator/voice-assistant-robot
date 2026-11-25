@@ -57,10 +57,11 @@ fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMov
 
     let window = app.get_webview_window("main")
         .ok_or_else(|| "Otto's desktop window is unavailable.".to_string())?;
+    // Never guess another display: if the current monitor cannot be identified,
+    // refuse the move rather than unexpectedly relocating Otto to the primary monitor.
     let monitor = window.current_monitor()
         .map_err(|error| error.to_string())?
-        .or(window.primary_monitor().map_err(|error| error.to_string())?)
-        .ok_or_else(|| "No display monitor is available.".to_string())?;
+        .ok_or_else(|| "Otto's current monitor could not be identified.".to_string())?;
 
     let area = monitor.work_area();
     let area_left = area.position.x;
