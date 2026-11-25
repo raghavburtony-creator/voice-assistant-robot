@@ -48,15 +48,17 @@ export default function App() {
       return
     }
     if (action.action === 'desktop_move') {
-      void moveDesktopTo(action.destination).then(result => {
-        events.notify({
-          type: result.ok ? 'complete' : 'failure',
-          importance: 'normal',
-          topic: 'desktop-movement',
-          message: result.ok ? `Otto moved to ${action.destination}.` : (result.error ?? 'Otto could not move to that desktop position.'),
-          data: { destination: action.destination },
-        })
+      const movementTask = events.task(`desktop-movement-${Date.now()}`, {
+        importance: 'normal',
+        topic: 'desktop-movement',
+        message: `Otto is moving to ${action.destination}.`,
+        data: { destination: action.destination },
       })
+      void moveDesktopTo(action.destination).then(result => {
+        const message = result.ok ? `Otto moved to ${action.destination}.` : (result.error ?? `Otto could not move to ${action.destination}.`)
+        if (result.ok) movementTask.succeed(message)
+        else movementTask.fail(message)
+      }).catch(() => movementTask.fail(`Otto could not move to ${action.destination}.`))
       return
     }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
