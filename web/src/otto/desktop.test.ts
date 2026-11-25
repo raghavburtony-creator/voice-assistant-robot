@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, moveDesktopTo, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
+import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -24,27 +24,7 @@ describe('desktop bridge in browser mode', () => {
   })
 })
 
-describe('desktop movement bridge', () => {
-  it('validates and sends only a named destination to the native command', async () => {
-    const invoke = vi.fn().mockResolvedValue({
-      ok: true, destination: 'desktop-left',
-    })
-    window.__TAURI__ = {
-      core: { invoke },
-      event: { listen: vi.fn().mockResolvedValue(() => undefined) },
-    } as never
-
-    await expect(moveDesktopTo('desktop-left')).resolves.toMatchObject({ ok: true, destination: 'desktop-left' })
-    expect(invoke).toHaveBeenCalledWith('move_desktop_window', { destination: 'desktop-left' })
-
-    delete window.__TAURI__
-  })
-
-  it('reports browser mode as unavailable instead of pretending movement succeeded', async () => {
-    delete window.__TAURI__
-    await expect(moveDesktopTo('home')).resolves.toMatchObject({ ok: false, destination: 'home' })
-  })
-
+describe('desktop movement events', () => {
   it('subscribes to structured native movement events', async () => {
     const listen = vi.fn().mockResolvedValue(() => undefined)
     window.__TAURI__ = { core: { invoke: vi.fn() }, event: { listen } } as never
@@ -53,7 +33,9 @@ describe('desktop movement bridge', () => {
     expect(unlisten()).toBeUndefined()
     delete window.__TAURI__
   })
+})
 
+describe('desktop action bridge', () => {
   it('accepts only the permissioned desktop action allow-list', () => {
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toEqual({
       action: 'desktop_action', desktop_action: 'move_top',
