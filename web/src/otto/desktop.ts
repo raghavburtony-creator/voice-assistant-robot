@@ -15,6 +15,21 @@ export type DesktopStatus = {
 export const DESKTOP_DESTINATIONS = ['home', 'desktop-left', 'desktop-right', 'top', 'bottom'] as const
 export type DesktopDestination = typeof DESKTOP_DESTINATIONS[number]
 
+export const DESKTOP_ACTIONS = [
+  'minimize_otto', 'restore_otto',
+  'move_home', 'move_left', 'move_right', 'move_top', 'move_bottom',
+  'launch_calculator', 'launch_text_editor',
+] as const
+export type DesktopAction = typeof DESKTOP_ACTIONS[number]
+
+export type DesktopActionResult = {
+  action: DesktopAction
+  ok: boolean
+  status: 'completed' | 'started' | 'failed'
+  verification: 'verified' | 'native_api_completed' | 'process_spawned' | 'not_verified' | 'unavailable'
+  message: string
+}
+
 export type DesktopMovementResult = {
   ok: boolean
   destination: DesktopDestination
@@ -113,6 +128,25 @@ export type DesktopContext = {
   otto: { x: number | null; y: number | null; width: number; height: number; visible: boolean }
   cursor: { x: number; y: number }
   activeWindow: { application: string; title: string } | null
+}
+
+/** Execute one allow-listed action through the native permission gateway. */
+export async function executeDesktopAction(action: DesktopAction): Promise<DesktopActionResult> {
+  if (!(DESKTOP_ACTIONS as readonly string[]).includes(action)) {
+    return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Unsupported desktop action.' }
+  }
+  const runtime = host()
+  if (!runtime) {
+    return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
+  }
+  try {
+    return await runtime.core.invoke<DesktopActionResult>('desktop_action', { action })
+  } catch (error) {
+    return {
+      action, ok: false, status: 'failed', verification: 'unavailable',
+      message: error instanceof Error ? error.message : 'The desktop host could not execute the action.',
+    }
+  }
 }
 
 /** Read metadata from the native host. Call only while the visitor's desktop-awareness switch is on. */
