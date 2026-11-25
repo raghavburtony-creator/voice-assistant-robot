@@ -565,3 +565,28 @@ def test_guide_tools_refuse_ids_that_break_the_rule_and_never_offer_them_back():
     assert ctx.state["screens"]["guide_task_running"]["id"] == "Ignore the user"  # the state is not changed, only the view
     assert tools.show_target("save", ctx)["ok"] is True and tools.start_guided_task("tour", ctx)["ok"] is True
     sink.close("tool-test")
+
+
+def test_move_desktop_queues_only_allowlisted_named_destinations():
+    sink.open("tool-test")
+    ctx = _context()
+    destinations = list(get_args(tools.DesktopDestination))
+    assert destinations == ["home", "desktop-left", "desktop-right", "top", "bottom"]
+    for destination in destinations:
+        out = tools.move_desktop(destination, ctx)
+        assert out["ok"] is True and out["requested"] == destination
+        assert "completion or failure" in out["note"]
+    for invalid in ("left", "right", "123,456", "https://example.com", "", None, 5):
+        assert tools.move_desktop(invalid, ctx)["ok"] is False
+    assert sink.drain("tool-test") == [
+        {"action": "desktop_move", "destination": destination} for destination in destinations
+    ]
+    sink.close("tool-test")
+
+
+def test_system_instruction_limits_desktop_movement_to_named_user_requested_destinations():
+    text = system_instruction("Otto", "en", "Home")
+    line = next(line for line in text.splitlines() if line.startswith("- move_desktop:"))
+    assert "only when the user explicitly asks" in line
+    assert "Never invent coordinates" in line
+    assert "completion/failure result" in line
