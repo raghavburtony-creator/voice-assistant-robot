@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 
+from app.voice.bridge import _task_specs
 from app.voice.continuity_store import (
     RETENTION_SECONDS,
     ContinuityRecord,
@@ -39,6 +40,16 @@ class FakeContinuityStore:
     def enable(self, scope, identity):
         self.disabled.discard((scope, identity))
 
+
+def test_task_specs_unwraps_browser_task_registry_envelope():
+    tasks = [{"id": "checkout", "stepIds": ["details", "payment"]}]
+    assert _task_specs({"tasks": tasks}) == tasks
+
+
+def test_task_specs_rejects_invalid_or_legacy_bare_list_payloads():
+    assert _task_specs([{"id": "checkout"}]) is None
+    assert _task_specs({"tasks": None}) is None
+    assert _task_specs(None) is None
 
 
 def test_store_round_trips_only_the_four_allowed_fields(tmp_path):
