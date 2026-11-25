@@ -430,8 +430,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     }
     ws.onmessage = event => {
       if (event.data instanceof ArrayBuffer) {
-        player.current?.play(event.data)
-        setStatus(current => current === 'listening' ? 'speaking' : current)
+        // The rest of a turn the visitor already cut off is dropped by the player; it must not show Otto as speaking again.
+        if (player.current?.play(event.data)) setStatus(current => current === 'listening' ? 'speaking' : current)
         return
       }
       if (typeof event.data !== 'string') return
@@ -616,6 +616,9 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const sendText = useCallback((text: string) => {
     const ws = socket.current
     if (!text.trim() || ws?.readyState !== WebSocket.OPEN) return false
+    // Typing over Otto is an interruption like speaking over him: what he was saying is void, so it stops now instead of
+    // playing on until the server answers the new message.
+    interruptRef.current()
     openEntry.current = null
     addTranscript('user', text.trim())
     openEntry.current = null

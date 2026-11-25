@@ -18,6 +18,7 @@ Each part of the kit has one job:
 |---|---|---|---|
 | Wire protocol | `route.py` docstring, `messages.ts` | One WebSocket: 16 kHz PCM up, 24 kHz PCM down, JSON messages both ways | D-01, D-04 |
 | Session | `route.py`, `bridge.py`, `config.py` | One ADK live session per connection. In memory, deleted on close, capped in length and number | D-04, D-09 |
+| Voice input and output | `bridge.py` (input pump), `events.py` (typed model events), `output.py` (one writer, interruption drops queued speech) | Listening is separate from speaking: input never waits on speech, speech never blocks the model | D-05 |
 | Tools | `tools.py`, `sink.py` | The only way the model acts. Every argument is checked against a `Literal` or a list the page reported | D-02, D-03, D-14, D-16, D-18 |
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |

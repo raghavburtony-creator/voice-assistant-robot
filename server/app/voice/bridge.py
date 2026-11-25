@@ -18,6 +18,8 @@ from typing import Any, AsyncIterator, Protocol
 from fastapi import WebSocket
 
 from app.config import settings
+from app.voice.events import Action, EventTranslator, Interrupted, Speech, Transcript, TurnComplete, VoiceEvent
+from app.voice.output import OutputChannel
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
@@ -173,8 +175,10 @@ class Bridge:
         self.perception.set_consent("browser", True)
         self.last_frame = float("-inf")
         self.frames = 0
-        # Gemini sends transcript chunks and then the whole text again; per role, did a chunk of this turn go out?
-        self._chunked = {"user": False, "assistant": False}
+        # The model side only queues on `out`; `output_pump` is its one writer (output.py), so a slow browser never stalls
+        # the model's events. `translator` names what each ADK event means (events.py).
+        self.out = OutputChannel(ws)
+        self.translator = EventTranslator()
 
     # ---- browser to model ----
 
@@ -268,32 +272,28 @@ class Bridge:
 
     # ---- model to browser ----
 
-    async def _transcript(self, role: str, transcription: Any) -> None:
-        text = getattr(transcription, "text", None)
-        if not text:
-            return
-        if getattr(transcription, "finished", False):
-            already, self._chunked[role] = self._chunked[role], False
-            if already:
-                return
-        else:
-            self._chunked[role] = True
-        await self.ws.send_json({"type": "transcript", "role": role, "text": text})
+    def _deliver(self, event: VoiceEvent) -> None:
+        """Queues one event for the browser. Never waits on the socket."""
+        if isinstance(event, Speech):
+            self.out.audio(event.pcm)
+        elif isinstance(event, Interrupted):
+            self.out.interrupt()
+        elif isinstance(event, Transcript):
+            self.out.control({"type": "transcript", "role": event.role, "text": event.text})
+        elif isinstance(event, TurnComplete):
+            self.out.control({"type": "turn_complete"})
+        elif isinstance(event, Action):
+            self.out.control({"type": "action", **event.payload})
 
     async def model_to_browser(self) -> None:
         async for event in self.live.events():
             # A tool runs between its call and response events, so drain after every event, before this event's audio.
             for action in sink.drain(self.live.session_id):
-                await self.ws.send_json({"type": "action", **action})
-            if getattr(event, "interrupted", None):
-                await self.ws.send_json({"type": "interrupted"})
-            content = getattr(event, "content", None)
-            for part in (getattr(content, "parts", None) or []):
-                blob = getattr(part, "inline_data", None)
-                if blob is not None and getattr(blob, "data", None):
-                    await self.ws.send_bytes(blob.data)
-            await self._transcript("user", getattr(event, "input_transcription", None))
-            await self._transcript("assistant", getattr(event, "output_transcription", None))
-            if getattr(event, "turn_complete", None):
-                self._chunked = {"user": False, "assistant": False}
-                await self.ws.send_json({"type": "turn_complete"})
+                self._deliver(Action(action))
+            for item in self.translator.translate(event):
+                self._deliver(item)
+        await self.out.flush()  # the model is done: everything it said goes out before `ended`
+
+    async def output_pump(self) -> None:
+        """The one writer to the browser (output.py)."""
+        await self.out.run()

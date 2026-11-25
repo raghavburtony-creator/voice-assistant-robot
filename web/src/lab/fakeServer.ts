@@ -114,6 +114,12 @@ export class FakeVoiceServer {
     else if (typeof message.key === 'string') this.contexts.set(message.key, message.data ?? null)
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
     else if (message.type === 'text') {
+      // A new message while Otto is mid-sentence ends that turn: Gemini reports it as `interrupted` ([verify], Q-01).
+      // It takes a round trip to say so, so the page cuts Otto off on its own first.
+      if (this.speaking) {
+        this.stopStreaming()
+        this.later(() => { this.send({ type: 'interrupted' }); this.log('interrupted (a new message ended the turn)') }, 250)
+      }
       const text = (message.text ?? '').trim()
       const ask = /^(show me|where is) /i.exec(text)
       if (/\bcard\b|how do i install/i.test(text)) {
