@@ -76,9 +76,9 @@ The review of D-01 to D-18 against the target architecture is in [architecture.m
 
 ## D-05 The microphone is silent while Otto is audible
 
-**Decision:** While Otto speaks, the browser sends no microphone audio. The page listens for a voice clearly louder than his echo (`BARGE_IN`), then sends what it held back.
+**Decision:** While Otto speaks, the browser sends no microphone audio. The page listens for a voice clearly louder than his echo (`BARGE_IN`), then sends what it held back. "Clearly louder" is judged against the room: a level above `BARGE_IN.level` and above `floorRatio` times a noise floor learned while Otto is silent, for `holdMs`. The open mic sends only a validated turn (`VAD`, `speechGate.ts`), so steady background noise is neither streamed nor read as speech.
 **Why:** Browsers don't cancel Otto's echo reliably, so the model would hear itself.
-**Where:** `BARGE_IN` in `web/src/otto.config.ts`; README, "How it works". `BARGE_IN.level` still needs tuning on real hardware.
+**Where:** `BARGE_IN` and `VAD` in `web/src/otto.config.ts`, `web/src/otto/speechGate.ts`; README, "How it works". `BARGE_IN.level` still needs tuning on real hardware.
 
 ## D-06 The robot is decorative
 

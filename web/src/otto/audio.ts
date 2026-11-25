@@ -54,6 +54,15 @@ export function frameLevel(pcm: ArrayBuffer): number {
   return peak / 0x8000;
 }
 
+/** RMS level of a PCM16 frame, 0 to 1: what the end-of-turn gate follows (steadier than the peak, which one click can set). */
+export function frameRms(pcm: ArrayBuffer): number {
+  const samples = new Int16Array(pcm);
+  if (!samples.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+  return Math.sqrt(sum / samples.length) / 0x8000;
+}
+
 /** Call from a click handler: the AudioContext is created before the first await, inside the gesture. */
 export async function startRecorder(onFrame: (pcm: ArrayBuffer) => void): Promise<Recorder> {
   const context = new AudioContext();

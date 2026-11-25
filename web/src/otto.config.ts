@@ -73,22 +73,29 @@ export const SOUND_SETTINGS = OTTO_CONFIG.sound
 
 /**
  * Cutting Otto off by talking over him (open mic). While Otto is audible the microphone sends nothing (browsers do not
- * cancel his echo reliably), so the page itself listens for a voice clearly louder than his echo: a frame peak of at
- * least `level` (0..1) held for `holdMs`. Raise `level` if Otto cuts himself off on loud speakers; lower it if talking
- * over him does not work. Pressing Talk (push-to-talk) or "Stop speaking" always cuts him off.
+ * cancel his echo reliably), so the page itself listens for a voice clearly louder than his echo and than the room: a
+ * frame peak of at least `level` (0..1) AND `floorRatio` times the noise floor learned while he was silent (a fan sets that
+ * floor, so it cannot cut him off), held for `holdMs`. A dip shorter than `gapMs` does not restart the run. A burst shorter
+ * than `holdMs` is rejected. Raise `level` if Otto cuts himself off on loud speakers; lower it if talking over him does
+ * not work. Pressing Talk (push-to-talk) or "Stop speaking" always cuts him off.
  */
 export const BARGE_IN = {
   enabled: true,
   level: 0.22,
   holdMs: 200,
+  floorRatio: 4,
+  gapMs: 100,
   /** The last frames held back (50 ms each) that are sent once he is cut off, so the first words reach the server. */
   keepFrames: 8,
 }
 
 /**
- * When the visitor has finished talking (the Gemini adapter's createGeminiVoiceBridge, passed as its `vad` option). The
- * page meters the microphone: speech counts after `speechOnsetMs` above `speechThreshold` (RMS 0..1), the turn ends after
- * `silenceTimeoutMs` of quiet, and Otto starts thinking. Raise `speechThreshold` in a noisy room.
+ * When the visitor has finished talking (the Gemini adapter's createGeminiVoiceBridge, passed as its `vad` option, and
+ * the open mic's gate on this page). The page meters the microphone and follows the room's noise floor: speech starts when
+ * the level stays above `enterRatio` times the floor (never below `speechThreshold`, RMS 0..1) for `speechOnsetMs`, holds
+ * down to `exitRatio` times the floor, and the turn ends after `silenceTimeoutMs` below that, and Otto starts thinking.
+ * A fan or a hum therefore does not keep a turn open; you do not raise `speechThreshold` for a noisy room, only for a
+ * microphone that is hot in a silent one. `calibrationMs`: at the start only the floor is learned.
  */
 export const VAD: VadSettings = {
   speechThreshold: 0.02,
@@ -96,6 +103,10 @@ export const VAD: VadSettings = {
   silenceTimeoutMs: 1000,
   noSpeechTimeoutMs: 6000,
   maxTurnDurationMs: 30_000,
+  enterRatio: 2.5,
+  exitRatio: 1.6,
+  minExitLevel: 0.012,
+  calibrationMs: 400,
 }
 
 /** The URL of the server. Empty in development: Vite proxies /api to it (vite.config.ts). Set VITE_API_URL in production. */

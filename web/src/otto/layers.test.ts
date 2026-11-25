@@ -25,6 +25,7 @@ const CORE = [
   'robot/gestures.ts',
   'robot/robot.ts',
   'soundCues.ts',
+  'speechGate.ts',
 ]
 
 const raw = import.meta.glob(['/src/**/*.{ts,tsx}', '!/src/**/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>

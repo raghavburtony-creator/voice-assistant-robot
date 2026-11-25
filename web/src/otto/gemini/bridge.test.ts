@@ -13,10 +13,14 @@ vi.mock('../audio', async original => ({
     return { stop: () => { r.stopped = true }, setMuted: () => {}, stream: {} as MediaStream }
   }),
 }))
-const detectors: { handlers: VadHandlers; disposed: boolean }[] = []
+const detectors: { handlers: VadHandlers; disposed: boolean; noiseFloor: number; initialFloor?: number }[] = []
 vi.mock('./vad', async original => ({
   ...(await original<typeof import('./vad')>()),
-  VoiceActivityDetector: class { handlers: VadHandlers; disposed = false; constructor(_s: unknown, _o: unknown, handlers: VadHandlers) { this.handlers = handlers; detectors.push(this) } dispose() { this.disposed = true } },
+  VoiceActivityDetector: class {
+    handlers: VadHandlers; disposed = false; noiseFloor = 0.04; initialFloor?: number
+    constructor(_s: unknown, _o: unknown, handlers: VadHandlers, _c?: unknown, initialFloor?: number) { this.handlers = handlers; this.initialFloor = initialFloor; detectors.push(this) }
+    dispose() { this.disposed = true }
+  },
 }))
 
 class FakeNode { connected = true; connect() { return this } disconnect() { this.connected = false } }
@@ -358,6 +362,64 @@ describe('createGeminiVoiceBridge', () => {
     expect(muted?.()).toBe(false)
     ws.receive(pcm())
     expect(muted?.()).toBe(true)
+    bridge.close()
+  })
+
+  it("the room's noise floor goes from one detector to the next, so a reopened mic starts knowing the room", async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    expect(detectors[0].initialFloor).toBeUndefined()
+    detectors[0].handlers.onSpeechEnd('silence')
+    ws.receive('{"type":"turn_complete"}'); await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    expect(detectors.at(-1)!.initialFloor).toBe(0.04)
+    bridge.close()
+  })
+
+  it("diagnostics: the turn's completion is reported, with no audio in any event", async () => {
+    const { otto } = fakeOtto()
+    const events: unknown[] = []
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' }, onDiagnostic: e => events.push(e) })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    ws.receive('{"type":"turn_complete"}')
+    expect(events).toEqual([{ type: 'turn_complete' }])
+    bridge.close()
+  })
+
+  it("text and the microphone are two inputs of one conversation: text neither stops the mic nor opens a new session", async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    await bridge.startMic()
+    recorders[0].onFrame(pcm(800))
+    bridge.sendText('where is it?')
+    expect(recorders[0].stopped).toBe(false)
+    expect(detectors[0].disposed).toBe(false)
+    recorders[0].onFrame(pcm(800))
+    expect(ws.sent.filter(m => m instanceof ArrayBuffer)).toHaveLength(2)
+    expect(ws.sent).toContain('{"type":"text","text":"where is it?"}')
+    expect(FakeSocket.made).toHaveLength(1)
+    bridge.close()
+  })
+
+  it('without a microphone (stopped, or never allowed) text still works', async () => {
+    const { otto } = fakeOtto()
+    const bridge = createGeminiVoiceBridge(otto, { transport: { type: 'proxy', url: 'ws://localhost/ws' } })
+    const done = bridge.connect()
+    const ws = FakeSocket.made[0]
+    ws.open(); ws.receive('{"type":"ready"}'); await done
+    bridge.sendText('first')
+    await bridge.startMic()
+    bridge.stopMic()
+    bridge.sendText('second')
+    expect(ws.sent.filter(m => typeof m === 'string' && m.includes('"text"'))).toHaveLength(2)
     bridge.close()
   })
 

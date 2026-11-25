@@ -12,7 +12,8 @@ import {
 } from './consent'
 import { currentContext, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
-import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES } from '../otto.config'
+import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES, VAD } from '../otto.config'
+import { BargeInGate, OpenMicGate, type DiagnosticSink, type OpenMicStep } from './speechGate'
 import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
@@ -75,12 +76,16 @@ type Options = {
   onAction: (action: AssistantAction) => void
   /** For tests and the lab: make the socket (a stand-in for the server). Default: a real WebSocket. */
   createSocket?: (url: string) => WebSocket
+  /** Privacy-safe voice events (speech start and end, interruption accepted or rejected and why). Levels and reasons, never audio. */
+  onDiagnostic?: DiagnosticSink
 }
 
 const MAX_ENTRIES = 40
 const MIC_HEARD_LEVEL = 0.02
 /** One recorder frame (audio.ts FRAME_SAMPLES at 16 kHz). */
 const FRAME_MS = 50
+/** Frames kept while no turn is open and sent when one starts: the onset (180 ms) plus a margin, so the first word is whole. */
+const PREROLL_FRAMES = 12
 /** 5 seconds of 50 ms frames. */
 const SILENT_WARNING_FRAMES = 100
 /** Screens republish on every keystroke; forward at most this often per screen. */
@@ -119,7 +124,7 @@ export function loadAssistantAudio(): Promise<AudioModule> {
   return audioLoad
 }
 
-export function useVoiceAssistant({ language, page, onAction, createSocket }: Options) {
+export function useVoiceAssistant({ language, page, onAction, createSocket, onDiagnostic }: Options) {
   const [status, setStatus] = useState<AssistantStatus>('idle')
   /** Counts barge-ins (the visitor cut Otto off), so the robot can react to each one. */
   const [interruptions, setInterruptions] = useState(0)
@@ -153,6 +158,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
   const openEntry = useRef<{ role: TranscriptEntry['role']; id: number } | null>(null)
   const nextId = useRef(0)
   const actionRef = useRef(onAction)
+  const diagnosticRef = useRef(onDiagnostic)
   const pageRef = useRef(page)
   // Read by the recorder's frame callback and the timers, which outlive a render.
   const live = useRef(false)
@@ -168,6 +174,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
   const openAttempt = useRef(0)
   useEffect(() => {
     actionRef.current = onAction
+    diagnosticRef.current = onDiagnostic
     pageRef.current = page
     socketFactory.current = createSocket
   })
@@ -315,35 +322,46 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
     setMicSilent(false)
     let quietFrames = 0
     let heard = false
-    // Barge-in: frames held back while Otto is audible, and how long the voice has been loud over him.
+    // Barge-in: frames held back while Otto is audible, judged against the room's noise floor (BargeInGate).
     const held: ArrayBuffer[] = []
-    let loudFor = 0
+    const diagnose: DiagnosticSink = event => diagnosticRef.current?.(event)
+    const barge = new BargeInGate({ level: BARGE_IN.level, holdMs: BARGE_IN.holdMs, floorRatio: BARGE_IN.floorRatio, gapMs: BARGE_IN.gapMs }, diagnose)
+    // The open mic's turn gate: only a validated turn reaches the server (OpenMicGate). Between turns a fan's noise is
+    // dropped here, not streamed and billed; the last frames are kept so the start of a turn is not lost. Push-to-talk is
+    // the visitor's own gate.
+    const turn = new OpenMicGate<ArrayBuffer>(VAD, PREROLL_FRAMES, diagnose)
+    const upstream = (step: OpenMicStep<ArrayBuffer>) => {
+      if (ws.readyState === WebSocket.OPEN) step.send.forEach(f => ws.send(f))
+      if (step.endOfAudio) sendMicOff()
+    }
     audio.startRecorder(frame => {
       if (socket.current !== ws || !live.current) return
       // Frames that are not sent are not counted for the meter or the silence warning either.
-      if (!transmitting()) { levelRef.current = 0; held.length = 0; loudFor = 0; return }
+      if (!transmitting()) { levelRef.current = 0; held.length = 0; barge.reset(); turn.stop(); return }
       // Browser echo cancellation misses Web Audio playback, so the guide would hear itself and cut itself off: while
-      // the guide is audible frames are held back, not sent. Only a voice clearly louder than Otto's echo, for a
-      // moment (BARGE_IN), cuts him off; then the held frames go first, so the start of what was said is not lost.
-      // While the guide is audible the listener is not "quiet", so the open mic's 60 seconds wait.
+      // the guide is audible frames are held back, not sent. Only a voice clearly louder than Otto's echo and than the
+      // room, for a moment (BARGE_IN), cuts him off; then the held frames go first, so the start of what was said is
+      // not lost. While the guide is audible the listener is not "quiet", so the open mic's 60 seconds wait.
       if (player.current?.busy) {
         levelRef.current = 0
         lastSound.current = Date.now()
-        if (!BARGE_IN.enabled || !player.current.playing) { held.length = 0; loudFor = 0; return }
+        if (turn.isStreaming) upstream(turn.otto()); else turn.otto() // his turn begins: the visitor's is over
+        if (!BARGE_IN.enabled || !player.current.playing) { held.length = 0; barge.reset(); return }
         held.push(frame)
         if (held.length > BARGE_IN.keepFrames) held.shift()
-        loudFor = audio.frameLevel(frame) >= BARGE_IN.level ? loudFor + FRAME_MS : 0
-        if (loudFor < BARGE_IN.holdMs) return
-        loudFor = 0
+        if (!barge.frame(audio.frameLevel(frame), FRAME_MS, true)) return
         interruptRef.current()
-        if (ws.readyState === WebSocket.OPEN) held.forEach(f => ws.send(f))
+        // The interruption is speech: what was held goes first, and in an open mic the turn is open from here.
+        if (talkModeRef.current === 'open') upstream(turn.interrupted(held, performance.now()))
+        else if (ws.readyState === WebSocket.OPEN) held.forEach(f => ws.send(f))
         held.length = 0
         return
       }
       held.length = 0
-      loudFor = 0
-      if (ws.readyState === WebSocket.OPEN) ws.send(frame)
+      barge.frame(audio.frameLevel(frame), FRAME_MS, false) // the room's noise floor, learned while Otto is silent
       const peak = audio.frameLevel(frame)
+      if (talkModeRef.current === 'open') upstream(turn.frame(frame, audio.frameRms(frame), performance.now()))
+      else if (ws.readyState === WebSocket.OPEN) ws.send(frame)
       levelRef.current = peak
       if (peak > MIC_HEARD_LEVEL) {
         lastSound.current = Date.now()
@@ -430,6 +448,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket }: Op
           openEntry.current = null
           break
         case 'turn_complete':
+          diagnosticRef.current?.({ type: 'turn_complete' })
           player.current?.endTurn()
           openEntry.current = null
           break
