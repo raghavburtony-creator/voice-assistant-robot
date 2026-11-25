@@ -483,6 +483,39 @@ def test_environmental_proposal_is_bound_to_the_current_sink_session():
     sink.close("another-session")
 
 
+def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
+    class RecordingSocket:
+        def __init__(self):
+            self.sent = []
+
+        async def send_json(self, message):
+            self.sent.append(message)
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+    async def go():
+        live = FakeLive()
+        async def events():
+            yield SimpleNamespace(turn_complete=True)
+        live.events = events
+        ws = RecordingSocket()
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        assert sink.put(live.session_id, {
+            "environmental": {"topic": "object", "message": "A parcel is visible."},
+        })
+        pump = asyncio.create_task(bridge.output_pump())
+        await bridge.model_to_browser()
+        await bridge.out.flush()
+        pump.cancel()
+        return ws.sent
+
+    assert asyncio.run(go()) == [
+        {"type": "environmental", "proposal": {"topic": "object", "message": "A parcel is visible."}},
+        {"type": "turn_complete"},
+    ]
+
+
 # ---- shared frames (D-21) ----
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 60
