@@ -9,7 +9,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Task | Decisions | README sections | Files |
 |---|---|---|---|
 | Get oriented | all (the index in decisions.md) | "How it works", "Using it in a new project" | `AGENTS.md`, [architecture.md](architecture.md) |
-| Run or change the desktop companion (Tauri host, desktop bridge, packaging) | | "Run Otto as a desktop companion" | `web/src-tauri/`, `web/src/otto/desktop.ts` and its test, `web/package.json`, `web/src/main.tsx`, `web/src/app.css` |
+| Run or change the desktop companion (Tauri host, movement, desktop bridge, packaging) | | "Run Otto as a desktop companion" | `web/src-tauri/`, `web/src/otto/desktop.ts` and its test, `web/src/otto/messages.ts`, `web/src/App.tsx`, `server/app/voice/tools.py`, `server/app/voice/app_config.py`, `web/package.json` |
 | Add a page or a command | D-02, D-03, D-23 | "Using it in a new project" | `web/src/otto.config.ts`, `server/app/voice/app_config.py`, `server/app/voice/tools.py`, `server/tests/test_voice.py` |
 | Runtime navigation destinations (`navigate_to`) | D-02, D-03, D-17, D-22, D-23 | "Using it in a new project", "Adding a tool" | `web/src/otto/context.ts`, `contextBudget.ts`, `runtimeId.ts`, `messages.ts`, `useVoiceAssistant.ts` (`currentPageInfo`, start/page messages), `Otto.tsx` (`page`), `App.tsx` `onAction`, and their tests; `server/app/voice/runtime.py`, `tools.py`, `route.py` (start), `bridge.py` (page changes), `app_config.py` (`system_instruction`), `server/tests/test_voice.py` |
 | Add a tool | D-02, D-03, D-22, D-23 | "Adding a tool" | `server/app/voice/tools.py`, `sink.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `App.tsx` `onAction` |
