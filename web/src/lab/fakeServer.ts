@@ -89,7 +89,9 @@ export class FakeVoiceServer {
   speaking = false
   private log: ServerLog
   private contexts = new Map<string, unknown>()
-  private continuitySaved: { task: string; step: string; savedAt: number } | null = null
+  private continuitySaved: { task: string; step: string; savedAt: number } | null = (() => {
+    try { return JSON.parse(localStorage.getItem('otto-lab:continuity-task') || 'null') } catch { return null }
+  })()
   constructor(log: ServerLog = () => {}) { this.log = log }
 
   /** What the page last sent under `key` (null when cleared, undefined when never sent). */
@@ -118,14 +120,16 @@ export class FakeVoiceServer {
         const running = message.data as { id?: unknown; stepId?: unknown } | null
         this.continuitySaved = running && typeof running.id === 'string' && typeof running.stepId === 'string'
           ? { task: running.id, step: running.stepId, savedAt: Date.now() } : null
+        try { if (this.continuitySaved) localStorage.setItem('otto-lab:continuity-task', JSON.stringify(this.continuitySaved)); else localStorage.removeItem('otto-lab:continuity-task') } catch { /* lab persistence is best-effort */ }
       }
       if (message.key === 'guide_tasks' && this.continuitySaved) {
         const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
         const match = tasks?.find(task => task.id === this.continuitySaved?.task)
-        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(this.continuitySaved.step)) this.continuitySaved = null
+        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(this.continuitySaved.step)) { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ } }
         else {
           this.send({ type: 'action', action: 'task_resume', task: this.continuitySaved.task, step: this.continuitySaved.step })
           this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
         }
       }
     }
