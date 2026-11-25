@@ -18,3 +18,7 @@ web/test-results/
 
 # Claude Code worktrees (one per task, see AGENTS.md)
 .claude/worktrees/
+
+# Tauri build output
+web/src-tauri/target/
+web/src-tauri/gen/

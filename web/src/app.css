@@ -1,3 +1,4 @@
+:root[data-desktop='true'] { background: transparent; }
 :root { font-family: system-ui, sans-serif; line-height: 1.5; color: var(--otto-ink); background: var(--otto-surface-2); }
 body { margin: 0; }
 .app-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem;
