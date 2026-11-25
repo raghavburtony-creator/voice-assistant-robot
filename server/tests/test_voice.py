@@ -630,6 +630,15 @@ def test_desktop_movement_completion_is_announced_to_the_voice_session():
 
 
 
+def test_desktop_action_completion_is_announced_to_the_voice_session():
+    from app.voice.app_config import event_prompt
+
+    prompt = event_prompt("desktop_action_finished")
+    assert prompt is not None
+    assert "verification status" in prompt
+    assert "unverified process launch" in prompt
+
+
 def test_desktop_context_is_unavailable_until_the_visitor_enables_it():
     ctx = _context()
     assert tools.get_desktop_context(ctx) == {
