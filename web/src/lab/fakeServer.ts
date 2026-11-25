@@ -89,6 +89,10 @@ export class FakeVoiceServer {
   speaking = false
   private log: ServerLog
   private contexts = new Map<string, unknown>()
+  private continuitySeenRunning = false
+  private continuitySaved: { task: string; step: string; savedAt: number } | null = (() => {
+    try { return JSON.parse(localStorage.getItem('otto-lab:continuity-task') || 'null') } catch { return null }
+  })()
   constructor(log: ServerLog = () => {}) { this.log = log }
 
   /** What the page last sent under `key` (null when cleared, undefined when never sent). */
@@ -108,10 +112,38 @@ export class FakeVoiceServer {
     if (data instanceof ArrayBuffer) { this.micFrames++; return }
     if (typeof data !== 'string') return
     const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown; source?: unknown }
+    if (message.type === 'continuity_clear') { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }; return }
     if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
     if (message.type === 'capture') this.capture = message.source === 'camera' || message.source === 'screen' ? message.source : null
     if (message.type !== 'context') this.log(`client: ${message.type}${message.text ? ` "${message.text}"` : ''}`)
-    else if (typeof message.key === 'string') this.contexts.set(message.key, message.data ?? null)
+    else if (typeof message.key === 'string') {
+      this.contexts.set(message.key, message.data ?? null)
+      if (message.key === 'guide_task_running') {
+        const running = message.data as { id?: unknown; stepId?: unknown } | null
+        if (running && typeof running.id === 'string' && typeof running.stepId === 'string') {
+          this.continuitySeenRunning = true
+          this.continuitySaved = { task: running.id, step: running.stepId, savedAt: Date.now() }
+          try { localStorage.setItem('otto-lab:continuity-task', JSON.stringify(this.continuitySaved)) } catch { /* lab persistence is best-effort */ }
+        } else if (this.continuitySeenRunning) {
+          this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* lab persistence is best-effort */ }
+        }
+      }
+      const saved = this.continuitySaved
+      if (message.key === 'guide_tasks' && saved) {
+        const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
+        if (!tasks?.length) return
+        const match = tasks.find(task => task.id === saved.task)
+        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(saved.step)) {
+          this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
+        } else {
+          this.send({ type: 'action', action: 'task_resume', task: saved.task, step: saved.step })
+          this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
+        }
+      }
+    }
     if (message.type === 'start') this.later(() => { this.connected = true; this.send({ type: 'ready', limitSeconds: 600 }) }, 500)
     else if (message.type === 'text') {
       // A new message while Otto is mid-sentence ends that turn: Gemini reports it as `interrupted` ([verify], Q-01).

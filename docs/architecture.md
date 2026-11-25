@@ -71,6 +71,8 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 | **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | none (Q-07 answered by D-21) |
 | **Spatial / AR presence** | The robot's state (`robot/robot.ts`, gestures, movement rules), which is already pure | A second robot model with its own states | Q-06 |
 
+**CI-2 task continuity:** the host-scoped SQLite adapter (server/app/voice/continuity_store.py) keeps one record per opaque host identity, containing only scope, task, step and savedAt. The bridge saves only a task/step pair present in the current page's guide_tasks report, expires records after seven days, and deletes them on a null running-task report or visitor withdrawal. On a later session it waits for the current page's task registry, checks the saved step id against that registry, then sends a resume action; the browser checks the task and step again before ottoGuide.startTask(spec, step). The ADK live session remains ephemeral and unchanged.
+
 ### Rules for new capabilities (D-19)
 
 - **Extend, don't fork.** Put a new rule in an existing core module, or a new core module with a test (D-13). Put its adapter in shell. Put any new action through `tools.py` and `toAssistantAction` (D-02).

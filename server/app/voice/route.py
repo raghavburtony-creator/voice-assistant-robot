@@ -6,6 +6,7 @@
                              | {"type":"context","key":...,"data":{...}|null,"announce":...} | {"type":"stop"}
                              | {"type":"capture","source":"camera"|"screen"|null}   (a share starts or stops, D-21)
                              | {"type":"frame","data":<base64 JPEG>}   (while sharing: at most 1/s, 256 KB; others dropped)
+                             | {"type":"continuity_clear"}   (visitor withdrawal: deletes the saved task and suppresses saves for this session)
     server -> client  text   {"type":"ready","limitSeconds":600} | {"type":"transcript","role":"user"|"assistant","text":...}
                              {"type":"action","action":"navigate","page":...} | {"type":"action","action":"command","name":...}
                              {"type":"action","action":"guide","target":...} | {"type":"action","action":"task","task":...}

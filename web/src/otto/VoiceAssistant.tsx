@@ -48,7 +48,7 @@ const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ val
 export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void }) {
   const {
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
-    consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
+    consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking, clearContinuity,
   } = assistant
   const [draft, setDraft] = useState('')
   const [wakeOn, setWakeOn] = useWakeSetting()
@@ -177,6 +177,11 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
       <p id="voice-consent-open-why" className="voice-assistant__why">
         Off: press Talk each time you speak. On: {ASSISTANT_NAME} listens until you mute it, and turns the microphone off after 60 seconds with no speech.
       </p>
+    </section>}
+
+    {active && <section className="voice-assistant__lengths" aria-label="Task continuity">
+      <p>Task continuity is controlled by this app. You can clear the saved guided task for this identity.</p>
+      <Button variant="text" onClick={clearContinuity}>Clear saved task</Button>
     </section>}
 
     {limitWarning && <Notice variant="warning" action={{ label: 'Continue', onClick: continueSession }}>

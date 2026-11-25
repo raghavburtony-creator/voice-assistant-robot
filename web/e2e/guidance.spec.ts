@@ -183,3 +183,33 @@ test('the voice stops the running task, or moves it back or on a step', async ({
   for (const words of ['Moved on a step', 'Went back a step', 'Stopped the task']) await expect(panel).toContainText(words)
 })
 
+
+
+test('a guided task resumes in a fresh session from the server continuity record', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  let panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+
+  const status = page.getByText(/^(Task: |No task running)/)
+  await page.getByRole('button', { name: 'Start it', exact: true }).click()
+  await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('otto-lab:continuity-task'))).toContain('"step":"f2"')
+
+  // Simulate a different browser session: the server-side fake store survives, while tab-only D-20 state does not.
+  await page.evaluate(() => sessionStorage.removeItem('otto-kit:guide-task'))
+  await page.reload()
+  await page.getByLabel('Use the real Otto').check()
+  await expect(status).toHaveText('No task running.')
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+  await expect(status).toHaveText('Task: step 2 of 3: f2')
+  await expect(page.locator('#lab-guides + ol')).toContainText('task step 2/3 (resume): f2')
+})
