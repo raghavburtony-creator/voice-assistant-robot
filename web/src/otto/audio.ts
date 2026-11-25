@@ -184,10 +184,11 @@ export class SpeechPlayer {
     return this.sources.size;
   }
 
-  play(chunk: ArrayBuffer) {
-    if (this.closed || this.dropping) return;
+  /** Queues a chunk. False when it was not taken (closed, the rest of an interrupted turn, or empty): nothing will be heard. */
+  play(chunk: ArrayBuffer): boolean {
+    if (this.closed || this.dropping) return false;
     const samples = new Int16Array(chunk, 0, Math.floor(chunk.byteLength / 2));
-    if (!samples.length) return;
+    if (!samples.length) return false;
     if (this.context.state === "suspended") void this.resume();
     const buffer = this.context.createBuffer(1, samples.length, OUTPUT_RATE);
     const channel = buffer.getChannelData(0);
@@ -212,6 +213,7 @@ export class SpeechPlayer {
         this.onIdle?.();
       }
     };
+    return true;
   }
 
   /** How much of this turn has played, by the audio clock itself (so the bubble keeps pace with what is heard). */

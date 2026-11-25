@@ -12,6 +12,8 @@
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
+                             (everything goes out in the order the model made it, through one writer. "interrupted" first
+                              drops speech still queued, and a stalled browser cannot stall the model: output.py)
                              {"type":"ended","reason":"closed"|"service_ended"|"time_limit"}
                              {"type":"error","code":"not_configured"|"busy"|"bad_start"|"upstream","message":...}
                       binary 24 kHz mono PCM16 speech
@@ -54,7 +56,7 @@ async def _close(ws: WebSocket, payload: dict) -> None:
 
 
 async def _wait(tasks: set[asyncio.Task]) -> str:
-    """Runs the two pumps until one ends or the time limit passes. Returns the `ended` reason; raises what a pump raised."""
+    """Runs the three pumps (browser input, model events, browser output) until one ends or the time limit passes. Returns the `ended` reason; raises what a pump raised."""
     done, pending = await asyncio.wait(tasks, timeout=settings.max_session_seconds, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
@@ -81,6 +83,7 @@ async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail:
         return await _wait({
             asyncio.create_task(bridge.browser_to_model(), name="browser"),
             asyncio.create_task(bridge.model_to_browser(), name="model"),
+            asyncio.create_task(bridge.output_pump(), name="output"),
         })
 
 
