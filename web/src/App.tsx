@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPage, PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
 import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
+import { moveDesktopTo } from './otto/desktop'
 
 function pageFromHash(): PageId {
   const id = window.location.hash.slice(1)
@@ -46,11 +47,23 @@ export default function App() {
       if (isPage(action.page)) goTo(action.page)
       return
     }
+    if (action.action === 'desktop_move') {
+      void moveDesktopTo(action.destination).then(result => {
+        events.notify({
+          type: result.ok ? 'complete' : 'failure',
+          importance: 'normal',
+          topic: 'desktop-movement',
+          message: result.ok ? `Otto moved to ${action.destination}.` : (result.error ?? 'Otto could not move to that desktop position.'),
+          data: { destination: action.destination, monitor: result.monitor },
+        })
+      })
+      return
+    }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
     else if (action.action === 'guide' || action.action === 'task' || action.action === 'task_move' || action.action === 'card') return
     else if (action.name === 'show_message') setMessage(`Hello from Otto, at ${new Date().toLocaleTimeString()}.`)
     else if (action.name === 'toggle_theme') setDark(value => !value)
-  }, [])
+  }, [events])
 
   // Tell Otto when a message appears (by the button or by his own command); he reacts, and a guided task can see it.
   useEffect(() => { if (message) events.notify({ type: 'success', topic: 'message', where: '.app-message' }) }, [message, events])
