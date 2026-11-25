@@ -315,4 +315,4 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 
 **Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
 
-**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
+**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/Otto.tsx` (result announcement), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
