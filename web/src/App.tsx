@@ -66,11 +66,6 @@ export default function App() {
         message: `Otto is requesting permission to ${description}.`,
         data: { action: action.desktop_action },
       })
-      if (!window.confirm(`Allow Otto to ${description}?\n\nThis action will run only if you approve it.`)) {
-        desktopTask.fail('The visitor declined this desktop action. Nothing was executed.')
-        return
-      }
-
       void executeDesktopAction(action.desktop_action).then(result => {
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
