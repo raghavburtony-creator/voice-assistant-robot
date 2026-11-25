@@ -70,7 +70,7 @@ The native/web boundary stays intent-based:
 - `getDesktopContext()` reports monitor work area, Otto's window position/visibility and cursor position; on Windows it also reports the foreground application's executable name and window title only.
 - The voice panel has a session-only **Share desktop context with Otto** switch. Sampling runs only while a conversation is open and the switch is on, and stops immediately when disabled or the conversation ends.
 - No screenshots, application contents, keystrokes, process ids or executable paths are sent.
-- the desktop UI asks the visitor to approve each exact action before calling the native gateway; the Rust host independently deserializes a closed action enum and rejects unknown variants;
+- the native Tauri command displays an operating-system confirmation for each exact action before execution; a direct webview invocation cannot skip approval, and the Rust host independently deserializes a closed action enum and rejects unknown variants;
 - application launching is limited to Calculator and Text Editor, using fixed platform-specific executable/app identifiers and no caller-supplied arguments;
 - results distinguish verified window state, native movement completion and process spawn; launching a process is not reported as proof that its window is ready;
 - no arbitrary shell, filesystem, input automation, arbitrary application, URL, path, argument or general window-control command is exposed.
