@@ -590,3 +590,13 @@ def test_system_instruction_limits_desktop_movement_to_named_user_requested_dest
     assert "only when the user explicitly asks" in line
     assert "Never invent coordinates" in line
     assert "completion/failure result" in line
+
+
+
+def test_desktop_movement_completion_is_announced_to_the_voice_session():
+    from app.voice.app_config import event_prompt
+
+    prompt = event_prompt("desktop_movement_finished")
+    assert prompt is not None
+    assert "app_tasks" in prompt
+    assert "not said by the user" in prompt
