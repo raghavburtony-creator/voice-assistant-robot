@@ -58,6 +58,50 @@ describe('desktop action bridge', () => {
     delete window.__TAURI__
   })
 
+  it('requires a fresh matching observation before reporting a native move as successful', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        action: 'move_left', ok: true, status: 'completed',
+        verification: 'native_api_completed', message: 'Native movement completed.',
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1900, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+      ok: true, status: 'completed', verification: 'verified',
+    })
+    expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_action', { action: 'move_left' })
+    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_context')
+    delete window.__TAURI__
+  })
+
+  it('reports failure when native movement completes but observation disagrees', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        action: 'move_left', ok: true, status: 'completed',
+        verification: 'native_api_completed', message: 'Native movement completed.',
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1200, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'not_verified',
+    })
+    delete window.__TAURI__
+  })
+
   it('does not execute desktop actions in browser mode', async () => {
     delete window.__TAURI__
     await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
