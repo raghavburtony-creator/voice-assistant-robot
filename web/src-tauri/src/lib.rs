@@ -194,7 +194,7 @@ fn desktop_context(app: AppHandle) -> Result<DesktopContext, String> {
     Ok(DesktopContext {
         platform: std::env::consts::OS,
         monitor: DesktopRect { x: area.position.x, y: area.position.y, width: area.size.width, height: area.size.height },
-        otto: DesktopWindowContext { x: position.map(|point| point.x), y: position.map(|point| point.y), width: size.width, height: size.height, visible },
+        otto: DesktopWindowContext { x: position.as_ref().map(|point| point.x), y: position.as_ref().map(|point| point.y), width: size.width, height: size.height, visible },
         cursor: DesktopPoint { x: cursor.x.round() as i32, y: cursor.y.round() as i32 },
         active_window: active_window_context(),
     })
