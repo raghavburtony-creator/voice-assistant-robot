@@ -539,6 +539,44 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
         {"type": "turn_complete"},
     ]
 
+def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued():
+    class RecordingSocket:
+        def __init__(self):
+            self.sent = []
+
+        async def send_json(self, message):
+            self.sent.append(message)
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+    async def go():
+        live = FakeLive()
+        async def events():
+            yield SimpleNamespace(turn_complete=True)
+        live.events = events
+        ws = RecordingSocket()
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        bridge.capture = "camera"
+        bridge.capture_generation = 3
+        live.state["capture_source"] = "camera"
+        live.state["capture_generation"] = 3
+        assert sink.put(live.session_id, {
+            "environmental": {"generation": 1, "topic": "object", "message": "Old camera observation."},
+        })
+        pump = asyncio.create_task(bridge.output_pump())
+        await bridge.model_to_browser()
+        await bridge.out.flush()
+        pump.cancel()
+        try:
+            await pump
+        except asyncio.CancelledError:
+            pass
+        live.close()
+        return ws.sent
+
+    assert asyncio.run(go()) == [{"type": "turn_complete"}]
+
 
 # ---- shared frames (D-21) ----
 
