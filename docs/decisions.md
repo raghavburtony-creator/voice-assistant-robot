@@ -41,6 +41,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-21 | Camera and screen are sent only while the visitor shares them, as still frames, and never kept | privacy | current |
 | D-22 | Runtime authority is a chain of checks, not one component | architecture | current |
 | D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
+| D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
@@ -287,3 +288,17 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? Options: (A) extend the shader; (B) a second renderer driven by the pure robot state (`robot/robot.ts`, gestures, movement); (C) amend D-12; (D) keep the renderer and add a separate spatial presentation layer around it. It stays open until the AR requirements and the shader's limits are known. | Spatial / AR epic | unassigned | open |
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
+
+
+## D-24 Desktop context is opt-in, metadata-only and limited to the active conversation
+
+**Decision:**
+- Desktop awareness is off by default and is enabled only by a clearly labelled switch in Otto's voice panel. The choice is held in memory for the current conversation only and resets when the conversation ends.
+- While enabled and a conversation is open, the native host may report the current monitor work area, Otto window position and visibility, cursor position, and (where the operating system permits) the foreground application's name and window title.
+- The context is sampled at a bounded interval and published through the existing session context channel (D-19). The ADK orchestrator can read it only through get_desktop_context.
+- No screenshots, application contents, keystrokes, process identifiers, executable paths or background activity history are collected or sent. Disabling the switch or ending the conversation clears the published context.
+- The native host returns only a small typed metadata record. Platform-specific fields that cannot be obtained safely are reported as unavailable rather than guessed.
+
+**Why:** Desktop awareness is useful for positioning and high-level context, but a desktop window title and cursor position can still reveal personal information. Explicit, visible, session-scoped consent keeps the capability bounded and revocable without adding a second observation pipeline.
+
+**Where:** web/src/otto/VoiceAssistant.tsx (visible opt-in), web/src/otto/Otto.tsx (session lifecycle and context publication), web/src/otto/desktop.ts, web/src-tauri/src/lib.rs (native metadata boundary), server/app/voice/tools.py (get_desktop_context), and server/tests/test_voice.py.

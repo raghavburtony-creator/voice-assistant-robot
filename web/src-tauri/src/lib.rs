@@ -35,6 +35,33 @@ struct DesktopMovementResult {
     destination: String,
 }
 
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopRect { x: i32, y: i32, width: u32, height: u32 }
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopPoint { x: i32, y: i32 }
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWindowContext { x: Option<i32>, y: Option<i32>, width: u32, height: u32, visible: bool }
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActiveWindowContext { application: String, title: String }
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopContext {
+    platform: &'static str,
+    monitor: DesktopRect,
+    otto: DesktopWindowContext,
+    cursor: DesktopPoint,
+    active_window: Option<ActiveWindowContext>,
+}
+
 const MOVEMENT_MARGIN: i32 = 20;
 const MOVEMENT_STEPS: i32 = 24;
 const MOVEMENT_FRAME_MS: u64 = 16;
@@ -146,10 +173,85 @@ fn resolve_destination(
     Ok((raw.0.clamp(min_x, max_x), raw.1.clamp(min_y, max_y)))
 }
 
+
+/// Read desktop metadata only after the UI has explicitly enabled desktop awareness.
+/// No screenshots, application contents, keystrokes, process ids or executable paths are returned.
+#[tauri::command]
+fn desktop_context(app: AppHandle) -> Result<DesktopContext, String> {
+    let window = app.get_webview_window("main")
+        .ok_or_else(|| "Otto's desktop window is unavailable.".to_string())?;
+    let monitor = window.current_monitor()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "Otto's current monitor could not be identified.".to_string())?;
+    let area = monitor.work_area();
+    // Wayland compositors may intentionally withhold a window's global position.
+    // Keep the rest of the desktop context useful and represent that field as unavailable.
+    let position = window.outer_position().ok();
+    let size = window.outer_size().map_err(|error| error.to_string())?;
+    let cursor = window.cursor_position().map_err(|error| error.to_string())?;
+    let visible = window.is_visible().map_err(|error| error.to_string())?;
+
+    Ok(DesktopContext {
+        platform: std::env::consts::OS,
+        monitor: DesktopRect { x: area.position.x, y: area.position.y, width: area.size.width, height: area.size.height },
+        otto: DesktopWindowContext { x: position.as_ref().map(|point| point.x), y: position.as_ref().map(|point| point.y), width: size.width, height: size.height, visible },
+        cursor: DesktopPoint { x: cursor.x.round() as i32, y: cursor.y.round() as i32 },
+        active_window: active_window_context(),
+    })
+}
+
+#[cfg(windows)]
+fn active_window_context() -> Option<ActiveWindowContext> {
+    use std::{ffi::c_void, os::windows::ffi::OsStringExt};
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetForegroundWindow() -> *mut c_void;
+        fn GetWindowTextW(hwnd: *mut c_void, text: *mut u16, max_count: i32) -> i32;
+        fn GetWindowThreadProcessId(hwnd: *mut c_void, process_id: *mut u32) -> u32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, process_id: u32) -> *mut c_void;
+        fn QueryFullProcessImageNameW(process: *mut c_void, flags: u32, path: *mut u16, size: *mut u32) -> i32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() { return None; }
+        let mut title_buffer = [0u16; 256];
+        let title_len = GetWindowTextW(hwnd, title_buffer.as_mut_ptr(), title_buffer.len() as i32);
+        let title = if title_len > 0 {
+            String::from_utf16_lossy(&title_buffer[..title_len as usize])
+                .chars().filter(|ch| !ch.is_control()).take(120).collect::<String>()
+        } else { String::new() };
+
+        let mut process_id = 0u32;
+        if GetWindowThreadProcessId(hwnd, &mut process_id) == 0 || process_id == 0 { return None; }
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
+        if process.is_null() { return None; }
+        let mut path_buffer = [0u16; 1024];
+        let mut path_len = path_buffer.len() as u32;
+        let ok = QueryFullProcessImageNameW(process, 0, path_buffer.as_mut_ptr(), &mut path_len);
+        let _ = CloseHandle(process);
+        if ok == 0 { return None; }
+        let path = std::ffi::OsString::from_wide(&path_buffer[..path_len as usize]);
+        let application = std::path::Path::new(&path).file_name()?.to_string_lossy()
+            .chars().filter(|ch| !ch.is_control()).take(80).collect::<String>();
+        if application.is_empty() { return None; }
+        Some(ActiveWindowContext { application, title })
+    }
+}
+
+#[cfg(not(windows))]
+fn active_window_context() -> Option<ActiveWindowContext> { None }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![desktop_status, move_desktop_window])
+        .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, move_desktop_window])
         .setup(|app| {
             // Informational lifecycle event only; it grants no desktop action.
             app.emit("otto://desktop-ready", DesktopStatus::current())?;

@@ -26,6 +26,7 @@ import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
 import type { IdleControls } from './OttoStage'
 import { publishContext } from './context'
+import { getDesktopContext, isDesktopRuntime } from './desktop'
 import { capList } from './contextBudget'
 import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
@@ -98,6 +99,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     otto.notify({ type: 'section', topic: page })
   }, [page, otto])
   const [open, setOpen] = useState(false)
+  const [desktopAwarenessEnabled, setDesktopAwarenessEnabled] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const ownGuide = useMemo(createOttoGuide, [])
   const ottoGuide = guide ?? ownGuide
@@ -242,6 +244,40 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     }, () => ({ maxChars: pageContext.maxChars, maxNodes: pageContext.maxNodes, includeSelection: pageContext.includeSelection, includeTargets: false }))
     return () => { stop(); publishContext('page', null) }
   }, [conversing, pageContext.enabled, pageContext.maxChars, pageContext.maxNodes, pageContext.includeSelection])
+
+  // Desktop metadata is sampled only during an open conversation and an explicit, visible opt-in.
+  useEffect(() => {
+    if (!conversing || !desktopAwarenessEnabled || !isDesktopRuntime()) {
+      publishContext('desktop_context', null)
+      return
+    }
+    let stopped = false
+    let inFlight = false
+    const refresh = async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const context = await getDesktopContext()
+        if (!stopped) publishContext('desktop_context', context ? { enabled: true, ...context } : null)
+      } catch {
+        if (!stopped) publishContext('desktop_context', null)
+      } finally {
+        inFlight = false
+      }
+    }
+    void refresh()
+    const timer = window.setInterval(() => { void refresh() }, 2000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      publishContext('desktop_context', null)
+    }
+  }, [conversing, desktopAwarenessEnabled])
+
+  useEffect(() => {
+    if (!conversing && desktopAwarenessEnabled) setDesktopAwarenessEnabled(false)
+  }, [conversing, desktopAwarenessEnabled])
+
   /** What Otto is saying now, for the robot to mouth: the spoken channel only (no URLs, code or markdown in the bubble). */
   const line = status === 'speaking' ? toSpoken([...transcript].reverse().find(entry => entry.role === 'assistant')?.text ?? '') : ''
 
@@ -255,6 +291,8 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const wakeQuestion = useRef<string | null>(null)
   const closePanel = useCallback(() => {
     wakeQuestion.current = null
+    setDesktopAwarenessEnabled(false)
+    publishContext('desktop_context', null)
     stop()
     setOpen(false)
     opener.current?.focus()
@@ -309,6 +347,6 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
       ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
           events={otto} idleControls={idleControls} face={guideFace} onIdleState={state => { idleRef.current = state }} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
-    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} />}
+    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} desktopAwarenessEnabled={desktopAwarenessEnabled} onDesktopAwarenessChange={setDesktopAwarenessEnabled} />}
   </>
 }
