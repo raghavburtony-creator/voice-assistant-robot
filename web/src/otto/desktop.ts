@@ -30,12 +30,6 @@ export type DesktopActionResult = {
   message: string
 }
 
-export type DesktopMovementResult = {
-  ok: boolean
-  destination: DesktopDestination
-  error?: string
-}
-
 export type DesktopMovementEvent = {
   status: 'started' | 'completed' | 'failed'
   destination: DesktopDestination
@@ -73,26 +67,6 @@ export async function getDesktopStatus(): Promise<DesktopStatus | null> {
   const runtime = host()
   if (!runtime) return null
   return runtime.core.invoke<DesktopStatus>('desktop_status')
-}
-
-/** Ask the native host to move Otto to an allow-listed named destination. */
-export async function moveDesktopTo(destination: DesktopDestination): Promise<DesktopMovementResult> {
-  if (!(DESKTOP_DESTINATIONS as readonly string[]).includes(destination)) {
-    return { ok: false, destination, error: 'Unsupported desktop destination.' }
-  }
-  const runtime = host()
-  if (!runtime) {
-    return { ok: false, destination, error: 'Desktop movement is only available in the Otto desktop app.' }
-  }
-  try {
-    return await runtime.core.invoke<DesktopMovementResult>('move_desktop_window', { destination })
-  } catch (error) {
-    return {
-      ok: false,
-      destination,
-      error: error instanceof Error ? error.message : 'The desktop host could not move Otto.',
-    }
-  }
 }
 
 /** Subscribe to native movement lifecycle events. */
