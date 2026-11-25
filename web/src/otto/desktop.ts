@@ -18,18 +18,12 @@ export type DesktopDestination = typeof DESKTOP_DESTINATIONS[number]
 export type DesktopMovementResult = {
   ok: boolean
   destination: DesktopDestination
-  monitor: string | null
-  x?: number
-  y?: number
   error?: string
 }
 
 export type DesktopMovementEvent = {
   status: 'started' | 'completed' | 'failed'
   destination: DesktopDestination
-  monitor: string | null
-  x: number | null
-  y: number | null
   message: string | null
 }
 
@@ -69,11 +63,11 @@ export async function getDesktopStatus(): Promise<DesktopStatus | null> {
 /** Ask the native host to move Otto to an allow-listed named destination. */
 export async function moveDesktopTo(destination: DesktopDestination): Promise<DesktopMovementResult> {
   if (!(DESKTOP_DESTINATIONS as readonly string[]).includes(destination)) {
-    return { ok: false, destination, monitor: null, error: 'Unsupported desktop destination.' }
+    return { ok: false, destination, error: 'Unsupported desktop destination.' }
   }
   const runtime = host()
   if (!runtime) {
-    return { ok: false, destination, monitor: null, error: 'Desktop movement is only available in the Otto desktop app.' }
+    return { ok: false, destination, error: 'Desktop movement is only available in the Otto desktop app.' }
   }
   try {
     return await runtime.core.invoke<DesktopMovementResult>('move_desktop_window', { destination })
@@ -81,7 +75,6 @@ export async function moveDesktopTo(destination: DesktopDestination): Promise<De
     return {
       ok: false,
       destination,
-      monitor: null,
       error: error instanceof Error ? error.message : 'The desktop host could not move Otto.',
     }
   }
