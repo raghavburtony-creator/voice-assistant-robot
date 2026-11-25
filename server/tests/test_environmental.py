@@ -45,8 +45,9 @@ def test_contract_rejects_unknown_topics_uncertainty_and_malformed_values():
 
 def test_fake_adapter_is_deterministic_and_does_not_depend_on_observation():
     fake = DeterministicFakeEnvironmentalAdapter(candidate())
-    assert fake.propose(b"frame one") == candidate()
-    assert fake.propose(b"completely different frame") == candidate()
+    expected = clean_environmental_proposal(candidate())
+    assert fake.propose(b"frame one") == expected
+    assert fake.propose(b"completely different frame") == expected
     abstain = DeterministicFakeEnvironmentalAdapter(None)
     assert abstain.propose(object()) is None
 
