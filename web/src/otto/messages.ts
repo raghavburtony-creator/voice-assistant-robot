@@ -12,7 +12,7 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('transcript'), role: z.enum(['user', 'assistant']), text: z.string() }),
   z.object({ type: z.literal('interrupted') }),
   z.object({ type: z.literal('turn_complete') }),
-  z.object({ type: z.literal('action'), action: z.string(), page: z.unknown().optional(), name: z.unknown().optional(), target: z.unknown().optional(), task: z.unknown().optional(), move: z.unknown().optional(), card: z.unknown().optional(), destination: z.unknown().optional(), desktop_action: z.unknown().optional() }),
+  z.object({ type: z.literal('action'), action: z.string(), page: z.unknown().optional(), name: z.unknown().optional(), target: z.unknown().optional(), task: z.unknown().optional(), step: z.unknown().optional(), move: z.unknown().optional(), card: z.unknown().optional(), destination: z.unknown().optional(), desktop_action: z.unknown().optional() }),
   z.object({ type: z.literal('avatar'), event: z.unknown() }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('ended'), reason: z.string() }),
@@ -33,7 +33,7 @@ export type AssistantCard = { title: string; body: string; code?: string; follow
 
 /** What Otto may make the page do. Add a variant here when you add a tool that sends a new kind of action. */
 export type AssistantAction = { action: 'navigate'; page: string } | { action: 'command'; name: CommandName } | { action: 'guide'; target: string }
-  | { action: 'task'; task: string } | { action: 'task_move'; move: GuideTaskMove } | { action: 'card'; card: AssistantCard } | { action: 'desktop_action'; desktop_action: DesktopAction }
+  | { action: 'task'; task: string } | { action: 'task_resume'; task: string; step: string } | { action: 'task_move'; move: GuideTaskMove } | { action: 'card'; card: AssistantCard } | { action: 'desktop_action'; desktop_action: DesktopAction }
 
 // The same caps as server/app/voice/tools.py (CARD_*): the browser's own check, not a trust in the server's (D-02).
 // eslint-disable-next-line no-control-regex
@@ -60,7 +60,7 @@ const isCommand = (value: unknown): value is CommandName => typeof value === 'st
 const isDesktopAction = (value: unknown): value is DesktopAction => typeof value === 'string' && (DESKTOP_ACTIONS as readonly string[]).includes(value)
 
 /** The action in a server message, or null when it is unknown or unusable. This is the browser's own allow-list. */
-export function toAssistantAction(message: { action: string; page?: unknown; name?: unknown; target?: unknown; task?: unknown; move?: unknown; card?: unknown; destination?: unknown; desktop_action?: unknown },
+export function toAssistantAction(message: { action: string; page?: unknown; name?: unknown; target?: unknown; task?: unknown; step?: unknown; move?: unknown; card?: unknown; destination?: unknown; desktop_action?: unknown },
   isTarget?: (id: string) => boolean, isTask?: (id: string) => boolean, isDestination?: (id: string) => boolean): AssistantAction | null {
   if (message.action === 'navigate' && isPage(message.page)) return { action: 'navigate', page: message.page }
   if (message.action === 'navigate' && isRuntimeId(message.page) && isDestination?.(message.page)) return { action: 'navigate', page: message.page }
@@ -68,6 +68,7 @@ export function toAssistantAction(message: { action: string; page?: unknown; nam
   // A target or task id must fit the runtime id rule (D-23) and still be in the page's own live registry.
   if (message.action === 'guide' && isRuntimeId(message.target) && isTarget?.(message.target)) return { action: 'guide', target: message.target }
   if (message.action === 'task' && isRuntimeId(message.task) && isTask?.(message.task)) return { action: 'task', task: message.task }
+  if (message.action === 'task_resume' && isRuntimeId(message.task) && isTask?.(message.task) && isRuntimeId(message.step)) return { action: 'task_resume', task: message.task, step: message.step }
   if (message.action === 'task_move' && isMove(message.move)) return { action: 'task_move', move: message.move }
   if (message.action === 'card') { const card = toAssistantCard(message.card); return card ? { action: 'card', card } : null }
   if (message.action === 'desktop_action' && isDesktopAction(message.desktop_action)) return { action: 'desktop_action', desktop_action: message.desktop_action }
