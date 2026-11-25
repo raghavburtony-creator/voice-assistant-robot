@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
+import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady, verifyDesktopMovement } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -87,3 +87,29 @@ describe('desktop awareness bridge', () => {
     delete window.__TAURI__
   })
 })
+
+describe('desktop movement verification', () => {
+  const context = {
+    platform: 'linux',
+    monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+    otto: { x: -1900, y: 220, width: 420, height: 640, visible: true },
+    cursor: { x: -1500, y: 400 },
+    activeWindow: null,
+  }
+
+  it('verifies a movement from a fresh observation, including negative monitor origins', () => {
+    expect(verifyDesktopMovement('move_left', context)).toBe(true)
+  })
+
+  it('rejects a native completion when the observed position is wrong', () => {
+    expect(verifyDesktopMovement('move_right', context)).toBe(false)
+  })
+
+  it('does not verify an observation without a usable window position', () => {
+    expect(verifyDesktopMovement('move_home', {
+      ...context,
+      otto: { ...context.otto, x: null, y: null },
+    })).toBe(false)
+  })
+})
+
