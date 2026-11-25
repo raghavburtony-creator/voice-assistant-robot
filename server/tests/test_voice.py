@@ -421,7 +421,7 @@ def test_show_card_checks_and_caps_what_the_model_sends():
 
 def test_environmental_topic_allow_list_matches_the_browser():
     source = (Path(__file__).resolve().parents[2] / "web" / "src" / "otto" / "awareness" / "environmental.ts").read_text()
-    match = re.search(r"ENVIRONMENTAL_TOPICS = \\[(.*?)\\] as const", source, re.S)
+    match = re.search(r"ENVIRONMENTAL_TOPICS = \[(.*?)\] as const", source, re.S)
     assert match
     assert re.findall(r'"([a-z_]+)"', match.group(1)) == list(get_args(tools.EnvironmentalTopic))
     assert list(get_args(tools.EnvironmentalConfidence)) == ["sufficient", "uncertain"]
