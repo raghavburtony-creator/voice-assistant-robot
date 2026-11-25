@@ -180,6 +180,8 @@ class Bridge:
         self.continuity_withdrawn = False
         self.pending_continuity = None
         if live.continuity is not None:
+            # A host-supplied enabled identity is the explicit opt-in that re-enables a prior withdrawal.
+            self.continuity_store.enable(live.continuity.scope, live.continuity.identity)
             self.pending_continuity = self.continuity_store.load(live.continuity.scope, live.continuity.identity)
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
@@ -274,7 +276,7 @@ class Bridge:
         self.continuity_withdrawn = True
         self.pending_continuity = None
         if identity is not None:
-            self.continuity_store.delete(identity.scope, identity.identity)
+            self.continuity_store.disable(identity.scope, identity.identity)
 
     async def send_frame(self, data: Any) -> None:
         """D-21's limits, again on this side: a share is on, the data is a JPEG within the cap, and not too soon."""
