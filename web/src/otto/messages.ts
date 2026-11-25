@@ -13,6 +13,8 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('interrupted') }),
   z.object({ type: z.literal('turn_complete') }),
   z.object({ type: z.literal('action'), action: z.string(), page: z.unknown().optional(), name: z.unknown().optional(), target: z.unknown().optional(), task: z.unknown().optional(), move: z.unknown().optional(), card: z.unknown().optional(), destination: z.unknown().optional() }),
+  z.object({ type: z.literal('avatar'), event: z.unknown() }),
+  z.object({ type: z.literal('action'), action: z.string(), page: z.unknown().optional(), name: z.unknown().optional(), target: z.unknown().optional(), task: z.unknown().optional(), move: z.unknown().optional(), card: z.unknown().optional() }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('ended'), reason: z.string() }),
 ])
