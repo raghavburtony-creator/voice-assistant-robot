@@ -136,6 +136,20 @@ def _bridge_for_null_update(store, state):
     return bridge
 
 
+def _bridge_for_resume(store, record):
+    actions = []
+    bridge = object.__new__(Bridge)
+    bridge.live = SimpleNamespace(
+        state={"screens": {}},
+        continuity=ContinuityContext(scope="app", identity="visitor"),
+    )
+    bridge.continuity_store = store
+    bridge.pending_continuity = record
+    bridge.continuity_resumed = False
+    bridge.out = SimpleNamespace(control=actions.append)
+    return bridge, actions
+
+
 def test_source_unmount_preserves_saved_task_once_during_navigation_handoff():
     store = FakeContinuityStore()
     record = ContinuityRecord("app", "checkout", "payment", 100)
@@ -192,3 +206,35 @@ def test_page_change_invalidates_only_the_previous_page_registries():
     assert state["screens"]["guide_tasks"] is None
     assert state["screens"]["guide_task_running"] == {"id": "checkout", "stepId": "payment"}
     assert state["screens"]["app_tasks"] == {"running": [{"id": "upload"}]}
+
+
+def test_destination_interface_resumes_only_the_task_and_step_it_reports():
+    store = FakeContinuityStore()
+    record = ContinuityRecord("app", "checkout", "payment", 100)
+    store.save(record, "visitor")
+    bridge, actions = _bridge_for_resume(store, record)
+
+    bridge._resume_saved_task({"tasks": [
+        {"id": "profile", "stepIds": ["start"]},
+        {"id": "checkout", "stepIds": ["details", "payment"]},
+    ]})
+
+    assert actions == [{"type": "action", "action": "task_resume", "task": "checkout", "step": "payment"}]
+    assert bridge.pending_continuity is None
+    assert store.load("app", "visitor", now=101) == record
+
+
+def test_destination_interface_drops_a_task_or_step_it_does_not_offer():
+    for offered in (
+        [{"id": "profile", "stepIds": ["start"]}],
+        [{"id": "checkout", "stepIds": ["details"]}],
+    ):
+        store = FakeContinuityStore()
+        record = ContinuityRecord("app", "checkout", "payment", 100)
+        store.save(record, "visitor")
+        bridge, actions = _bridge_for_resume(store, record)
+
+        bridge._resume_saved_task({"tasks": offered})
+
+        assert actions == []
+        assert store.load("app", "visitor", now=101) is None
