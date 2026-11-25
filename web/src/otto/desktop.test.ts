@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
 import { toAssistantAction } from './messages'
