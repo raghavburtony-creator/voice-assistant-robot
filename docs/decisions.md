@@ -58,6 +58,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
 | Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | open |
+| Q-10 | Environmental observations may propose bounded checked awareness events | awareness, privacy | answered by D-30 |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
 
