@@ -194,6 +194,14 @@ export class FakeVoiceServer {
     return true
   }
 
+  /** The server says how things are going (server/app/voice/avatar.py): working, asking permission, success... */
+  avatar(event: Record<string, unknown>) {
+    if (!this.socket || !this.connected) return false
+    this.send({ type: 'avatar', event })
+    this.log(`avatar: ${JSON.stringify(event)}`)
+    return true
+  }
+
   bargeIn() {
     if (!this.socket || !this.speaking) return false
     this.stopStreaming()

@@ -229,7 +229,7 @@ const job = events.task('render', { topic: 'image generation', where: '#preview'
 job.succeed('Your image is ready')                                                   // or job.fail('...'), job.done()
 ```
 
-**Event types:** `success`, `failure`, `attention`, `task`, `complete`, `section`, `select`, `waiting`, `arrive`, `leave`, `interact` and `idle`. Each can carry:
+**Event types:** `success`, `failure`, `attention`, `task`, `complete`, `section`, `select`, `waiting`, `arrive`, `leave`, `interact`, `idle`, `permission` and `express`. Each can carry:
 - `importance`: `minor`, `normal` or `major`;
 - `where`: a selector, element or rect;
 - `topic`: what it was about;
@@ -254,6 +254,10 @@ job.succeed('Your image is ready')                                              
 - Repeats (same type and topic) shrink, and the third is ignored.
 - Each reaction size has a cooldown.
 - A per-minute gesture budget limits how often he gestures.
+
+**Asking permission:** `permission` means Otto (or your app) is asking the visitor for a go-ahead. Give it a `task` id: Otto holds an alert face, even in a conversation, with the `message` (the question) in his bubble and, for a server's request, as a line in the panel, until an ending event with the same `task` answers it (`complete` with `data: { permission: 'granted' | 'denied' }`; a refusal ends the hold with no smile). It wakes him, and when the visitor is away it waits for their return. Without a `task` id it is one brief reaction, since nothing can answer it. Otto only shows the question: whether an action is allowed is the server's and the policy layer's job (D-22).
+
+**From the server (avatar events):** the server can tell Otto how things are going with `{"type":"avatar","event":{...}}` (`server/app/voice/avatar.py`, `web/src/otto/awareness/avatar.ts`, pure and tested). Presentation only: an event says what is happening, never what Otto should do, and it is not a tool, so the model cannot send one. Kinds: `thinking`, `working` (both take an `id`), `waiting`, `permission` (`id` and `state`: `asking`, `granted`, `denied`), `success`, `failure`, `emotion` (one of Otto's faces), `gesture` (one of his gestures), `movement` (`to: 'visitor'`: a look), and `listening`, `speaking` and `interruption`, which the voice session's own status already shows. Each is checked on both ends (ids, caps on text, only names Otto has), and then becomes the events above (`working` is a `task`, `success` is a `success`), so it gets the same judgement as an app event: the same sizes, cooldowns and quiet while he talks. Server code calls `Bridge.avatar({...})`; nothing in this repo sends one yet (the orchestrator, task engine and policy layer will: #44, #49, #47), and the lab's "Server:" buttons try them.
 
 **What the voice model sees:** `<Otto>` also reports the `events.task(...)` handles under `app_tasks` (`awareness/busy.ts`, pure and tested). `running` lists the handles still open, with id and topic. `ended` lists the last five that finished, newest first, each with its outcome (`succeeded`, `failed` or `complete`) and message. Each list keeps at most five entries, and topics and messages are cut at 160 characters. No other event type is sent. Like all context, it reaches the server only while a conversation is open, so "Is my upload done?" or "Why did it fail?" is answered from what your app reported. Keep task messages free of anything the visitor wouldn't want read back.
 

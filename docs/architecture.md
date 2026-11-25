@@ -22,6 +22,7 @@ Each part of the kit has one job:
 | Tools | `tools.py`, `sink.py` | The only way the model acts. Every argument is checked against a `Literal` or a list the page reported | D-02, D-03, D-14, D-16, D-18 |
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |
+| Avatar events | `awareness/avatar.ts`, `avatar.py`, `bridge.py` (`avatar`) | A backend tells Otto's character how things are going (working, asking permission, success...). Presentation only: it becomes ordinary awareness events, never a second bus, and carries no authority | D-19, D-22 |
 | Guidance | `guidance/` | The host says what to show, Otto decides how. Guided tasks follow observed progress | D-14, D-16 |
 | Body | `robot/`, `movement/`, `mouth.ts`, `sound.ts` | The robot: decorative, reduced-motion aware, synthesised sound | D-06, D-07, D-10, D-11, D-12 |
 | Packaging | `element/`, `react/`, `gemini/` | `<otto-mascot>` and its optional adapters | D-12, D-15 |

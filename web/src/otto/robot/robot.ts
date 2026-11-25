@@ -3,6 +3,9 @@
 
 export type RobotPose = 'idle' | 'listening' | 'talking' | 'thinking'
 export type RobotExpression = 'happy' | 'searching' | 'excited' | 'alert' | 'resting' | 'sad' | 'curious'
+export const ROBOT_EXPRESSIONS: readonly RobotExpression[] = ['happy', 'searching', 'excited', 'alert', 'resting', 'sad', 'curious']
+export const isRobotExpression = (value: unknown): value is RobotExpression =>
+  typeof value === 'string' && (ROBOT_EXPRESSIONS as readonly string[]).includes(value)
 
 /** Characters a second for the speech bubble: about the pace of the Gemini voice. */
 export const SPEAK_CPS = 16
