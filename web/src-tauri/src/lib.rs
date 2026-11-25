@@ -273,6 +273,11 @@ async fn move_desktop_window_inner(app: &AppHandle, destination: String) -> Resu
         let x = (start.x as f64 + (target_x as f64 - start.x as f64) * eased).round() as i32;
         let y = (start.y as f64 + (target_y as f64 - start.y as f64) * eased).round() as i32;
         if let Err(error) = window.set_position(PhysicalPosition::new(x, y)) {
+            let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
+                status: "failed",
+                destination: destination.clone(),
+                message: Some(format!("Otto could not finish moving: {error}")),
+            });
             return Err(format!("Otto could not finish moving: {error}"));
         }
         tokio::time::sleep(Duration::from_millis(MOVEMENT_FRAME_MS)).await;
