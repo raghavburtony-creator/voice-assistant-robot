@@ -104,6 +104,39 @@ export type DesktopContext = {
   activeWindow: { application: string; title: string } | null
 }
 
+/** Verify a completed movement against a fresh, read-only native observation. */
+export function verifyDesktopMovement(action: DesktopAction, context: DesktopContext): boolean {
+  const destinations: Partial<Record<DesktopAction, DesktopDestination>> = {
+    move_home: 'home',
+    move_left: 'desktop-left',
+    move_right: 'desktop-right',
+    move_top: 'top',
+    move_bottom: 'bottom',
+  }
+  const destination = destinations[action]
+  if (!destination || context.otto.x === null || context.otto.y === null) return false
+
+  const margin = 20
+  const left = context.monitor.x
+  const top = context.monitor.y
+  const minX = left + margin
+  const minY = top + margin
+  const maxX = Math.max(minX, left + context.monitor.width - context.otto.width - margin)
+  const maxY = Math.max(minY, top + context.monitor.height - context.otto.height - margin)
+  const centreX = left + Math.max(0, context.monitor.width) / 2 - context.otto.width / 2
+  const centreY = top + Math.max(0, context.monitor.height) / 2 - context.otto.height / 2
+  const expected = {
+    home: [centreX, centreY],
+    'desktop-left': [minX, centreY],
+    'desktop-right': [maxX, centreY],
+    top: [centreX, minY],
+    bottom: [centreX, maxY],
+  }[destination]
+  const targetX = Math.min(maxX, Math.max(minX, expected[0]))
+  const targetY = Math.min(maxY, Math.max(minY, expected[1]))
+  return Math.abs(context.otto.x - targetX) <= 5 && Math.abs(context.otto.y - targetY) <= 5
+}
+
 /** Execute one allow-listed action through the native permission gateway. */
 export async function executeDesktopAction(action: DesktopAction): Promise<DesktopActionResult> {
   if (!(DESKTOP_ACTIONS as readonly string[]).includes(action)) {
@@ -114,7 +147,22 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
   }
   try {
-    return await runtime.core.invoke<DesktopActionResult>('desktop_action', { action })
+    const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action })
+    if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
+
+    // Native API completion is not proof that the window reached its requested position.
+    // Take a fresh observation and only report success when the observed geometry agrees.
+    const context = await runtime.core.invoke<DesktopContext>('desktop_context')
+    if (!verifyDesktopMovement(action, context)) {
+      return {
+        ...result,
+        ok: false,
+        status: 'failed',
+        verification: 'not_verified',
+        message: "The native move finished, but Otto's observed position did not match the requested destination.",
+      }
+    }
+    return { ...result, verification: 'verified', message: `${result.message} The final position was verified.` }
   } catch (error) {
     return {
       action, ok: false, status: 'failed', verification: 'unavailable',
