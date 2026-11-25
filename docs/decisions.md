@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-30**, **Q-11**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-31**, **Q-11**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -47,6 +47,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-27 | The server voice layer is not a pure core/shell architecture | layers | current |
 | D-28 | Defer spatial/AR renderer selection until a target is specified | robot, architecture | current |
 | D-29 | Sign recognition uses a dedicated temporal adapter and text-only handoff | accessibility, privacy | current |
+| D-30 | Environmental observations propose bounded checked awareness events | awareness, privacy | current |
 
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
