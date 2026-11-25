@@ -24,6 +24,7 @@ PageId = Literal["home", "features", "about"]
 Command = Literal["show_message", "toggle_theme"]
 #: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
 TaskMove = Literal["stop", "back", "next"]
+DesktopDestination = Literal["home", "desktop-left", "desktop-right", "top", "bottom"]
 #: RUNTIME_ID is imported from runtime.py: one server rule for tools and page/current-view messages. A test checks it equals
 #: RUNTIME_ID in web/src/otto/runtimeId.ts.
 DESTINATIONS_CONTEXT_KEY = "destinations"
@@ -149,6 +150,24 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
 
 
 
+def move_desktop(destination: DesktopDestination, tool_context: ToolContext) -> dict:
+    """Move Otto's native desktop window to a named position: home, desktop-left, desktop-right, top or bottom.
+
+    Use only when the user explicitly asks Otto to move around the desktop. Never pass pixel coordinates,
+    monitor identifiers, application targets or arbitrary window commands. The native desktop host performs
+    the bounded movement and reports completion or failure separately; do not claim it succeeded merely
+    because this request was queued.
+    """
+    if destination not in get_args(DesktopDestination):
+        return {"ok": False, "error": "Unknown desktop destination. Use home, desktop-left, desktop-right, top or bottom."}
+    _send(tool_context, {"action": "desktop_move", "destination": destination})
+    return {
+        "ok": True,
+        "requested": destination,
+        "note": "The named movement request was queued. Wait for the desktop runtime's completion or failure event before claiming it finished.",
+    }
+
+
 def move_guided_task(move: TaskMove, tool_context: ToolContext) -> dict:
     """Steer the guided task Otto is walking the user through (guide_task_running in get_screen_context): stop ends it,
     back returns to the previous step, next counts the current step as done and moves on. Use it when the user says
@@ -205,5 +224,5 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, run_command, show_target, start_guided_task, move_guided_task, show_card)]
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
