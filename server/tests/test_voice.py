@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -432,6 +433,54 @@ def test_tool_schemas_have_no_anyof():
     """An Optional argument becomes anyOf in the schema; keep the declarations plain (see show_card)."""
     for tool in tools.TOOLS:
         assert "anyOf" not in str(tool._get_declaration().parameters_json_schema), tool.name
+
+
+def test_environmental_tool_queues_only_a_checked_camera_attention_proposal():
+    now = time.monotonic()
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["capture_source"] = "camera"
+    ctx.state["perception"] = {"latest": [{
+        "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    result = tools.notice_environmental_observation("object", "A parcel is visible.", "sufficient", ctx)
+    assert result["accepted"] is True
+    assert sink.drain("tool-test") == [{
+        "environmental": {"topic": "object", "message": "A parcel is visible."},
+    }]
+    sink.close("tool-test")
+
+
+def test_environmental_tool_abstains_without_active_fresh_camera_context():
+    now = time.monotonic()
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["capture_source"] = "screen"
+    ctx.state["perception"] = {"latest": [{
+        "source": "screen", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
+    ctx.state["capture_source"] = "camera"
+    assert tools.notice_environmental_observation("object", "A parcel.", "uncertain", ctx)["accepted"] is False
+    assert tools.notice_environmental_observation("identity", "A person.", "sufficient", ctx)["accepted"] is False
+    ctx.state["perception"]["latest"][0]["timestamp"] = now - 10
+    assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
+    assert sink.drain("tool-test") == []
+    sink.close("tool-test")
+
+
+def test_environmental_proposal_is_bound_to_the_current_sink_session():
+    now = time.monotonic()
+    ctx = _context()
+    ctx.state["capture_source"] = "camera"
+    ctx.state["perception"] = {"latest": [{
+        "source": "camera", "kind": "frame", "consent": "granted", "timestamp": now,
+    }]}
+    sink.open("another-session")
+    result = tools.notice_environmental_observation("activity", "A machine is moving.", "sufficient", ctx)
+    assert result["accepted"] is False
+    assert sink.drain("another-session") == []
+    sink.close("another-session")
 
 
 # ---- shared frames (D-21) ----
