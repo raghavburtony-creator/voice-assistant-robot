@@ -13,6 +13,7 @@ from app.voice.environmental import (
 def state_with_camera_frame(at: float = 100.0) -> dict:
     return {
         "capture_source": "camera",
+        "capture_generation": 1,
         "perception": {"latest": [{
             "source": "camera", "kind": "frame", "consent": "granted", "timestamp": at,
         }]},
