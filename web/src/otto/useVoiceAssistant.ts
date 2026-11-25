@@ -177,6 +177,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const socket = useRef<WebSocket | null>(null)
   // What the visitor is sharing (D-21) and when its last frame went; both end with the conversation.
   const sharing = useRef<CaptureSource | null>(null)
+  /** Monotonic client generation: a Stop/re-share invalidates proposals already in flight. */
+  const sharingGeneration = useRef(0)
   const lastFrameAt = useRef<number | null>(null)
   const recorder = useRef<Recorder | null>(null)
   const player = useRef<SpeechPlayer | null>(null)
@@ -337,6 +339,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     player.current?.close()
     player.current = null
     sharing.current = null
+    sharingGeneration.current += 1
     lastFrameAt.current = null
     const ws = socket.current
     socket.current = null
@@ -508,7 +511,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
         case 'environmental':
           {
             // Stop/hidden-tab/session teardown clears this ref before any late proposal can reach Otto.
-            const event = toEnvironmentalAttention(sharing.current, message.proposal)
+            const event = toEnvironmentalAttention(sharing.current, sharingGeneration.current, message.generation, message.proposal)
             if (event) environmentalRef.current?.(event)
           }
           break
@@ -676,9 +679,10 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const sendCapture = useCallback((source: CaptureSource | null) => {
     const ws = socket.current
     if (ws?.readyState !== WebSocket.OPEN) return false
+    const generation = ++sharingGeneration.current
     sharing.current = source
     lastFrameAt.current = null
-    ws.send(JSON.stringify({ type: 'capture', source }))
+    ws.send(JSON.stringify({ type: 'capture', source, generation }))
     return true
   }, [])
 
