@@ -67,6 +67,36 @@ def keyed(monkeypatch):
     return calls
 
 
+def test_continuity_identity_stays_server_side_and_requires_trusted_proxy(keyed, monkeypatch):
+    monkeypatch.setattr(settings, "continuity_trust_proxy", True)
+    with TestClient(app).websocket_connect(
+        "/api/v1/voice/live",
+        headers={
+            "x-otto-continuity-enabled": "true",
+            "x-otto-continuity-identity": "opaque-visitor-42",
+        },
+    ) as ws:
+        ws.send_json({"type": "start", "language": "en", "page": "home"})
+        assert ws.receive_json()["type"] == "ready"
+        _receive_until_ended(ws)
+    # The identity is deliberately not added to the browser protocol or the model state.
+    assert keyed == [("en", "home", "Home", "short")]
+
+
+def test_continuity_headers_are_ignored_when_the_deployment_does_not_trust_the_proxy(keyed):
+    with TestClient(app).websocket_connect(
+        "/api/v1/voice/live",
+        headers={
+            "x-otto-continuity-enabled": "true",
+            "x-otto-continuity-identity": "opaque-visitor-42",
+        },
+    ) as ws:
+        ws.send_json({"type": "start", "language": "en", "page": "home"})
+        assert ws.receive_json()["type"] == "ready"
+        _receive_until_ended(ws)
+    assert keyed == [("en", "home", "Home", "short")]
+
+
 def test_not_configured_without_a_key(monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", SecretStr(""))
     with TestClient(app).websocket_connect("/api/v1/voice/live") as ws:
