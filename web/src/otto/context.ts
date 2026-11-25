@@ -41,6 +41,14 @@ export function publishContext(key: string, data: Record<string, unknown> | null
   listeners.forEach(listener => listener({ key, data, announce }))
 }
 
+/** Context keys whose allow-lists belong to the page currently mounted, not the page just left. */
+const PAGE_CONTEXT_KEYS = ['guide_targets', 'guide_tasks', DESTINATIONS_CONTEXT_KEY] as const
+
+/** Clear the previous interface's registries before its replacement publishes fresh ones. */
+export function clearPageContext() {
+  PAGE_CONTEXT_KEYS.forEach(key => publishContext(key, null))
+}
+
 /** A destination the page is still reporting, or null. Runtime navigation is checked against this immediately before use. */
 export function findDestination(id: string): Destination | null {
   if (!isRuntimeId(id)) return null
