@@ -470,6 +470,7 @@ def test_environmental_tool_abstains_without_active_fresh_camera_context():
     }]}
     assert tools.notice_environmental_observation("object", "A parcel.", "sufficient", ctx)["accepted"] is False
     ctx.state["capture_source"] = "camera"
+    ctx.state["perception"]["latest"][0]["source"] = "camera"
     assert tools.notice_environmental_observation("object", "A parcel.", "uncertain", ctx)["accepted"] is False
     assert tools.notice_environmental_observation("identity", "A person.", "sufficient", ctx)["accepted"] is False
     ctx.state["perception"]["latest"][0]["timestamp"] = now - 10
@@ -517,6 +518,11 @@ def test_bridge_emits_environmental_proposal_as_a_separate_checked_message():
         await bridge.model_to_browser()
         await bridge.out.flush()
         pump.cancel()
+        try:
+            await pump
+        except asyncio.CancelledError:
+            pass
+        live.close()
         return ws.sent
 
     assert asyncio.run(go()) == [
