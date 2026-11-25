@@ -294,6 +294,12 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 
 **Why:** The current camera path is explicitly designed for sparse visual context and Gemini Live's documented video input is one frame per second. Sign-language recognition is a temporal language task, not a generic image-description prompt. Keeping a provider-neutral temporal adapter separate from the existing still-frame path avoids promising unsupported recognition, while the text-only handoff preserves Otto's existing conversation, accessibility and authority boundaries. The language, task and data requirements must be established with the signing community before choosing a model.
 
+**Evidence reviewed:**
+- [Gemini Live API – send audio and video streams](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/live-api/send-audio-video-streams): documents discrete video frames at 1 FPS. This is provider documentation for the Live API, not a claim that it performs sign-language recognition.
+- [A comprehensive survey on recent advances and challenges in sign language recognition systems](https://link.springer.com/article/10.1007/s44163-025-00629-7): describes the importance of hand movement, facial/non-manual signals and temporal context, and the generalisation limits of controlled, signer-dependent evaluations.
+- [Official Mauritian Sign Language online dictionary](https://swdmauritius.signsdiscovery.com/) and [INJS project history for the Mauritian Sign Language dictionary](https://www.injs-paris.fr/page/expertises-et-projets/cooperations-internationales/projet-de-developpement-de-la-langue-des-signes-mauricienne/): establish relevant MSL linguistic/community resources; they do not, by themselves, establish a licensed continuous-video ML training corpus.
+
+
 **Where:** Existing capture limits and lifecycle: `web/src/otto/capture.ts`, `useScreenShare.ts`, `ScreenShare.tsx`, `useVoiceAssistant.ts` and `server/app/voice/bridge.py` (D-21). Existing text/session path: `useVoiceAssistant.ts`, `messages.ts`, `bridge.py` and the panel transcript in `VoiceAssistant.tsx`. The sign adapter and its tests are to be added by the SIG-02 implementation issue.
 
 ## Open questions
