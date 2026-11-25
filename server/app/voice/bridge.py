@@ -21,6 +21,7 @@ from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
+from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,9 @@ class Bridge:
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
         self.capture: str | None = None
+        self.perception = PerceptionGateway()
+        # Browser/page context is an explicit conversation input, not camera/screen capture.
+        self.perception.set_consent("browser", True)
         self.last_frame = float("-inf")
         self.frames = 0
         # Gemini sends transcript chunks and then the whole text again; per role, did a chunk of this turn go out?
@@ -192,6 +196,10 @@ class Bridge:
             return
         screens[key] = data
         self.live.state["screens"] = screens
+        try:
+            self.perception.ingest_context("browser", {key: data})
+        except PerceptionRejected:
+            pass
         announce = event.get("announce")
         prompt = event_prompt(announce) if isinstance(announce, str) else None
         now = asyncio.get_running_loop().time()
@@ -213,9 +221,14 @@ class Bridge:
             return
         if not 0 < len(jpeg) <= MAX_FRAME_BYTES or not jpeg.startswith(JPEG_MAGIC):
             return
+        try:
+            observation = self.perception.ingest_frame(self.capture, jpeg, timestamp=now)
+        except PerceptionRejected:
+            return
         self.last_frame = now
         self.frames += 1
-        await self.live.send_image(jpeg)
+        self.live.state["perception"] = {"latest": self.perception.summary(), "last_observation_id": observation.id}
+        await self.live.send_image(observation.data or b"")
 
     async def browser_to_model(self) -> None:
         while True:
@@ -240,6 +253,10 @@ class Bridge:
                 await self.live.send_text(event["text"][:MAX_TEXT_CHARS])
             elif kind == "capture" and (event.get("source") in CAPTURE_SOURCES or event.get("source") is None):
                 self.capture = event.get("source")
+                for source in CAPTURE_SOURCES:
+                    self.perception.set_consent(source, source == self.capture)
+                if self.capture is None:
+                    self.live.state["perception"] = {"latest": self.perception.summary()}
             elif kind == "frame":
                 await self.send_frame(event.get("data"))
             elif kind == "mic_off":
