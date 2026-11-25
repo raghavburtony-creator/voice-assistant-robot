@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Live audio is billed per minute and there are no accounts, so sessions are capped in length and number.
     max_session_seconds: int = Field(default=600, gt=0)
     max_sessions: int = Field(default=4, gt=0)
+    # Cross-session continuity is disabled unless the deployment explicitly trusts a host/proxy boundary.
+    # The browser cannot set these WebSocket handshake headers itself.
+    continuity_trust_proxy: bool = False
 
     @field_validator("cors_origins")
     @classmethod
