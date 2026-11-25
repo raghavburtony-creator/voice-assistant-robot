@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
+import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady, verifyDesktopMovement } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -58,6 +58,65 @@ describe('desktop action bridge', () => {
     delete window.__TAURI__
   })
 
+  it('requires a fresh matching observation before reporting a native move as successful', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1500, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+      .mockResolvedValueOnce({
+        action: 'move_left', ok: true, status: 'completed',
+        verification: 'native_api_completed', message: 'Native movement completed.',
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1900, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+      ok: true, status: 'completed', verification: 'verified',
+    })
+    expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_context')
+    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_action', { action: 'move_left' })
+    expect(invoke).toHaveBeenNthCalledWith(3, 'desktop_context')
+    delete window.__TAURI__
+  })
+
+  it('reports failure when native movement completes but observation disagrees', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1500, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+      .mockResolvedValueOnce({
+        action: 'move_left', ok: true, status: 'completed',
+        verification: 'native_api_completed', message: 'Native movement completed.',
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1200, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'not_verified',
+    })
+    delete window.__TAURI__
+  })
+
   it('does not execute desktop actions in browser mode', async () => {
     delete window.__TAURI__
     await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
@@ -87,3 +146,29 @@ describe('desktop awareness bridge', () => {
     delete window.__TAURI__
   })
 })
+
+describe('desktop movement verification', () => {
+  const context = {
+    platform: 'linux',
+    monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+    otto: { x: -1900, y: 220, width: 420, height: 640, visible: true },
+    cursor: { x: -1500, y: 400 },
+    activeWindow: null,
+  }
+
+  it('verifies a movement from a fresh observation, including negative monitor origins', () => {
+    expect(verifyDesktopMovement('move_left', context)).toBe(true)
+  })
+
+  it('rejects a native completion when the observed position is wrong', () => {
+    expect(verifyDesktopMovement('move_right', context)).toBe(false)
+  })
+
+  it('does not verify an observation without a usable window position', () => {
+    expect(verifyDesktopMovement('move_home', {
+      ...context,
+      otto: { ...context.otto, x: null, y: null },
+    })).toBe(false)
+  })
+})
+
