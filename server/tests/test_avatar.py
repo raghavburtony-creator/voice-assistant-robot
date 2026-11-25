@@ -64,6 +64,7 @@ def test_text_is_plain_single_line_and_capped():
 
 class _Live:
     session_id = "avatar"
+    continuity = None
     state: dict = {}
 
 
