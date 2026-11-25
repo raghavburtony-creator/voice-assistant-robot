@@ -308,11 +308,11 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 
 **Decision:**
 - Desktop actions are proposed by the existing ADK tool layer and pass through the existing server sink and browser action validation. No second orchestrator or autonomous native decision-maker is introduced.
-- The desktop UI must ask the visitor to approve each exact action before invoking the native command. Declining performs no action; approval is scoped to that one request.
+- The native Tauri command must ask the visitor to approve each exact action before execution. The approval prompt is enforced inside the native command, so a direct webview invocation cannot bypass it. Declining performs no action; approval is scoped to that one request.
 - The native command accepts only a closed enum: minimize Otto, restore Otto, move Otto to one of five named positions, launch Calculator, or launch Text Editor. Unknown actions are rejected by native deserialization.
 - Application launching uses fixed platform-specific application identifiers with no caller-provided executable, URL, path or arguments. No shell command, arbitrary application, filesystem operation, keystroke or general input automation is exposed.
 - Results distinguish verified window state, movement accepted/completed by the native window API, and a process successfully spawned. A spawned process is not described as a verified, ready application window.
 
 **Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
 
-**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/Otto.tsx` (result announcement), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
+**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src-tauri/src/lib.rs` (native confirmation dialog), `web/src/otto/Otto.tsx` (result announcement), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
