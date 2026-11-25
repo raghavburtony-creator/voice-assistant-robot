@@ -2,8 +2,9 @@
 // before the page uses it. Anything that does not fit is dropped, never guessed at.
 
 import { z } from 'zod'
-import { COMMANDS, isPage, type CommandName, type PageId } from '../otto.config'
+import { COMMANDS, isPage, type CommandName } from '../otto.config'
 import { GUIDE_TASK_MOVES, type GuideTaskMove } from './guidance/task'
+import { isRuntimeId } from './runtimeId'
 
 const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), limitSeconds: z.number().finite().positive().optional().catch(undefined) }),
@@ -29,7 +30,7 @@ export function parseServerMessage(text: string): ServerMessage | null {
 export type AssistantCard = { title: string; body: string; code?: string; followUps?: string[] }
 
 /** What Otto may make the page do. Add a variant here when you add a tool that sends a new kind of action. */
-export type AssistantAction = { action: 'navigate'; page: PageId } | { action: 'command'; name: CommandName } | { action: 'guide'; target: string }
+export type AssistantAction = { action: 'navigate'; page: string } | { action: 'command'; name: CommandName } | { action: 'guide'; target: string }
   | { action: 'task'; task: string } | { action: 'task_move'; move: GuideTaskMove } | { action: 'card'; card: AssistantCard }
 
 // The same caps as server/app/voice/tools.py (CARD_*): the browser's own check, not a trust in the server's (D-02).
@@ -57,11 +58,13 @@ const isCommand = (value: unknown): value is CommandName => typeof value === 'st
 
 /** The action in a server message, or null when it is unknown or unusable. This is the browser's own allow-list. */
 export function toAssistantAction(message: { action: string; page?: unknown; name?: unknown; target?: unknown; task?: unknown; move?: unknown; card?: unknown },
-  isTarget?: (id: string) => boolean, isTask?: (id: string) => boolean): AssistantAction | null {
+  isTarget?: (id: string) => boolean, isTask?: (id: string) => boolean, isDestination?: (id: string) => boolean): AssistantAction | null {
   if (message.action === 'navigate' && isPage(message.page)) return { action: 'navigate', page: message.page }
+  if (message.action === 'navigate' && isRuntimeId(message.page) && isDestination?.(message.page)) return { action: 'navigate', page: message.page }
   if (message.action === 'command' && isCommand(message.name)) return { action: 'command', name: message.name }
-  if (message.action === 'guide' && typeof message.target === 'string' && isTarget?.(message.target)) return { action: 'guide', target: message.target }
-  if (message.action === 'task' && typeof message.task === 'string' && isTask?.(message.task)) return { action: 'task', task: message.task }
+  // A target or task id must fit the runtime id rule (D-23) and still be in the page's own live registry.
+  if (message.action === 'guide' && isRuntimeId(message.target) && isTarget?.(message.target)) return { action: 'guide', target: message.target }
+  if (message.action === 'task' && isRuntimeId(message.task) && isTask?.(message.task)) return { action: 'task', task: message.task }
   if (message.action === 'task_move' && isMove(message.move)) return { action: 'task_move', move: message.move }
   if (message.action === 'card') { const card = toAssistantCard(message.card); return card ? { action: 'card', card } : null }
   return null

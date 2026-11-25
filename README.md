@@ -40,7 +40,9 @@ Checks: `cd server && .venv/bin/python -m pytest`, `cd web && npm test` (the ges
 
 ## Using it in a new project
 
-The two files you edit every time are the two config files. Their page and command lists must match (a server test checks it).
+The two files you edit every time are the two config files. Their static page and command lists must match (a server test checks it).
+
+What Otto only shows, walks the visitor through or opens for them (guide targets, guided tasks and destinations) can be reported by the page at runtime instead, as ids checked on both ends. Commands, which change something in your app, always stay in both config lists. The page can't add one (D-23).
 
 | What | Web | Server |
 |---|---|---|
@@ -51,17 +53,36 @@ The two files you edit every time are the two config files. Their page and comma
 In your app:
 
 ```tsx
-import { Otto, useAssistantContext, type AssistantAction } from './otto'
+import { useEffect } from 'react'
+import { Otto, publishContext, useAssistantContext, type AssistantAction } from './otto'
+
+// Routes stay in host code. Otto receives ids and labels, never these URLs.
+const routes: Record<string, string> = {
+  home: '/', features: '/features', about: '/about',
+  'project.42': '/projects/42',
+}
 
 // Once, near the top of the app. `page` is the visitor's current page id.
 <Otto page={page} onAction={(action: AssistantAction) => {
-  if (action.action === 'navigate') router.push(action.page)
-  else if (action.name === 'toggle_theme') toggleTheme()
+  if (action.action === 'navigate') {
+    const route = routes[action.page]
+    if (route) router.push(route) // keep `page` equal to action.page when that view is current
+  } else if (action.action === 'command' && action.name === 'toggle_theme') toggleTheme()
 }} />
 
 // In any component: tell Otto what is on screen. It reads this with get_screen_context.
 useAssistantContext('cart', { items: 3, total: 'Rs 450' })
+
+// While this view is current, offer a runtime destination. Clear it when the view leaves.
+useEffect(() => {
+  publishContext('destinations', { destinations: [{ id: 'project.42', label: 'Project Forty Two' }] })
+  return () => publishContext('destinations', null)
+}, [])
 ```
+
+A destination has only an `id` and a page-data `label`. Its id follows the shared runtime-id rule: 1 to 64 characters from `A-Z a-z 0-9 _ . : -`, beginning with a letter or digit. The kit caps the list to the context budget. `navigate_to` accepts a static page id or an id in the current `destinations` list; the browser checks the id against that live list again immediately before `onAction`. An old, unreported id, a URL and a path are refused. The host maps the accepted id to a route, as above; neither the model nor the reported context supplies a URL.
+
+After the host opens a runtime view, it passes that destination id back as `<Otto page={page}>` for as long as the view is current (the example router derives `page` from its current route). On session start and every page change, the browser validates the value and sends `{ page, title }`: a runtime title uses the destination's capped, plain-text label when it is available, otherwise its id, while a static page title always comes from the deployment config. A URL, path or malformed host value is never sent as the page id; it falls back to the first static page, and the server validates the message again. `explain_page` remains limited to static pages because their explanatory text comes from the deployment.
 
 Copy `web/src/otto/`, `web/src/otto.config.ts`, `web/public/otto/` and `server/app/voice/` into the new project, or start from this repository. Otto's colours are `ROBOT_COLORS` in `otto.config.ts`.
 
@@ -88,6 +109,8 @@ sendFrame (a share) -> {"type":"frame"}    checked (JPEG, 256 KB, 1/s) -> LiveRe
 
 - The API key never reaches the browser. Sessions are limited in length (`MAX_SESSION_SECONDS`) and number (`MAX_SESSIONS`), because live audio is billed per minute.
 - Every action is checked twice: by the tool on the server, and by `toAssistantAction` in the browser. Most can be undone from the panel.
+- One context update is at most 16 KB (UTF-8, compact JSON; `MAX_CONTEXT_BYTES` in `bridge.py` and `contextBudget.ts`, kept equal by a test). The server refuses a bigger one and clears that key, so the model never keeps reading an old value (D-23).
+- Only tool calls make anything happen. Nothing Otto says is turned into an action. Some things only the visitor can do, and no tool does them: answering the mic consent, turning on "Hey Otto", starting a camera or screen share, and pressing a card's follow-up. The visitor's Stop, Not now and undo win over the model (D-22).
 - The robot is only a picture. It is hidden from screen readers; the panel shows everything Otto says as text.
 - Otto's mouth follows its real voice: five bars from five speech bands (`web/src/otto/mouth.ts`): the centre bar is vowel pitch (85-300 Hz), the inner pair the formants (300 Hz-2 kHz), the outer pair consonants and sibilants (2-4 kHz). A noise gate shuts the mouth in pauses, and bars rise in ~25 ms and fall in ~140 ms. The live voice, an audio file in the lab and the lab's fake voice all go through the same `MouthAnalyzer`. With reduced motion the mouth still moves; only body motion stops. The speech bubble shows the transcript as far as the audio has actually played, read from the speech player's own clock. It is held to at most 24 characters a second, so a transcript that arrives ahead of its audio does not run ahead. Without a clock, as in the lab's fake voice, it types at `SPEAK_CPS`.
 - Barge-in: cut Otto off and he stops at once. Queued audio is stopped and disconnected, and the rest of his turn still arriving from the server is dropped. The mouth closes, whatever gesture was playing stops, and he nods (`GESTURE_SETTINGS.onInterrupt`, with its chirp) as he goes back to listening. Four things can cut him off:
@@ -216,7 +239,7 @@ Your app says what to show; Otto decides how. First mark the things he may show,
 const off = registerGuideTarget('save', '#save', { label: 'the Save button' })   // code wins over markup with the same id
 ```
 
-Without `data-otto-label`, the label is the `aria-label`, then the element's text. Then make a guide channel once and ask:
+Without `data-otto-label`, the label is the `aria-label`, then the element's text. An id is 1 to 64 of `A-Z a-z 0-9 _ . : -`, starting with a letter or a digit, with no spaces. The same rule holds for guided task ids. A target or task whose id breaks it is never told to the model (the console warns once), and both ends refuse it (`runtimeId.ts`, `RUNTIME_ID` in `tools.py`; D-23). Then make a guide channel once and ask:
 
 ```tsx
 const guide = useMemo(createOttoGuide, [])
@@ -296,7 +319,7 @@ events.notify({ type: 'failure', topic: 'signup', help: 'email', message: 'Check
 
 **Missing, hidden or disabled targets:** a target that isn't on the page, or is there but not drawn (`display: none`, a collapsed panel), gets the fallback: a sad face, a head shake (its cue is `chirpNegative`) and "I can't find that on this page." The `missing` event says which (`reason: 'not_found' | 'hidden'`). The voice is told before it acts: `<Otto>` reports each target's state, `show_target` refuses a hidden one with a structured error, and accepts a disabled one with `disabled: true` so the model says it can't be used yet.
 
-**Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change.
+**Voice:** "Where is…" or "Show me…" makes the model call the `show_target` tool. "How do I…" or "Help me with…" makes it call `start_guided_task` when a task fits. `<Otto>` reports the page's targets and its offered tasks (`registerGuideTask(spec)`) to the server, and each tool accepts only those ids. The browser checks the id again before Otto acts (D-02, D-14, D-16). Otto then says each step himself and follows the visitor's progress; the model only introduces the task. The demo app offers one, "Show an example message", which Otto follows by himself across a page change. Both lists are capped to the context budget: entries are kept in order (registered targets first, then marked-up ones in page order) and the rest are left out whole, with `omitted` telling the model how many (D-23). Register the targets that matter most first.
 
 **What the model sees of a running task:** while a guided task runs, `<Otto>` also reports it under `guide_task_running`: its id and title, the visitor's step (`step` of `total`, 1-based) and that step's words, capped at 80 and 200 characters (`taskProgress` in `guidance/task.ts`). The report is cleared when the task is done or cancelled. Like all context, it reaches the server only while a conversation is open. "Where was I?" or "What's next?" is answered from it, and the model is told not to start that task again or `show_target` the current step.
 

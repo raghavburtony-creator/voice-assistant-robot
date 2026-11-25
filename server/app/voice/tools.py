@@ -1,8 +1,9 @@
 """Otto's tools. Model output is untrusted, so every argument is checked here, and the browser checks every action again.
 
-A tool that should change something in the browser returns a `client_action`; it is queued in the sink and sent to the browser.
-To add a tool: write the function below, add it to TOOLS, and (if it sends an action) handle that action in
-web/src/otto.config.ts `isAllowedAction` and in App's `onAction`.
+A tool that should change something in the browser queues an action with `_send`; the sink holds it and the bridge sends it.
+This is the server's link in the authority chain (D-22). To add a tool: write the function below, add it to TOOLS, and (if it
+sends an action) accept that action in `toAssistantAction` (web/src/otto/messages.ts) and handle it in App's `onAction`.
+`test_action_kinds_match_on_both_ends` fails until both ends name it.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from typing import Literal, get_args
 from google.adk.tools import FunctionTool, ToolContext
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
+from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.sink import sink
 
 logger = logging.getLogger(__name__)
@@ -22,21 +24,42 @@ PageId = Literal["home", "features", "about"]
 Command = Literal["show_message", "toggle_theme"]
 #: The voice's moves on a running guided task; a test checks it equals GUIDE_TASK_MOVES in web/src/otto/guidance/task.ts.
 TaskMove = Literal["stop", "back", "next"]
+#: RUNTIME_ID is imported from runtime.py: one server rule for tools and page/current-view messages. A test checks it equals
+#: RUNTIME_ID in web/src/otto/runtimeId.ts.
+DESTINATIONS_CONTEXT_KEY = "destinations"
+DESTINATIONS_CONTEXT_FIELD = "destinations"
+
+
+def _reported(tool_context: ToolContext, key: str, field: str) -> dict[str, dict]:
+    """What the page reported under `key`, by id. An entry whose id breaks the rule is left out, so it is never offered back."""
+    report = (tool_context.state.get("screens") or {}).get(key)
+    entries = report.get(field) if isinstance(report, dict) else None
+    if not isinstance(entries, list):
+        return {}
+    return {e["id"]: e for e in entries if isinstance(e, dict) and is_runtime_id(e.get("id"))}
 
 
 def _send(tool_context: ToolContext, action: dict) -> None:
     sink.put(tool_context.session.id, action)
 
 
-def navigate_to(page: PageId, tool_context: ToolContext) -> dict:
-    """Take the user to a page of the app."""
-    if page not in PAGES:
-        return {"error": f"Unknown page. Valid pages: {', '.join(PAGE_IDS)}"}
+def navigate_to(page: str, tool_context: ToolContext) -> dict:
+    """Take the user to a static page, or to a destination the current page reported. page is an id, never a URL or path."""
+    destinations = _reported(tool_context, DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD)
+    if not isinstance(page, str) or (page not in PAGES and (not is_runtime_id(page) or page not in destinations)):
+        return {"error": "Unknown destination. Use a static page id or one of the ids the current page reported.",
+                "known": [*PAGE_IDS, *destinations]}
+    reported_label = destinations.get(page, {}).get("label")
+    title = PAGES[page]["title"] if page in PAGES else runtime_title(reported_label, page)
     _send(tool_context, {"action": "navigate", "page": page})
     # Later tools in this turn see the new page.
     tool_context.state["page"] = page
-    tool_context.state["page_title"] = PAGES[page]["title"]
-    return {"ok": True, "now_on": PAGES[page]["title"]}
+    tool_context.state["page_title"] = title
+    # Runtime lists belong only to the page that reported them (D-23). The browser will report the new page's list later.
+    screens = tool_context.state.get("screens")
+    if isinstance(screens, dict):
+        screens[DESTINATIONS_CONTEXT_KEY] = None
+    return {"ok": True, "now_on": title}
 
 
 def explain_page(page: PageId, tool_context: ToolContext) -> dict:
@@ -50,8 +73,20 @@ def get_screen_context(tool_context: ToolContext) -> dict:
     """What the user has open right now: the current page and whatever the page reported about itself."""
     state = tool_context.state
     page = state.get("page", "home")
+    title = state.get("page_title")
+    if not isinstance(title, str):
+        title = PAGES.get(page, PAGES["home"])["title"]
     screens = {key: value for key, value in (state.get("screens") or {}).items() if value is not None}
-    return {"current_page": {"id": page, "title": PAGES.get(page, PAGES["home"])["title"]},
+    # The page's lists reach the model only with ids that fit the rule (D-23), whoever published them.
+    for key, field in (("guide_targets", "targets"), ("guide_tasks", "tasks"),
+                       (DESTINATIONS_CONTEXT_KEY, DESTINATIONS_CONTEXT_FIELD)):
+        if isinstance(screens.get(key), dict):
+            screens[key] = {**screens[key], field: list(_reported(tool_context, key, field).values())}
+    # So does the running task's id. A host can start a task it never registered, so this id is checked here too.
+    running = screens.get("guide_task_running")
+    if isinstance(running, dict) and "id" in running and not is_runtime_id(running["id"]):
+        screens["guide_task_running"] = {k: v for k, v in running.items() if k != "id"}
+    return {"current_page": {"id": page, "title": title},
             **(screens or {"note": "The page has reported nothing else."})}
 
 
@@ -68,10 +103,8 @@ def show_target(target_id: str, tool_context: ToolContext) -> dict:
     """Have Otto point at something on the user's current page. Use it when the user asks where something is, what something is,
     how to do something on this page, or says "show me". target_id must be one of the ids from get_screen_context under
     guide_targets; never invent one. Then explain it in one or two plain sentences."""
-    screens = tool_context.state.get("screens") or {}
-    reported = (screens.get("guide_targets") or {}).get("targets")
-    targets = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
-    if not isinstance(target_id, str) or not target_id or len(target_id) > 64 or target_id not in targets:
+    targets = _reported(tool_context, "guide_targets", "targets")
+    if not is_runtime_id(target_id) or target_id not in targets:
         return {"ok": False, "error": "Unknown target. Use one of the known ids.", "known": list(targets)}
     found = targets[target_id]
     # The page reports a target it has but is not drawing (collapsed, display: none): Otto can't point at it. Say so, don't pretend.
@@ -91,10 +124,8 @@ def start_guided_task(task_id: str, tool_context: ToolContext) -> dict:
     user does each step. Use it when the user asks for help doing something ("how do I...", "help me with...") and a task
     in get_screen_context under guide_tasks fits. task_id must be one of those ids; never invent one. Otto says each step
     himself, so only introduce it in one short sentence; don't read the steps out."""
-    screens = tool_context.state.get("screens") or {}
-    reported = (screens.get("guide_tasks") or {}).get("tasks")
-    tasks = {t["id"]: t for t in reported if isinstance(t, dict) and isinstance(t.get("id"), str)} if isinstance(reported, list) else {}
-    if not isinstance(task_id, str) or not task_id or len(task_id) > 64 or task_id not in tasks:
+    tasks = _reported(tool_context, "guide_tasks", "tasks")
+    if not is_runtime_id(task_id) or task_id not in tasks:
         return {"ok": False, "error": "Unknown task. Use one of the known ids.", "known": list(tasks)}
     _send(tool_context, {"action": "task", "task": task_id})
     found = tasks[task_id]

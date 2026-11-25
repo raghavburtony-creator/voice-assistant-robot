@@ -13,6 +13,7 @@ const CORE = [
   'awareness/reactions.ts',
   'capture.ts',
   'config.ts',
+  'contextBudget.ts',
   'gemini/channels.ts',
   'gemini/prompt.ts',
   'guidance/friction.ts',
@@ -24,6 +25,7 @@ const CORE = [
   'movement/stage.ts',
   'robot/gestures.ts',
   'robot/robot.ts',
+  'runtimeId.ts',
   'soundCues.ts',
   'speechGate.ts',
 ]

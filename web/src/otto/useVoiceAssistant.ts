@@ -10,13 +10,14 @@ import {
   readAnswerLength, readMicConsent, readMicTalk, saveAnswerLength, saveMicConsent, saveMicTalk,
   type AnswerLength, type MicConsent, type MicTalk,
 } from './consent'
-import { currentContext, subscribeContext, type ContextUpdate } from './context'
+import { currentContext, findDestination, subscribeContext, type ContextUpdate } from './context'
 import type { MouthSource } from './mouth'
-import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, PAGES, VAD } from '../otto.config'
+import { apiBase, ASSISTANT_NAME, BARGE_IN, COMMAND_LABELS, isPage, PAGES, VAD } from '../otto.config'
 import { BargeInGate, OpenMicGate, type DiagnosticSink, type OpenMicStep } from './speechGate'
 import type { GuideTaskMove } from './guidance/task'
 import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
+import { isRuntimeId } from './runtimeId'
 
 export type { AssistantAction } from './messages'
 export type AssistantStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'ended' | 'error'
@@ -31,7 +32,7 @@ const TASK_MOVE_LABELS: Record<GuideTaskMove, string> = { stop: 'Stopped the tas
 /** The words and the undo for an action. `before` is the page that was showing. Add a case for each new kind of action. */
 function describeAction(action: AssistantAction, before: string): { label: string; inverse: AssistantAction | null } {
   if (action.action === 'navigate') {
-    const title = PAGES.find(item => item.id === action.page)?.title ?? action.page
+    const title = PAGES.find(item => item.id === action.page)?.title ?? findDestination(action.page)?.label ?? action.page
     const back = PAGES.find(item => item.id === before)
     return { label: `Opened ${title}`, inverse: back && back.id !== action.page ? { action: 'navigate', page: back.id } : null }
   }
@@ -92,6 +93,21 @@ const SILENT_WARNING_FRAMES = 100
 const CONTEXT_DEBOUNCE_MS = 400
 
 const SOCKET_PATH = '/api/v1/voice/live'
+
+/** A current view sent on the wire: a configured page or a runtime id, never a URL/path. Invalid host input falls back safely. */
+export function currentPageInfo(value: string): { page: string; title: string } {
+  const page = isPage(value) || isRuntimeId(value) ? value : PAGES[0].id
+  const title = PAGES.find(item => item.id === page)?.title ?? findDestination(page)?.label ?? page
+  return { page, title }
+}
+
+/** The two protocol messages that carry the current view, kept here so their validation and titles cannot drift. */
+export function startMessage(language: string, page: string, detail: AnswerLength) {
+  return { type: 'start' as const, language, ...currentPageInfo(page), detail }
+}
+export function pageMessage(page: string) {
+  return { type: 'page' as const, ...currentPageInfo(page) }
+}
 
 /** Used when the server's `ready` does not say (server/app/config.py, `max_session_seconds`). */
 export const DEFAULT_LIMIT_SECONDS = 600
@@ -159,7 +175,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const nextId = useRef(0)
   const actionRef = useRef(onAction)
   const diagnosticRef = useRef(onDiagnostic)
-  const pageRef = useRef(page)
+  const pageRef = useRef(currentPageInfo(page).page)
   // Read by the recorder's frame callback and the timers, which outlive a render.
   const live = useRef(false)
   const mutedRef = useRef(false)
@@ -175,7 +191,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   useEffect(() => {
     actionRef.current = onAction
     diagnosticRef.current = onDiagnostic
-    pageRef.current = page
+    pageRef.current = currentPageInfo(page).page
     socketFactory.current = createSocket
   })
 
@@ -404,7 +420,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     socket.current = ws
     wakeTimer.current = window.setTimeout(() => { wakeTimer.current = undefined; setWaking(true) }, WAKING_AFTER_MS)
     if (withMic) startMic(ws, audio)
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'start', language, page: pageRef.current, detail: answerLengthRef.current }))
+    ws.onopen = () => ws.send(JSON.stringify(startMessage(language, pageRef.current, answerLengthRef.current)))
     ws.onerror = () => fail(MESSAGES.connect, 'connect')
     ws.onclose = () => {
       if (socket.current !== ws) return
@@ -454,7 +470,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           break
         case 'action':
           {
-            const action = toAssistantAction(message, id => findGuideTarget(id) !== null, id => findGuideTask(id) !== null)
+            const action = toAssistantAction(message, id => findGuideTarget(id) !== null, id => findGuideTask(id) !== null,
+              id => findDestination(id) !== null)
             if (action) {
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)
@@ -627,7 +644,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   }, [])
 
   useEffect(() => {
-    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: 'page', page }))
+    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(pageMessage(page)))
   }, [page])
 
   useEffect(() => teardown, [teardown])

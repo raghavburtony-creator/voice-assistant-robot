@@ -1,8 +1,8 @@
 """The voice WebSocket, between the browser and Gemini Live. The API key never leaves the server.
 
-    client -> server  text   {"type":"start","language":"en","page":"home","detail":"short"|"detailed"}   (first message)
+    client -> server  text   {"type":"start","language":"en","page":"home","title":"Home","detail":"short"|"detailed"}   (first message)
                       binary 16 kHz mono PCM16 microphone audio
-                      text   {"type":"page","page":...} | {"type":"text","text":...} | {"type":"mic_off"}
+                      text   {"type":"page","page":...,"title":...} | {"type":"text","text":...} | {"type":"mic_off"}
                              | {"type":"context","key":...,"data":{...}|null,"announce":...} | {"type":"stop"}
                              | {"type":"capture","source":"camera"|"screen"|null}   (a share starts or stops, D-21)
                              | {"type":"frame","data":<base64 JPEG>}   (while sharing: at most 1/s, 256 KB; others dropped)
@@ -28,6 +28,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import settings
 from app.voice.app_config import LANGUAGE_NAMES, PAGES
+from app.voice.runtime import is_runtime_id, runtime_title
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 logger = logging.getLogger(__name__)
@@ -35,10 +36,10 @@ logger = logging.getLogger(__name__)
 _active = 0
 
 
-def connect_adk(language: str, page: str, detail: str):
+def connect_adk(language: str, page: str, page_title: str, detail: str):
     """Replaced in tests."""
     from app.voice.bridge import connect_adk as real
-    return real(language, page, detail)
+    return real(language, page, page_title, detail)
 
 
 def _scrub(text: str) -> str:
@@ -72,9 +73,9 @@ async def _wait(tasks: set[asyncio.Task]) -> str:
     return reason
 
 
-async def _run(ws: WebSocket, language: str, page: str, detail: str) -> str:
+async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail: str) -> str:
     from app.voice.bridge import Bridge
-    async with connect_adk(language, page, detail) as live:
+    async with connect_adk(language, page, page_title, detail) as live:
         bridge = Bridge(ws, live)
         await ws.send_json({"type": "ready", "limitSeconds": settings.max_session_seconds})
         return await _wait({
@@ -107,14 +108,15 @@ async def voice_live(ws: WebSocket) -> None:
     if not isinstance(start, dict) or start.get("type") != "start":
         await _close(ws, {"type": "error", "code": "bad_start", "message": "The voice guide could not start."})
         return
-    language, page, detail = start.get("language"), start.get("page"), start.get("detail")
+    language, page, page_title, detail = start.get("language"), start.get("page"), start.get("title"), start.get("detail")
     language = language if isinstance(language, str) and language in LANGUAGE_NAMES else "en"
-    page = page if isinstance(page, str) and page in PAGES else next(iter(PAGES))
+    page = page if isinstance(page, str) and (page in PAGES or is_runtime_id(page)) else next(iter(PAGES))
+    page_title = PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page)
     detail = "detailed" if detail == "detailed" else "short"
 
     _active += 1
     try:
-        reason = await _run(ws, language, page, detail)
+        reason = await _run(ws, language, page, page_title, detail)
     except WebSocketDisconnect:
         return
     except Exception as exc:

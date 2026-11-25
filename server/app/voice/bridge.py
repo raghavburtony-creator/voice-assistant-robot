@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import uuid
 import warnings
 from contextlib import asynccontextmanager
@@ -18,7 +19,10 @@ from fastapi import WebSocket
 
 from app.config import settings
 from app.voice.app_config import PAGES, event_prompt, system_instruction
+from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
+
+logger = logging.getLogger(__name__)
 
 APP_ID = "otto-voice"
 USER_ID = "visitor"
@@ -27,7 +31,8 @@ PAGE_PLACEHOLDER = "{page_title}"
 
 MAX_AUDIO_FRAME_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 2000
-#: A page's context: a JSON object (or null), at most this big when serialised.
+#: A page's context: a JSON object (or null), at most this many UTF-8 bytes as compact JSON (`context_bytes`). The browser caps
+#: its lists to the same number (web/src/otto/contextBudget.ts; a test checks they match), and a refused update clears its key (D-23).
 MAX_CONTEXT_BYTES = 16 * 1024
 MAX_CONTEXT_KEYS = 8
 CONTEXT_KEY_CHARS = 40
@@ -39,6 +44,14 @@ CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
 JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def context_bytes(data: object) -> int:
+    """The UTF-8 length of `data` as compact JSON, as `contextBytes` in web/src/otto/contextBudget.ts measures it.
+
+    A lone surrogate arrives escaped (`\\ud800`, 6 bytes) and json.loads makes it one character. It is counted as that
+    escape again, so a client can't fit twice the budget into an update with them."""
+    return len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "backslashreplace"))
 
 
 class LiveSession(Protocol):
@@ -89,7 +102,7 @@ class _AdkLiveSession:
 
 
 @asynccontextmanager
-async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[LiveSession]:
+async def connect_adk(language: str, page: str, page_title: str, detail: str) -> AsyncIterator[LiveSession]:
     """One ADK live session for one browser connection. ADK is imported here, so a server that never opens one never loads it."""
     from google.adk.agents import LlmAgent
     from google.adk.agents.live_request_queue import LiveRequestQueue
@@ -111,7 +124,8 @@ async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[Li
     runner = Runner(app_name=APP_ID, agent=agent, session_service=service)
     session = await service.create_session(
         app_name=APP_ID, user_id=USER_ID, session_id=uuid.uuid4().hex,
-        state={"page": page, "page_title": PAGES[page]["title"], "language": language, "screens": {}},
+        state={"page": page, "page_title": PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page),
+               "language": language, "screens": {}},
     )
     run_config = RunConfig(
         streaming_mode=StreamingMode.BIDI,
@@ -135,9 +149,15 @@ async def connect_adk(language: str, page: str, detail: str) -> AsyncIterator[Li
             pass
 
 
-def _set_page(state: dict, page: str) -> None:
+def _set_page(state: dict, page: object, title: object = None) -> None:
+    if not isinstance(page, str) or (page not in PAGES and not is_runtime_id(page)):
+        return
     state["page"] = page
-    state["page_title"] = PAGES[page]["title"]
+    state["page_title"] = PAGES[page]["title"] if page in PAGES else runtime_title(title, page)
+    # Lists are page-scoped (D-23); do not let a page update carry the previous page's destinations forward.
+    screens = state.get("screens")
+    if isinstance(screens, dict):
+        screens["destinations"] = None
 
 
 class Bridge:
@@ -158,11 +178,17 @@ class Bridge:
         key, data = event.get("key"), event.get("data")
         if not isinstance(key, str) or not 0 < len(key) <= CONTEXT_KEY_CHARS:
             return
-        if data is not None and (not isinstance(data, dict) or len(json.dumps(data)) > MAX_CONTEXT_BYTES):
-            return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
+        if data is not None and (not isinstance(data, dict) or context_bytes(data) > MAX_CONTEXT_BYTES):
+            # Never keep the previous value: a stale list must not stay usable (D-23). The content is not logged.
+            if key in screens:
+                screens[key] = None
+                self.live.state["screens"] = screens
+            logger.warning("Refused a context update for %r: not an object or over %d bytes; the key is cleared", key, MAX_CONTEXT_BYTES)
+            return
         if key not in screens and len(screens) >= MAX_CONTEXT_KEYS:
+            logger.warning("Refused a context update for %r: already %d keys", key, MAX_CONTEXT_KEYS)
             return
         screens[key] = data
         self.live.state["screens"] = screens
@@ -206,8 +232,8 @@ class Bridge:
             except ValueError:
                 continue
             kind = event.get("type") if isinstance(event, dict) else None
-            if kind == "page" and event.get("page") in PAGES:
-                _set_page(self.live.state, event["page"])
+            if kind == "page":
+                _set_page(self.live.state, event.get("page"), event.get("title"))
             elif kind == "context":
                 await self.update_context(event)
             elif kind == "text" and isinstance(event.get("text"), str) and event["text"].strip():
