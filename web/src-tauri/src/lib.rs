@@ -209,8 +209,24 @@ fn launch_allowlisted_application(action: DesktopAction) -> Result<&'static str,
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     return Err("Application launching is not supported on this platform.".into());
 
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     {
+        // gtk-launch is a short-lived desktop-entry dispatcher. Waiting for its
+        // exit status distinguishes a successful dispatch from a missing or
+        // broken desktop entry; spawn() alone would only prove gtk-launch started.
+        let status = Command::new(program).args(args).status()
+            .map_err(|error| format!("{label} could not be launched: {error}"))?;
+        if status.success() {
+            Ok(label)
+        } else {
+            Err(format!("{label} launcher exited unsuccessfully ({status})."))
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        // These platform launchers hand the request to the OS and may remain
+        // attached to the launched app, so report process spawn rather than wait.
         Command::new(program).args(args).spawn()
             .map(|_| label)
             .map_err(|error| format!("{label} could not be launched: {error}"))
