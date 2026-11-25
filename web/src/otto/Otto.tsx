@@ -223,9 +223,12 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     const off = otto.subscribe(event => {
       const next = nextBusy(busy, event)
       if (next !== busy) {
-        const announce = event.topic === 'desktop-movement' && ['success', 'failure', 'complete'].includes(event.type)
-          ? 'desktop_movement_finished'
-          : undefined
+        const terminal = ['success', 'failure', 'complete'].includes(event.type)
+        const announce = terminal && event.topic === 'desktop-action'
+          ? 'desktop_action_finished'
+          : terminal && event.topic === 'desktop-movement'
+            ? 'desktop_movement_finished'
+            : undefined
         publishContext('app_tasks', busyContext(busy = next), announce)
       }
     })

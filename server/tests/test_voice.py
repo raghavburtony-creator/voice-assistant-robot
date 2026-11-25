@@ -567,29 +567,56 @@ def test_guide_tools_refuse_ids_that_break_the_rule_and_never_offer_them_back():
     sink.close("tool-test")
 
 
-def test_move_desktop_queues_only_allowlisted_named_destinations():
+def test_desktop_action_allowlist_matches_the_browser_contract():
+    text = (WEB_CONFIG.parent / "otto" / "desktop.ts").read_text(encoding="utf-8")
+    found = re.search(r"DESKTOP_ACTIONS = \[(.*?)\] as const", text, flags=re.S)
+    assert found
+    assert re.findall(r"'([a-z_]+)'", found.group(1)) == list(get_args(tools.DesktopAction))
+
+
+def test_desktop_action_gateway_queues_only_allowlisted_actions_for_approval():
+    sink.open("tool-test")
+    ctx = _context()
+    actions = list(get_args(tools.DesktopAction))
+    assert actions == [
+        "minimize_otto", "restore_otto",
+        "move_home", "move_left", "move_right", "move_top", "move_bottom",
+        "launch_calculator", "launch_text_editor",
+    ]
+    for action in actions:
+        out = tools.desktop_action(action, ctx)
+        assert out["ok"] is True and out["requested"] == action
+        assert out["status"] == "awaiting_user_approval"
+        assert "user to approve" in out["note"]
+    for invalid in ("run_shell", "launch_terminal", "launch_anything", "move_123,456", "C:\\\\temp", "", None, 5):
+        assert tools.desktop_action(invalid, ctx)["ok"] is False
+    assert sink.drain("tool-test") == [
+        {"action": "desktop_action", "desktop_action": action} for action in actions
+    ]
+    sink.close("tool-test")
+
+
+def test_move_desktop_uses_the_permissioned_action_gateway():
     sink.open("tool-test")
     ctx = _context()
     destinations = list(get_args(tools.DesktopDestination))
     assert destinations == ["home", "desktop-left", "desktop-right", "top", "bottom"]
     for destination in destinations:
         out = tools.move_desktop(destination, ctx)
-        assert out["ok"] is True and out["requested"] == destination
-        assert "completion or failure" in out["note"]
-    for invalid in ("left", "right", "123,456", "https://example.com", "", None, 5):
-        assert tools.move_desktop(invalid, ctx)["ok"] is False
+        assert out["ok"] is True and out["status"] == "awaiting_user_approval"
     assert sink.drain("tool-test") == [
-        {"action": "desktop_move", "destination": destination} for destination in destinations
+        {"action": "desktop_action", "desktop_action": action}
+        for action in ("move_home", "move_left", "move_right", "move_top", "move_bottom")
     ]
     sink.close("tool-test")
 
 
-def test_system_instruction_limits_desktop_movement_to_named_user_requested_destinations():
+def test_system_instruction_describes_permissioned_desktop_actions():
     text = system_instruction("Otto", "en", "Home")
-    line = next(line for line in text.splitlines() if line.startswith("- move_desktop:"))
-    assert "only when the user explicitly asks" in line
-    assert "Never invent coordinates" in line
-    assert "completion/failure result" in line
+    line = next(line for line in text.splitlines() if line.startswith("- desktop_action:"))
+    assert "user to approve the exact action" in line
+    assert "Never invent an application" in line
+    assert "verification honestly" in line
 
 
 
@@ -601,6 +628,15 @@ def test_desktop_movement_completion_is_announced_to_the_voice_session():
     assert "app_tasks" in prompt
     assert "not said by the user" in prompt
 
+
+
+def test_desktop_action_completion_is_announced_to_the_voice_session():
+    from app.voice.app_config import event_prompt
+
+    prompt = event_prompt("desktop_action_finished")
+    assert prompt is not None
+    assert "verification status" in prompt
+    assert "unverified process launch" in prompt
 
 
 def test_desktop_context_is_unavailable_until_the_visitor_enables_it():

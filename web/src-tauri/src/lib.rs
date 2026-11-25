@@ -1,6 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +64,50 @@ struct DesktopContext {
     active_window: Option<ActiveWindowContext>,
 }
 
+/// A closed set of desktop actions. Values are deserialized by Tauri and unknown
+/// variants are rejected before any operating-system operation is attempted.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum DesktopAction {
+    MinimizeOtto,
+    RestoreOtto,
+    MoveHome,
+    MoveLeft,
+    MoveRight,
+    MoveTop,
+    MoveBottom,
+    LaunchCalculator,
+    LaunchTextEditor,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopActionResult {
+    action: DesktopAction,
+    ok: bool,
+    status: &'static str,
+    verification: &'static str,
+    message: String,
+}
+
+fn action_result(action: DesktopAction, ok: bool, status: &'static str, verification: &'static str, message: String) -> DesktopActionResult {
+    DesktopActionResult { action, ok, status, verification, message }
+}
+
+fn desktop_action_label(action: DesktopAction) -> &'static str {
+    match action {
+        DesktopAction::MinimizeOtto => "minimize Otto",
+        DesktopAction::RestoreOtto => "restore Otto",
+        DesktopAction::MoveHome => "move Otto to the centre of the desktop",
+        DesktopAction::MoveLeft => "move Otto to the left side of the desktop",
+        DesktopAction::MoveRight => "move Otto to the right side of the desktop",
+        DesktopAction::MoveTop => "move Otto to the top of the desktop",
+        DesktopAction::MoveBottom => "move Otto to the bottom of the desktop",
+        DesktopAction::LaunchCalculator => "launch Calculator",
+        DesktopAction::LaunchTextEditor => "launch Text Editor",
+    }
+}
+
 const MOVEMENT_MARGIN: i32 = 20;
 const MOVEMENT_STEPS: i32 = 24;
 const MOVEMENT_FRAME_MS: u64 = 16;
@@ -73,20 +119,118 @@ fn desktop_status() -> DesktopStatus {
     DesktopStatus::current()
 }
 
-/// Move Otto to one of a small set of named positions on the monitor he currently
-/// occupies. Coordinates stay inside the native host and are clamped to the
-/// monitor work area, which may have a negative desktop origin.
+/// Execute one allow-listed desktop action after the web UI has obtained explicit
+/// approval for that exact request. The native enum is the final argument boundary.
 #[tauri::command]
-async fn move_desktop_window(app: AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
-    let result = move_desktop_window_inner(&app, destination.clone()).await;
-    if let Err(message) = &result {
-        let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
-            status: "failed",
-            destination,
-            message: Some(message.clone()),
-        });
+async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionResult {
+    let window = match app.get_webview_window("main") {
+        Some(window) => window,
+        None => return action_result(action, false, "failed", "unavailable", "Otto's desktop window is unavailable.".into()),
+    };
+
+    // Approval is enforced inside the native command, so a direct webview invoke
+    // cannot skip the visitor's decision by bypassing the React confirmation UI.
+    let approved = app.dialog()
+        .message(format!("Allow Otto to {}?", desktop_action_label(action)))
+        .title("Otto desktop action")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Cancel".into()))
+        .blocking_show();
+    if !approved {
+        return action_result(action, false, "denied", "not_verified", "The visitor declined this desktop action. Nothing was executed.".into());
     }
-    result
+
+    match action {
+        DesktopAction::MinimizeOtto => {
+            if let Err(error) = window.minimize() {
+                return action_result(action, false, "failed", "unavailable", format!("Otto could not be minimized: {error}"));
+            }
+            match window.is_minimized() {
+                Ok(true) => action_result(action, true, "completed", "verified", "Otto is minimized.".into()),
+                Ok(false) => action_result(action, false, "failed", "not_verified", "The operating system did not confirm that Otto was minimized.".into()),
+                Err(error) => action_result(action, true, "completed", "unavailable", format!("Minimize was accepted, but its state could not be checked: {error}")),
+            }
+        }
+        DesktopAction::RestoreOtto => {
+            let result = window.unminimize().and_then(|_| window.show()).and_then(|_| window.set_focus());
+            if let Err(error) = result {
+                return action_result(action, false, "failed", "unavailable", format!("Otto could not be restored: {error}"));
+            }
+            match (window.is_minimized(), window.is_visible()) {
+                (Ok(false), Ok(true)) => action_result(action, true, "completed", "verified", "Otto is visible and restored.".into()),
+                _ => action_result(action, false, "failed", "not_verified", "The operating system did not confirm that Otto is visible and restored.".into()),
+            }
+        }
+        DesktopAction::MoveHome | DesktopAction::MoveLeft | DesktopAction::MoveRight | DesktopAction::MoveTop | DesktopAction::MoveBottom => {
+            let destination = match action {
+                DesktopAction::MoveHome => "home",
+                DesktopAction::MoveLeft => "desktop-left",
+                DesktopAction::MoveRight => "desktop-right",
+                DesktopAction::MoveTop => "top",
+                DesktopAction::MoveBottom => "bottom",
+                _ => unreachable!(),
+            };
+            match move_desktop_window_inner(&app, destination.to_string()).await {
+                Ok(_) => action_result(action, true, "completed", "native_api_completed", format!("Otto's move to {destination} completed through the native window API.")),
+                Err(error) => action_result(action, false, "failed", "unavailable", error),
+            }
+        }
+        DesktopAction::LaunchCalculator | DesktopAction::LaunchTextEditor => {
+            match launch_allowlisted_application(action) {
+                Ok(application) => action_result(action, true, "started", "process_spawned", format!("{application} was launched. The operating system has not confirmed that its window is ready.")),
+                Err(error) => action_result(action, false, "failed", "unavailable", error),
+            }
+        }
+    }
+}
+
+fn launch_allowlisted_application(action: DesktopAction) -> Result<&'static str, String> {
+    #[cfg(target_os = "windows")]
+    let (program, args, label): (&str, &[&str], &str) = match action {
+        DesktopAction::LaunchCalculator => ("calc.exe", &[], "Calculator"),
+        DesktopAction::LaunchTextEditor => ("notepad.exe", &[], "Text Editor"),
+        _ => return Err("This action is not an application launch.".into()),
+    };
+
+    #[cfg(target_os = "macos")]
+    let (program, args, label): (&str, &[&str], &str) = match action {
+        DesktopAction::LaunchCalculator => ("open", &["-a", "Calculator"], "Calculator"),
+        DesktopAction::LaunchTextEditor => ("open", &["-a", "TextEdit"], "Text Editor"),
+        _ => return Err("This action is not an application launch.".into()),
+    };
+
+    #[cfg(target_os = "linux")]
+    let (program, args, label): (&str, &[&str], &str) = match action {
+        DesktopAction::LaunchCalculator => ("gtk-launch", &["org.gnome.Calculator"], "Calculator"),
+        DesktopAction::LaunchTextEditor => ("gtk-launch", &["org.gnome.TextEditor"], "Text Editor"),
+        _ => return Err("This action is not an application launch.".into()),
+    };
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    return Err("Application launching is not supported on this platform.".into());
+
+    #[cfg(target_os = "linux")]
+    {
+        // gtk-launch is a short-lived desktop-entry dispatcher. Waiting for its
+        // exit status distinguishes a successful dispatch from a missing or
+        // broken desktop entry; spawn() alone would only prove gtk-launch started.
+        let status = Command::new(program).args(args).status()
+            .map_err(|error| format!("{label} could not be launched: {error}"))?;
+        if status.success() {
+            Ok(label)
+        } else {
+            Err(format!("{label} launcher exited unsuccessfully ({status})."))
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        // These platform launchers hand the request to the OS and may remain
+        // attached to the launched app, so report process spawn rather than wait.
+        Command::new(program).args(args).spawn()
+            .map(|_| label)
+            .map_err(|error| format!("{label} could not be launched: {error}"))
+    }
 }
 
 async fn move_desktop_window_inner(app: &AppHandle, destination: String) -> Result<DesktopMovementResult, String> {
@@ -129,6 +273,11 @@ async fn move_desktop_window_inner(app: &AppHandle, destination: String) -> Resu
         let x = (start.x as f64 + (target_x as f64 - start.x as f64) * eased).round() as i32;
         let y = (start.y as f64 + (target_y as f64 - start.y as f64) * eased).round() as i32;
         if let Err(error) = window.set_position(PhysicalPosition::new(x, y)) {
+            let _ = app.emit("otto://desktop-movement", DesktopMovementEvent {
+                status: "failed",
+                destination: destination.clone(),
+                message: Some(format!("Otto could not finish moving: {error}")),
+            });
             return Err(format!("Otto could not finish moving: {error}"));
         }
         tokio::time::sleep(Duration::from_millis(MOVEMENT_FRAME_MS)).await;
@@ -251,7 +400,8 @@ fn active_window_context() -> Option<ActiveWindowContext> { None }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, move_desktop_window])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, desktop_action])
         .setup(|app| {
             // Informational lifecycle event only; it grants no desktop action.
             app.emit("otto://desktop-ready", DesktopStatus::current())?;
@@ -266,7 +416,25 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_destination;
+    use super::{desktop_action_label, resolve_destination, DesktopAction};
+
+    #[test]
+    fn every_native_action_has_a_specific_confirmation_label() {
+        let actions = [
+            DesktopAction::MinimizeOtto,
+            DesktopAction::RestoreOtto,
+            DesktopAction::MoveHome,
+            DesktopAction::MoveLeft,
+            DesktopAction::MoveRight,
+            DesktopAction::MoveTop,
+            DesktopAction::MoveBottom,
+            DesktopAction::LaunchCalculator,
+            DesktopAction::LaunchTextEditor,
+        ];
+        for action in actions {
+            assert!(!desktop_action_label(action).is_empty());
+        }
+    }
 
     #[test]
     fn named_destinations_stay_inside_a_negative_origin_work_area() {

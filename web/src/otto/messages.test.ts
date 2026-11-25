@@ -72,3 +72,16 @@ describe('card actions', () => {
       expect(toAssistantAction({ action: 'card', card })).toBeNull()
   })
 })
+
+describe('desktop action gateway messages', () => {
+  it('accepts only the closed desktop action allow-list', () => {
+    const message = parseServerMessage('{"type":"action","action":"desktop_action","desktop_action":"launch_calculator"}')
+    expect(message).toMatchObject({ type: 'action', action: 'desktop_action', desktop_action: 'launch_calculator' })
+    for (const desktop_action of [
+      'minimize_otto', 'restore_otto', 'move_home', 'move_left', 'move_right',
+      'move_top', 'move_bottom', 'launch_calculator', 'launch_text_editor',
+    ]) expect(toAssistantAction({ action: 'desktop_action', desktop_action })).toEqual({ action: 'desktop_action', desktop_action })
+    for (const desktop_action of ['run_shell', 'launch_terminal', 'launch_anything', 'move_0,0', '', 3, null])
+      expect(toAssistantAction({ action: 'desktop_action', desktop_action })).toBeNull()
+  })
+})

@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-24**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-25**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -42,6 +42,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-22 | Runtime authority is a chain of checks, not one component | architecture | current |
 | D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
 | D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
+| D-25 | Desktop actions require per-action approval and a closed native allow-list | security | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
@@ -302,3 +303,16 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 **Why:** Desktop awareness is useful for positioning and high-level context, but a desktop window title and cursor position can still reveal personal information. Explicit, visible, session-scoped consent keeps the capability bounded and revocable without adding a second observation pipeline.
 
 **Where:** web/src/otto/VoiceAssistant.tsx (visible opt-in), web/src/otto/Otto.tsx (session lifecycle and context publication), web/src/otto/desktop.ts, web/src-tauri/src/lib.rs (native metadata boundary), server/app/voice/tools.py (get_desktop_context), and server/tests/test_voice.py.
+
+## D-25 Desktop actions require per-action approval and a closed native allow-list
+
+**Decision:**
+- Desktop actions are proposed by the existing ADK tool layer and pass through the existing server sink and browser action validation. No second orchestrator or autonomous native decision-maker is introduced.
+- The native Tauri command must ask the visitor to approve each exact action before execution. The approval prompt is enforced inside the native command, so a direct webview invocation cannot bypass it. Declining performs no action; approval is scoped to that one request.
+- The native command accepts only a closed enum: minimize Otto, restore Otto, move Otto to one of five named positions, launch Calculator, or launch Text Editor. Unknown actions are rejected by native deserialization.
+- Application launching uses fixed platform-specific application identifiers with no caller-provided executable, URL, path or arguments. No shell command, arbitrary application, filesystem operation, keystroke or general input automation is exposed.
+- Results distinguish verified window state, movement accepted/completed by the native window API, and a process successfully spawned. A spawned process is not described as a verified, ready application window.
+
+**Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
+
+**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src-tauri/src/lib.rs` (native confirmation dialog), `web/src/otto/Otto.tsx` (result announcement), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.

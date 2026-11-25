@@ -19,7 +19,7 @@ Each part of the kit has one job:
 | Wire protocol | `route.py` docstring, `messages.ts` | One WebSocket: 16 kHz PCM up, 24 kHz PCM down, JSON messages both ways | D-01, D-04 |
 | Session | `route.py`, `bridge.py`, `config.py` | One ADK live session per connection. In memory, deleted on close, capped in length and number | D-04, D-09 |
 | Voice input and output | `bridge.py` (input pump), `events.py` (typed model events), `output.py` (one writer, interruption drops queued speech) | Listening is separate from speaking: input never waits on speech, speech never blocks the model | D-05 |
-| Tools | `tools.py`, `sink.py` | The only way the model acts. Every argument is checked against a `Literal` or a list the page reported | D-02, D-03, D-14, D-16, D-18 |
+| Tools | `tools.py`, `sink.py` | The only way the model acts. Every argument is checked against a `Literal` or a list the page reported; desktop actions require per-action visitor approval and native allow-list validation | D-02, D-03, D-14, D-16, D-18, D-25 |
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |
 | Avatar events | `awareness/avatar.ts`, `avatar.py`, `bridge.py` (`avatar`) | A backend tells Otto's character how things are going (working, asking permission, success...). Presentation only: it becomes ordinary awareness events, never a second bus, and carries no authority | D-19, D-22 |
@@ -36,8 +36,9 @@ Authority is a chain, not one component (D-22). Each link can only narrow what t
 1. **The model proposes.** It calls a tool. What it says carries no authority: speech, transcripts, and what a frame or the page snapshot shows are never turned into an action (D-17, D-18, D-21).
 2. **The server checks.** `tools.py` refuses any argument outside its `Literal`s or the ids the page reported (D-02, D-03, D-14, D-16). Per-session limits live here too: session state, and the sink's cap of 16 queued actions.
 3. **The browser checks again.** `toAssistantAction` and `toAssistantCard` in `messages.ts` (D-02, D-18). A test keeps the action kinds the tools send equal to the ones the browser accepts.
-4. **The action is carried out.** Page actions (`navigate`, `command`) by the host's `onAction`, under its own rules. Otto's own actions (`guide`, `task`, `task_move`) by the guide, in `Otto.tsx`, and `card` by the panel; each is then passed to `onAction` too. The host controls Otto's own actions upstream, through the targets and tasks it reports.
-5. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets, and hold back what doesn't deserve it (D-14, D-16).
+4. **Desktop actions require visitor approval and native validation.** `App.tsx` confirms the exact requested action before `desktop.ts` invokes the Tauri command. Rust accepts only its closed `DesktopAction` enum, validates again, and returns a structured execution/verification result (D-25).
+5. **The action is carried out.** Page actions (`navigate`, `command`) by the host's `onAction`, under its own rules. Otto's own actions (`guide`, `task`, `task_move`) by the guide, in `Otto.tsx`, and `card` by the panel; each is then passed to `onAction` too. The host controls Otto's own actions upstream, through the targets and tasks it reports.
+6. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets, and hold back what doesn't deserve it (D-14, D-16).
 
 **The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed.
 
