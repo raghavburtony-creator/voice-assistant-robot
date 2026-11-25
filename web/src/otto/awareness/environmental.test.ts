@@ -7,6 +7,7 @@ describe("environmental proposal validation", () => {
       topic: "object", message: "  A parcel\u0000 is visible\n ", action: "navigate", where: "#save",
     })).toEqual({ topic: "object", message: "A parcel is visible" })
     expect(parseEnvironmentalProposal({ topic: "activity", message: "x".repeat(500) })?.message).toHaveLength(120)
+    expect(parseEnvironmentalProposal({ topic: "object", message: "See https://example.test now." })?.message).toBe("See now.")
   })
 
   it("rejects malformed proposals, unknown topics and empty text", () => {
