@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-28**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-29**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -45,12 +45,13 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-25 | Desktop actions require per-action approval and a closed native allow-list | security | current |
 | D-26 | Continuity identity is supplied by the host; cross-session task state is opt-in and bounded | continuity, privacy | current |
 | D-27 | The server voice layer is not a pure core/shell architecture | layers | current |
+| D-28 | Defer spatial/AR renderer selection until a target is specified | robot, architecture | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | answered by D-26 |
 | Q-04 | Is runtime authority a chain, or one component? | architecture | answered by D-22 |
 | Q-05 | How are the server's layers enforced? | layers | dropped |
-| Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
+| Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | answered by D-28 |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
 
@@ -342,3 +343,12 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 **Why:** A test that merely copies the web layer check would assert an architecture the server does not currently have. Treating the ADK-facing tool module as pure would be misleading, and introducing a broad refactor solely to answer this question would add scope without a demonstrated need. If a future change creates a stable pure server core, it should define that boundary explicitly and add focused import tests with it.
 
 **Where:** `server/app/voice/tools.py` (ADK imports and tool definitions), `app_config.py` (host configuration), `route.py` and `bridge.py` (transport/session boundary), and the extracted provider-independent modules listed above. Q-05 remains in the open-question history with status `dropped by D-27`.
+
+
+## D-28 Defer spatial/AR renderer selection until a target is specified
+
+**Decision:** Q-06 is answered by deferring a renderer choice, not by selecting one of its proposed implementation options. D-12 remains current: the supported web mascot continues to use its single WebGL 2 shader and does not acquire a 3D library or a second renderer as part of the current product. The project has not specified a concrete spatial/AR target, such as a required device class, browser/runtime, interaction model, placement/occlusion needs, or minimum capability set. Until a product issue defines those requirements, Otto will not add a spatial renderer or commit to extending the existing shader. When a target is defined, evaluate a separate presentation adapter that consumes the existing renderer-independent robot and gesture rules before considering changes to the web renderer. The existing robot state and gesture modules remain the reusable source of behaviour; a spatial presentation must not create a second robot state machine.
+
+**Why:** "Spatial/AR" alone does not identify a rendering environment or its constraints. WebXR-capable mobile browsers, headset runtimes and platform-native AR have materially different support, input, tracking, deployment and rendering requirements. Choosing a renderer now would guess at those constraints and risk either weakening D-12 or building an unused abstraction. The code already has a useful seam: `robot.ts` and `gestures.ts` hold renderer-independent expression and gesture data, while `ClayScene.tsx` adapts that data to the Clay Robot's `ClayControl` and WebGL implementation. A future target can use that seam without making the web renderer responsible for spatial presentation.
+
+**Where:** D-12; `web/src/otto/robot/robot.ts` (expressions and face data); `web/src/otto/robot/gestures.ts` (pure gesture definitions/controller); `web/src/otto/robot/ClayScene.tsx` (current React/WebGL presentation adapter); `web/src/components/originkit/ui/clay-robot.tsx` (single WebGL 2 renderer); and issue #12, which must be refined with a named target and user-facing requirements before implementation. Q-06 is answered by D-28; this decision does not claim that spatial/AR support has shipped.
