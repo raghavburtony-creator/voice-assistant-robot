@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-27**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-28**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -332,3 +332,12 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 **Why:** Q-03 is about who can safely connect two sessions, not about inventing a new runtime authority. A host already owns the application identity and its authentication boundary. Keeping the identity opaque and the stored record to task ids/time limits what continuity adds to the privacy surface. Seven days is long enough to resume an interrupted task on another device without turning the kit into a general visitor-memory system. No identity means no cross-session retention, preserving D-20's safer default.
 
 **Where:** The host-to-server session integration will carry the opaque identity; the continuity record will live behind a small server-side store used by the existing task/context path. web/src/otto/guidance/task.ts remains the source of the resume shape and validation rules, while the server persists only the bounded ids/time. docs/architecture.md and docs/roadmap.md define the capability boundary; implementation issues under #8 must cite D-26.
+
+
+## D-27 The server voice layer is not a pure core/shell architecture
+
+**Decision:** Q-05 is dropped. The proposed boundary does not exist in the server in the form the question assumed, so there is no meaningful equivalent of the web kit's two-layer import test to add now. `server/app/voice/tools.py` is an ADK tool adapter: it imports `FunctionTool` and `ToolContext` from `google.adk.tools` and combines tool registration, argument checks and calls into the session sink. `app_config.py` holds host-specific pages, commands and prompt configuration; it is not a pure rules layer. `route.py` and `bridge.py` are FastAPI/WebSocket and ADK session adapters. Some provider-independent rules have already been extracted into small modules such as `events.py`, `continuity.py`, `perception.py`, `runtime.py`, `context.py` and `avatar.py`, but the server does not define or enforce a comprehensive core/shell boundary around them.
+
+**Why:** A test that merely copies the web layer check would assert an architecture the server does not currently have. Treating the ADK-facing tool module as pure would be misleading, and introducing a broad refactor solely to answer this question would add scope without a demonstrated need. If a future change creates a stable pure server core, it should define that boundary explicitly and add focused import tests with it.
+
+**Where:** `server/app/voice/tools.py` (ADK imports and tool definitions), `app_config.py` (host configuration), `route.py` and `bridge.py` (transport/session boundary), and the extracted provider-independent modules listed above. Q-05 remains in the open-question history with status `dropped by D-27`.
