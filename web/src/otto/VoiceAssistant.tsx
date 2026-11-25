@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ASSISTANT_NAME } from '../otto.config'
+import { isDesktopRuntime } from './desktop'
 import type { AnswerLength } from './consent'
 import type { AssistantCard } from './messages'
 import ScreenShare, { canShare } from './ScreenShare'
@@ -44,7 +45,7 @@ export function VoiceCard({ card, onAsk }: { card: AssistantCard; onAsk: (text: 
 
 const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
 
-export default function VoiceAssistant({ assistant, onClose }: { assistant: Assistant; onClose: () => void }) {
+export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void }) {
   const {
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
@@ -189,6 +190,20 @@ export default function VoiceAssistant({ assistant, onClose }: { assistant: Assi
     </Notice>}
 
     {canShare() && <ScreenShare open={connected} sendCapture={assistant.sendCapture} sendFrame={assistant.sendFrame} />}
+
+    {active && isDesktopRuntime() && <fieldset className="voice-assistant__lengths">
+      <legend>Desktop awareness</legend>
+      <label className="ui-choice">
+        <input type="checkbox" checked={desktopAwarenessEnabled}
+          onChange={event => onDesktopAwarenessChange(event.target.checked)} />
+        <span>Share desktop context with Otto</span>
+      </label>
+      <p className="voice-assistant__why">
+        While enabled in this conversation, Otto receives your monitor and window positions, visibility, cursor position,
+        and (on Windows) the active app name and window title. This is metadata only: no screenshots, app contents or keystrokes.
+        Turn it off any time. It resets when the conversation ends.
+      </p>
+    </fieldset>}
 
     <ol className="voice-assistant__log" ref={log} aria-label="Conversation">
       {transcript.length === 0 && <li className="voice-assistant__hint">Ask what a page does, how to use it, or say where you want to go.</li>}
