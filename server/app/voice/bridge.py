@@ -356,6 +356,8 @@ class Bridge:
                 await self.live.send_text(event["text"][:MAX_TEXT_CHARS])
             elif kind == "capture" and (event.get("source") in CAPTURE_SOURCES or event.get("source") is None):
                 self.capture = event.get("source")
+                # Mirror only the active source into ephemeral session state for checked tools.
+                self.live.state["capture_source"] = self.capture
                 for source in CAPTURE_SOURCES:
                     self.perception.set_consent(source, source == self.capture)
                 if self.capture is None:
@@ -399,7 +401,11 @@ class Bridge:
         async for event in self.live.events():
             # A tool runs between its call and response events, so drain after every event, before this event's audio.
             for action in sink.drain(self.live.session_id):
-                self._deliver(Action(action))
+                environmental = action.get("environmental") if isinstance(action, dict) else None
+                if environmental is not None:
+                    self.out.control({"type": "environmental", "proposal": environmental})
+                else:
+                    self._deliver(Action(action))
             for item in self.translator.translate(event):
                 self._deliver(item)
         await self.out.flush()  # the model is done: everything it said goes out before `ended`
