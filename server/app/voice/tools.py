@@ -243,7 +243,7 @@ def move_desktop(destination: DesktopDestination, tool_context: ToolContext) -> 
         "top": "move_top",
         "bottom": "move_bottom",
     }
-    if destination not in mapping:
+    if not isinstance(destination, str) or destination not in mapping:
         return {"ok": False, "error": "Unknown desktop destination."}
     return desktop_action(mapping[destination], tool_context)
 
