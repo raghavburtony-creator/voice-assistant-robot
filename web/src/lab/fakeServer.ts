@@ -123,12 +123,15 @@ export class FakeVoiceServer {
           ? { task: running.id, step: running.stepId, savedAt: Date.now() } : null
         try { if (this.continuitySaved) localStorage.setItem('otto-lab:continuity-task', JSON.stringify(this.continuitySaved)); else localStorage.removeItem('otto-lab:continuity-task') } catch { /* lab persistence is best-effort */ }
       }
-      if (message.key === 'guide_tasks' && this.continuitySaved) {
+      const saved = this.continuitySaved
+      if (message.key === 'guide_tasks' && saved) {
         const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
-        const match = tasks?.find(task => task.id === this.continuitySaved?.task)
-        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(this.continuitySaved.step)) { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ } }
-        else {
-          this.send({ type: 'action', action: 'task_resume', task: this.continuitySaved.task, step: this.continuitySaved.step })
+        const match = tasks?.find(task => task.id === saved.task)
+        if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(saved.step)) {
+          this.continuitySaved = null
+          try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
+        } else {
+          this.send({ type: 'action', action: 'task_resume', task: saved.task, step: saved.step })
           this.continuitySaved = null
           try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }
         }
