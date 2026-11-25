@@ -96,11 +96,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const firstPage = useRef(true)
   useEffect(() => {
     if (firstPage.current) { firstPage.current = false; return }
+    // A runtime destination is a new host-supported interface. Drop the previous page's
+    // allow-lists immediately; the new page will publish its own registries below.
+    clearPageContext()
     otto.notify({ type: 'section', topic: page })
   }, [page, otto])
-  // A runtime destination is a new host-supported interface. Drop the previous page's
-  // allow-lists immediately; the new page will publish its own registries below.
-  useEffect(() => { clearPageContext() }, [page])
   const [open, setOpen] = useState(false)
   const [desktopAwarenessEnabled, setDesktopAwarenessEnabled] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
