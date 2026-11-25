@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDesktopContext, getDesktopStatus, isDesktopRuntime, moveDesktopTo, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
+import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, moveDesktopTo, onDesktopError, onDesktopMovement, onDesktopReady } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -54,12 +54,32 @@ describe('desktop movement bridge', () => {
     delete window.__TAURI__
   })
 
-  it('accepts only the known movement action and destination', () => {
-    expect(toAssistantAction({ action: 'desktop_move', destination: 'top' })).toEqual({
-      action: 'desktop_move', destination: 'top',
+  it('accepts only the permissioned desktop action allow-list', () => {
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toEqual({
+      action: 'desktop_action', desktop_action: 'move_top',
     })
-    expect(toAssistantAction({ action: 'desktop_move', destination: 'C:\\\\temp' })).toBeNull()
-    expect(toAssistantAction({ action: 'desktop_move', destination: 12 })).toBeNull()
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'run_shell' })).toBeNull()
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 12 })).toBeNull()
+  })
+
+  it('sends only an allow-listed action to the native gateway', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      action: 'launch_calculator', ok: true, status: 'started',
+      verification: 'process_spawned', message: 'Calculator was launched.',
+    })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+      ok: true, status: 'started', verification: 'process_spawned',
+    })
+    expect(invoke).toHaveBeenCalledWith('desktop_action', { action: 'launch_calculator' })
+    delete window.__TAURI__
+  })
+
+  it('does not execute desktop actions in browser mode', async () => {
+    delete window.__TAURI__
+    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'unavailable',
+    })
   })
 })
 
