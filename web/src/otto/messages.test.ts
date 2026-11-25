@@ -40,6 +40,19 @@ describe('task actions', () => {
   })
 })
 
+describe('task continuity resume actions', () => {
+  it('accepts only a task and step currently offered by the page', () => {
+    const m = parseServerMessage('{"type":"action","action":"task_resume","task":"show-message","step":"confirm"}')
+    expect(m).toMatchObject({ type: 'action', action: 'task_resume', task: 'show-message', step: 'confirm' })
+    const offered = (id: string) => id === 'show-message'
+    expect(toAssistantAction({ action: 'task_resume', task: 'show-message', step: 'confirm' }, undefined, offered))
+      .toEqual({ action: 'task_resume', task: 'show-message', step: 'confirm' })
+    expect(toAssistantAction({ action: 'task_resume', task: 'missing', step: 'confirm' }, undefined, offered)).toBeNull()
+    expect(toAssistantAction({ action: 'task_resume', task: 'show-message', step: 'missing step' }, undefined, offered)).toBeNull()
+    expect(toAssistantAction({ action: 'task_resume', task: 'show-message', step: 4 }, undefined, offered)).toBeNull()
+  })
+})
+
 describe('task moves', () => {
   it('pass only stop, back or next, checked again in the browser', () => {
     const m = parseServerMessage('{"type":"action","action":"task_move","move":"back"}')
