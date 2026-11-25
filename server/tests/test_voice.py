@@ -556,11 +556,13 @@ def test_a_stop_and_reshare_invalidate_an_environmental_proposal_already_queued(
             yield SimpleNamespace(turn_complete=True)
         live.events = events
         ws = RecordingSocket()
-        bridge = Bridge(ws, live)  # type: ignore[arg-type]
-        bridge.capture = "camera"
-        bridge.capture_generation = 3
-        live.state["capture_source"] = "camera"
-        live.state["capture_generation"] = 3
+        bridge = Bridge(ScriptedSocket(
+            {"type": "capture", "source": "camera", "generation": 1},
+            {"type": "capture", "source": None, "generation": 2},
+            {"type": "capture", "source": "camera", "generation": 3},
+        ), live)  # type: ignore[arg-type]
+        await bridge.browser_to_model()
+        assert bridge.capture == "camera" and bridge.capture_generation == 3
         assert sink.put(live.session_id, {
             "environmental": {"generation": 1, "topic": "object", "message": "Old camera observation."},
         })
