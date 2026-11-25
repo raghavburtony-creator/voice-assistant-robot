@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +94,20 @@ fn action_result(action: DesktopAction, ok: bool, status: &'static str, verifica
     DesktopActionResult { action, ok, status, verification, message }
 }
 
+fn desktop_action_label(action: DesktopAction) -> &'static str {
+    match action {
+        DesktopAction::MinimizeOtto => "minimize Otto",
+        DesktopAction::RestoreOtto => "restore Otto",
+        DesktopAction::MoveHome => "move Otto to the centre of the desktop",
+        DesktopAction::MoveLeft => "move Otto to the left side of the desktop",
+        DesktopAction::MoveRight => "move Otto to the right side of the desktop",
+        DesktopAction::MoveTop => "move Otto to the top of the desktop",
+        DesktopAction::MoveBottom => "move Otto to the bottom of the desktop",
+        DesktopAction::LaunchCalculator => "launch Calculator",
+        DesktopAction::LaunchTextEditor => "launch Text Editor",
+    }
+}
+
 const MOVEMENT_MARGIN: i32 = 20;
 const MOVEMENT_STEPS: i32 = 24;
 const MOVEMENT_FRAME_MS: u64 = 16;
@@ -112,6 +127,18 @@ async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionR
         Some(window) => window,
         None => return action_result(action, false, "failed", "unavailable", "Otto's desktop window is unavailable.".into()),
     };
+
+    // Approval is enforced inside the native command, so a direct webview invoke
+    // cannot skip the visitor's decision by bypassing the React confirmation UI.
+    let approved = app.dialog()
+        .message(format!("Allow Otto to {}?", desktop_action_label(action)))
+        .title("Otto desktop action")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Cancel".into()))
+        .blocking_show();
+    if !approved {
+        return action_result(action, false, "denied", "not_verified", "The visitor declined this desktop action. Nothing was executed.".into());
+    }
 
     match action {
         DesktopAction::MinimizeOtto => {
@@ -352,6 +379,7 @@ fn active_window_context() -> Option<ActiveWindowContext> { None }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![desktop_status, desktop_context, desktop_action])
         .setup(|app| {
             // Informational lifecycle event only; it grants no desktop action.
