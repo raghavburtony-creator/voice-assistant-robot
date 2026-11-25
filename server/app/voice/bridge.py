@@ -21,6 +21,7 @@ from app.config import settings
 from app.voice.events import Action, EventTranslator, Interrupted, Speech, Transcript, TurnComplete, VoiceEvent
 from app.voice.output import OutputChannel
 from app.voice.app_config import PAGES, event_prompt, system_instruction
+from app.voice.continuity import ContinuityContext
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
@@ -61,6 +62,7 @@ def context_bytes(data: object) -> int:
 class LiveSession(Protocol):
     session_id: str
     state: dict
+    continuity: ContinuityContext | None
 
     def events(self) -> AsyncIterator[Any]: ...
     async def send_audio(self, pcm: bytes) -> None: ...  # 16 kHz PCM16
@@ -76,6 +78,8 @@ class _AdkLiveSession:
         self.session_id: str = session.id
         # The same dict the tools read through tool_context.state.
         self.state: dict = session.state
+        # Host-supplied identity stays outside ADK state so it cannot become model context.
+        self.continuity: ContinuityContext | None = None
 
     async def events(self) -> AsyncIterator[Any]:
         with warnings.catch_warnings():
