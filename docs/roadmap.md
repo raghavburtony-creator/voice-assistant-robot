@@ -43,3 +43,13 @@ What exists already: guided tasks with observed progress (D-16), awareness `task
 Resuming a task after a reload is filed now that TA-4 has answered Q-02 with D-20: within a tab, as ids only.
 
 Milestones are set on GitHub once `.github/workflows/sync-labels.yml` has created them. Until then each issue names its milestone in its first line.
+
+## E2 Continuity across interfaces: first slices
+
+Q-03 is answered by D-26. The implementation starts with a narrow cross-session task-resume path rather than general visitor memory.
+
+| Slice | Outcome | Blocked by | Decisions |
+|---|---|---|---|
+| **CI-1** | A host can supply an opaque continuity identity without exposing it to the browser/model, and continuity is explicitly opt-in | none | D-01, D-19, D-26 |
+| **CI-2** | The active guided task can be persisted and resumed in a later session/device using only `{scope, task, step, savedAt}`, with 7-day expiry and deletion on completion/cancel/withdrawal | CI-1 | D-20, D-26 |
+| **CI-3** | A task can resume across supported app interfaces while runtime destinations remain host-mapped ids; no URL or global identity crosses the boundary | CI-2, #63 | D-23, D-26 |

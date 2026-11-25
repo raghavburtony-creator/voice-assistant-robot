@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-25**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-27**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -43,9 +43,10 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
 | D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
 | D-25 | Desktop actions require per-action approval and a closed native allow-list | security | current |
+| D-26 | Continuity identity is supplied by the host; cross-session task state is opt-in and bounded | continuity, privacy | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
-| Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
+| Q-03 | Who is the visitor, across sessions and interfaces? | privacy | answered by D-26 |
 | Q-04 | Is runtime authority a chain, or one component? | architecture | answered by D-22 |
 | Q-05 | How are the server's layers enforced? | layers | open |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
@@ -316,3 +317,18 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 **Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
 
 **Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src-tauri/src/lib.rs` (native confirmation dialog), `web/src/otto/Otto.tsx` (result announcement), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
+
+## D-26 Continuity identity is supplied by the host; cross-session task state is opt-in and bounded
+
+**Decision:**
+- **Identity comes from the host.** The host supplies an opaque continuity identity to the server when it opens a session. The kit never derives, guesses or invents an identity from the visitor, browser, device, voice, camera or page. The transport and authentication of that identity are a host/deployment concern; the server accepts it only through that trusted integration boundary. The identity is never sent to the browser or model as conversational content.
+- **Continuity is opt-in.** A host must explicitly enable cross-session continuity and tell the visitor that task state may be retained. With no host identity, or with continuity disabled, Otto keeps the D-20 same-tab behaviour only.
+- **What is kept.** The first continuity slice stores only the minimum needed to resume one guided task: an app/host scope, task id, step id and saved time. It never stores task prose, target text, page snapshots, conversation transcripts, camera/screen frames or typed values. The current task specification still comes from the app that reports the task.
+- **Retention.** An unfinished continuity record expires after 7 days, is removed when the task is completed or cancelled, and is deleted when the visitor withdraws continuity. A new task replaces the previous running-task record rather than creating an unbounded history. Expired or malformed records are ignored.
+- **Scope.** A record is valid only for the host/app scope that created it. Cross-device and cross-session resume therefore means the same host can recognise the same opaque identity; it does not grant Otto a global identity or allow one app to read another app's state.
+- **Visitor control.** The host owns the visitor-facing consent and clear controls. The kit provides the continuity state and must make withdrawal/deletion take effect for subsequent resumes; it must not silently re-enable retention after withdrawal.
+- **Storage.** The persistent store is a host-selected server-side adapter behind the existing voice/session boundary. InMemorySessionService remains the live ADK session store, not the continuity store. The first implementation must keep the storage interface narrow so another backend can replace it without changing the guide or ADK orchestration.
+
+**Why:** Q-03 is about who can safely connect two sessions, not about inventing a new runtime authority. A host already owns the application identity and its authentication boundary. Keeping the identity opaque and the stored record to task ids/time limits what continuity adds to the privacy surface. Seven days is long enough to resume an interrupted task on another device without turning the kit into a general visitor-memory system. No identity means no cross-session retention, preserving D-20's safer default.
+
+**Where:** The host-to-server session integration will carry the opaque identity; the continuity record will live behind a small server-side store used by the existing task/context path. web/src/otto/guidance/task.ts remains the source of the resume shape and validation rules, while the server persists only the bounded ids/time. docs/architecture.md and docs/roadmap.md define the capability boundary; implementation issues under #8 must cite D-26.
