@@ -110,7 +110,7 @@ export async function onDesktopError(handler: (message: string) => void): Promis
 export type DesktopContext = {
   platform: string
   monitor: { x: number; y: number; width: number; height: number }
-  otto: { x: number; y: number; width: number; height: number; visible: boolean }
+  otto: { x: number | null; y: number | null; width: number; height: number; visible: boolean }
   cursor: { x: number; y: number }
   activeWindow: { application: string; title: string } | null
 }
