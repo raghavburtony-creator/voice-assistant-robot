@@ -90,7 +90,7 @@ describe('what the visitor sees', () => {
     const r = createReactor(SETTINGS)
     const asked = toOttoEvents({ kind: 'permission', id: 'send', state: 'asking', message: 'May I send this?' }).map(e => r.decide(e, AWAKE, 0))[0]
     expect(asked).toMatchObject({ size: 'gesture', face: 'alert', gesture: 'nod', look: 'user', say: 'May I send this?' })
-    expect(r.activeAsk(1)).toMatchObject({ id: 'send' }) // held: no notice delay, and no timer ends it
+    expect(r.activeAsk(1)).toMatchObject({ id: 'send', message: 'May I send this?' }) // held: no notice delay; the question stays for the bubble
     expect(r.awareness(AWAKE, 1).app.asking).toMatchObject({ id: 'send' })
     expect(r.activeTask(SETTINGS.taskNoticeMs + 1)).toBeNull() // not a task
     toOttoEvents({ kind: 'permission', id: 'send', state: 'granted' }).forEach(e => r.decide(e, AWAKE, 5000))

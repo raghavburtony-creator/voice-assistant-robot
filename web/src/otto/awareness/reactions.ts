@@ -72,7 +72,9 @@ export type Awareness = {
   recent: readonly { type: OttoEventType; topic?: string; at: number; size: ReactionSize }[]
 }
 
-export type TaskInfo = { id: string; topic?: string; where?: StagePlace; since: number }
+export type TaskInfo = { id: string; topic?: string; where?: StagePlace; since: number
+  /** For a permission request: the question, shown in his bubble for as long as it is open. */
+  message?: string }
 
 /** Your own judgement, asked first. Return a Reaction (or { size: 'none' }) to decide, undefined to leave it to Otto. */
 export type ReactionRule = (event: Readonly<OttoEvent>, awareness: Readonly<Awareness>) => Omit<Reaction, 'why'> | undefined
@@ -188,7 +190,7 @@ export function createReactor(initial: AwarenessSettings): Reactor {
   function track(event: OttoEvent, now: number) {
     for (const [id, t] of tasks) if (now - t.since > TASK_STALE_MS) tasks.delete(id)
     for (const [id, t] of asks) if (now - t.since > TASK_STALE_MS) asks.delete(id)
-    if (event.type === 'permission' && event.task) asks.set(event.task, { id: event.task, topic: event.topic, where: event.where, since: now })
+    if (event.type === 'permission' && event.task) asks.set(event.task, { id: event.task, topic: event.topic, where: event.where, since: now, message: event.message })
     if (event.type === 'task' && event.task) tasks.set(event.task, { id: event.task, topic: event.topic, where: event.where, since: now })
     if (event.type === 'section') section = event.topic ?? (typeof event.where === 'string' ? event.where : 'section')
     if (event.type === 'waiting') waiting = event.where ?? 'page'

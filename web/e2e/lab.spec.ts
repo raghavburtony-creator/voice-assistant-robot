@@ -45,6 +45,8 @@ test('the server tells Otto how things are going: a permission request reaches t
   // The question reaches the page through the whole path (wire, check, Otto's event, his judgement) and is said to screen
   // readers, even in a conversation, where his own voice keeps the gestures.
   await expect(page.locator('.otto-sr').filter({ hasText: 'May I send this for you?' })).toHaveCount(1)
+  // And in the panel as visible text, for a visitor who sees Otto but does not use a screen reader.
+  await expect(panel.getByText('May I send this for you?')).toBeVisible()
   // The other answers and a job's start and end are accepted without error (the lab fails a test on any console error).
   for (const name of ['Server: permission denied', 'Server: a long job starts', 'Server: the job succeeds']) {
     await page.getByRole('button', { name }).click()

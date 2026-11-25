@@ -34,7 +34,7 @@ export type AwarenessOutput = {
   thinking: boolean
   /** Otto is asking the visitor's permission for something (held until it is answered): a face of its own. */
   asking: boolean
-  /** Words for the bubble (big reactions only). */
+  /** Words for the bubble: a big reaction's, or the question of a permission request while it is open. */
   bubble: string
   /** Words for screen readers. */
   announce: string
@@ -48,7 +48,7 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
   useEffect(() => { reactor.setSettings(settings) }, [reactor, settings])
 
   const [mood, setMood] = useState<RobotExpression | null>(null)
-  const [taskLook, setTaskLook] = useState<{ face: RobotExpression | null; thinking: boolean; asking: boolean }>({ face: null, thinking: false, asking: false })
+  const [taskLook, setTaskLook] = useState<{ face: RobotExpression | null; thinking: boolean; asking: boolean; question: string }>({ face: null, thinking: false, asking: false, question: '' })
   const [bubble, setBubble] = useState('')
   const [announce, setAnnounce] = useState('')
 
@@ -119,13 +119,14 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
       const ask = reactor.activeAsk(now)
       const t = reactor.activeTask(now)
       const any = ask !== null || reactor.awareness(state(), now).app.tasks.length > 0
-      if (!any) { window.clearInterval(taskTimer.current); taskTimer.current = undefined; setTaskLook({ face: null, thinking: false, asking: false }); return }
+      if (!any) { window.clearInterval(taskTimer.current); taskTimer.current = undefined; setTaskLook({ face: null, thinking: false, asking: false, question: '' }); return }
       // A question to the visitor comes before anything else Otto is busy with.
-      if (ask) { setTaskLook(was => was.asking ? was : { face: 'alert', thinking: false, asking: true }); return }
-      if (!t) { setTaskLook(was => was.asking ? { face: null, thinking: false, asking: false } : was); return }
+      // The question stays in his bubble while it is open, so a sighted visitor can read what they are being asked.
+      if (ask) { setTaskLook(was => was.asking && was.question === (ask.message ?? '') ? was : { face: 'alert', thinking: false, asking: true, question: ask.message ?? '' }); return }
+      if (!t) { setTaskLook(was => was.asking ? { face: null, thinking: false, asking: false, question: '' } : was); return }
       if (looked !== t.id && t.where !== undefined && !live.current.talking) { looked = t.id; stage.lookAt(t.where, 1.5) }
       const thinking = t.ms >= live.current.settings.thinkingAfterMs
-      setTaskLook(was => (was.face === 'searching' && was.thinking === thinking && !was.asking ? was : { face: 'searching', thinking, asking: false }))
+      setTaskLook(was => (was.face === 'searching' && was.thinking === thinking && !was.asking ? was : { face: 'searching', thinking, asking: false, question: '' }))
     }
     taskTimer.current = window.setInterval(check, 200)
   }, [reactor, state, stage])
@@ -181,5 +182,5 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
   }, [robot, settings.enabled, handle])
 
   const awareness = useCallback(() => reactor.awareness(state(), performance.now()), [reactor, state])
-  return { face: mood ?? taskLook.face, thinking: taskLook.thinking, asking: taskLook.asking, bubble, announce, awareness }
+  return { face: mood ?? taskLook.face, thinking: taskLook.thinking, asking: taskLook.asking, bubble: bubble || taskLook.question, announce, awareness }
 }

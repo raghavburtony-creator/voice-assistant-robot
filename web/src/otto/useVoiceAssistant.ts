@@ -477,7 +477,11 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           {
             // Presentation only: it changes how Otto looks, never what the page does, and it is checked like any server message.
             const avatar = parseAvatarEvent(message.event)
-            if (avatar) avatarRef.current?.(avatar)
+            if (avatar) {
+              // A question to the visitor is also in the panel as text, not only in Otto's bubble and a screen reader's live region.
+              if (avatar.kind === 'permission' && avatar.state === 'asking' && avatar.message) addCard({ title: 'Asking your permission', body: avatar.message })
+              avatarRef.current?.(avatar)
+            }
           }
           break
         case 'action':
