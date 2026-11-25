@@ -216,9 +216,14 @@ def test_navigate_sanitizes_a_reported_destination_label():
 def test_navigate_refuses_unreported_malformed_urls_and_paths():
     sink.open("tool-test")
     ctx = _context()
-    ctx.state["screens"] = {"destinations": {"destinations": [{"id": "settings", "label": "Settings"}]}}
+    ctx.state["screens"] = {
+        "destinations": {"destinations": [{"id": "settings", "label": "Settings"}]},
+        "guide_task_running": {"id": "checkout", "stepId": "payment"},
+    }
     for bad in ("unreported", "https://example.com", "/settings", "settings/profile", "bad path", "", None, 5, ["settings"]):
         assert "error" in tools.navigate_to(bad, ctx)
+    assert "continuity_handoff" not in ctx.state
+    assert ctx.state["screens"]["destinations"] is not None
     assert sink.drain("tool-test") == []
     sink.close("tool-test")
 
