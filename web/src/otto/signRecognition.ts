@@ -14,7 +14,11 @@ export class SignRecognitionGate {
   private lastSequence = -1
   private lastCapturedAt = -1
   private readonly finalized = new Set<string>()
-  constructor(readonly sessionId: string, readonly language: string) {
+  readonly sessionId: string
+  readonly language: string
+  constructor(sessionId: string, language: string) {
+    this.sessionId = sessionId
+    this.language = language
     if (!ID.test(sessionId)) throw new TypeError('Invalid sign-recognition session id')
     if (!LANGUAGE.test(language)) throw new TypeError('Invalid sign-recognition language tag')
   }
@@ -54,7 +58,8 @@ export interface SignRecognitionAdapter { run(onUpdate: (update: unknown) => voi
 /** Deterministic fixture adapter for tests; it has no capture or provider implementation. */
 export class FakeSignRecognitionAdapter implements SignRecognitionAdapter {
   private stopped = false
-  constructor(private readonly fixtures: readonly unknown[]) {}
+  private readonly fixtures: readonly unknown[]
+  constructor(fixtures: readonly unknown[]) { this.fixtures = fixtures }
   run(onUpdate: (update: unknown) => void): void {
     if (this.stopped) return
     for (const fixture of this.fixtures) { if (this.stopped) break; onUpdate(fixture) }
