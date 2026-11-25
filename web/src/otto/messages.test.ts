@@ -49,6 +49,13 @@ describe('task moves', () => {
   })
 })
 
+describe('avatar messages', () => {
+  it('pass the schema; the event inside is checked by parseAvatarEvent, not trusted here', () => {
+    expect(parseServerMessage('{"type":"avatar","event":{"kind":"working","id":"r1"}}')).toMatchObject({ type: 'avatar', event: { kind: 'working', id: 'r1' } })
+    expect(parseServerMessage('{"type":"avatar","event":"anything"}')).toMatchObject({ type: 'avatar' })
+  })
+})
+
 describe('card actions', () => {
   it('pass the schema and come out as plain, capped text', () => {
     const m = parseServerMessage(JSON.stringify({ type: 'action', action: 'card', card: { title: 'Steps', body: 'One.' } }))

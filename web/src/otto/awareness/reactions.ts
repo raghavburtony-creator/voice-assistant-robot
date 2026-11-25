@@ -19,8 +19,8 @@
 
 import type { OttoConfig } from '../config'
 import type { StagePlace } from '../movement/stage'
-import type { GestureName } from '../robot/gestures'
-import type { RobotExpression } from '../robot/robot'
+import { isGestureName, type GestureName } from '../robot/gestures'
+import { isRobotExpression, type RobotExpression } from '../robot/robot'
 import type { Importance, OttoEvent, OttoEventType } from './events'
 
 export type ReactionSize = 'none' | 'glance' | 'gesture' | 'big'
@@ -66,22 +66,27 @@ export type Awareness = {
     section: string | null
     /** What the app is waiting on the visitor for, if anything. */
     waiting: StagePlace | null
+    /** The oldest permission request still unanswered: Otto is asking the visitor for a go-ahead. */
+    asking: TaskInfo | null
   }
   recent: readonly { type: OttoEventType; topic?: string; at: number; size: ReactionSize }[]
 }
 
-export type TaskInfo = { id: string; topic?: string; where?: StagePlace; since: number }
+export type TaskInfo = { id: string; topic?: string; where?: StagePlace; since: number
+  /** For a permission request: the question, shown in his bubble for as long as it is open. */
+  message?: string }
 
 /** Your own judgement, asked first. Return a Reaction (or { size: 'none' }) to decide, undefined to leave it to Otto. */
 export type ReactionRule = (event: Readonly<OttoEvent>, awareness: Readonly<Awareness>) => Omit<Reaction, 'why'> | undefined
 
 export type AwarenessSettings = OttoConfig['awareness']
 
-const IMPORTANCE: Partial<Record<OttoEventType, Importance>> = { success: 'normal', failure: 'normal', attention: 'normal' }
+const IMPORTANCE: Partial<Record<OttoEventType, Importance>> = { success: 'normal', failure: 'normal', attention: 'normal', permission: 'normal' }
 const SIZE_OF: Record<Importance, ReactionSize> = { minor: 'glance', normal: 'gesture', major: 'big' }
 /** The largest reaction an event of this type ever gets (a section opening is never a celebration). */
 const MAX_SIZE: Partial<Record<OttoEventType, ReactionSize>> = {
   task: 'glance', section: 'gesture', select: 'gesture', waiting: 'gesture', interact: 'gesture', leave: 'none', idle: 'none',
+  permission: 'gesture', express: 'gesture',
 }
 
 /** The built-in reaction to each type, at each size. */
@@ -105,6 +110,8 @@ function shape(event: OttoEvent, size: ReactionSize): Omit<Reaction, 'why'> {
           gesture: big ? 'welcomeWave' : 'nod', gestureIntensity: big ? 0.7 : 0.5, walk: big ? at : undefined,
           say: big ? event.message : undefined }
     case 'complete':
+      // A request that was turned down is not good news: no smile, just a look.
+      if (event.data?.permission === 'denied') return { size, look, lookMs: 800 }
       return size === 'glance' ? { size, face: 'happy', faceMs: 1000, look, lookMs: 800 }
         : { size, face: 'happy', faceMs: 1500, look, lookMs: 1200, gesture: big ? 'celebrate' : 'nod', gestureIntensity: big ? 0.7 : 0.6 }
     case 'task':
@@ -123,6 +130,20 @@ function shape(event: OttoEvent, size: ReactionSize): Omit<Reaction, 'why'> {
     case 'interact':
       return size === 'glance' ? { size, face: 'happy', faceMs: 1200, look: 'user', lookMs: 1500 }
         : { size, face: 'excited', faceMs: 1000, look: 'user', lookMs: 1500, gesture: 'nod', gestureIntensity: 0.6 }
+    case 'permission':
+      // Asking is a pose of its own, held until the visitor answers (useAwareness shows it); this is the moment it starts.
+      return size === 'glance' ? { size, face: 'alert', faceMs: 1500, look: 'user', lookMs: 1500 }
+        : { size, face: 'alert', faceMs: 2500, look: 'user', lookMs: 2000, gesture: 'nod', gestureIntensity: 0.5,
+          say: event.message }
+    case 'express': {
+      // A backend's own request for a face, a gesture or a look. Only the names Otto already has; nothing else is read.
+      const d = event.data ?? {}
+      const face = isRobotExpression(d.expression) ? d.expression : undefined
+      const gesture = size !== 'glance' && isGestureName(d.gesture) ? d.gesture : undefined
+      const intensity = typeof d.gestureIntensity === 'number' && Number.isFinite(d.gestureIntensity) ? Math.min(1, Math.max(0, d.gestureIntensity)) : 0.6
+      return { size, face, faceMs: 1800, gesture, gestureIntensity: gesture ? intensity : undefined,
+        look: d.look === 'user' ? 'user' : look, lookMs: 1500 }
+    }
     default:
       return { size: 'none' }
   }
@@ -138,6 +159,8 @@ export type Reactor = {
   awareness(state: Pick<Awareness, 'self' | 'user'>, now: number): Awareness
   /** The task to show on Otto now: the oldest that has run at least taskNoticeMs, and for how long. */
   activeTask(now: number): (TaskInfo & { ms: number }) | null
+  /** The permission request Otto is holding a question for, if any (no delay: a question is not something to notice late). */
+  activeAsk(now: number): TaskInfo | null
   /** Failures and attention that came while nobody was watching (handed back once, on the visitor's return). */
   takeMissed(): OttoEvent[]
   setSettings(settings: AwarenessSettings): void
@@ -149,6 +172,8 @@ const TASK_STALE_MS = 120_000
 export function createReactor(initial: AwarenessSettings): Reactor {
   let settings = initial
   const tasks = new Map<string, TaskInfo>()
+  /** Permission requests waiting for an answer, by id. */
+  const asks = new Map<string, TaskInfo>()
   let section: string | null = null
   let waiting: Awareness['app']['waiting'] = null
   let recent: Awareness['recent'][number][] = []
@@ -164,6 +189,8 @@ export function createReactor(initial: AwarenessSettings): Reactor {
 
   function track(event: OttoEvent, now: number) {
     for (const [id, t] of tasks) if (now - t.since > TASK_STALE_MS) tasks.delete(id)
+    for (const [id, t] of asks) if (now - t.since > TASK_STALE_MS) asks.delete(id)
+    if (event.type === 'permission' && event.task) asks.set(event.task, { id: event.task, topic: event.topic, where: event.where, since: now, message: event.message })
     if (event.type === 'task' && event.task) tasks.set(event.task, { id: event.task, topic: event.topic, where: event.where, since: now })
     if (event.type === 'section') section = event.topic ?? (typeof event.where === 'string' ? event.where : 'section')
     if (event.type === 'waiting') waiting = event.where ?? 'page'
@@ -173,15 +200,17 @@ export function createReactor(initial: AwarenessSettings): Reactor {
   /** An ending names its task: it inherits the task's place and topic. */
   function withTask(event: OttoEvent): OttoEvent {
     if (!event.task || event.type === 'task') return event
-    const t = tasks.get(event.task)
+    const t = tasks.get(event.task) ?? asks.get(event.task)
     tasks.delete(event.task)
+    asks.delete(event.task)
     return t ? { where: t.where, topic: t.topic, ...stripUndefined(event) } : event
   }
 
   const reactor: Reactor = {
     awareness(state, now) {
       for (const [id, t] of tasks) if (now - t.since > TASK_STALE_MS) tasks.delete(id)
-      return { ...state, app: { tasks: [...tasks.values()], section, waiting }, recent: [...recent] }
+      for (const [id, t] of asks) if (now - t.since > TASK_STALE_MS) asks.delete(id)
+      return { ...state, app: { tasks: [...tasks.values()], section, waiting, asking: oldest(asks) }, recent: [...recent] }
     },
 
     decide(raw, state, now) {
@@ -215,7 +244,7 @@ export function createReactor(initial: AwarenessSettings): Reactor {
 
       // 2. Nobody watching.
       if (size !== 'none' && !state.user.present) {
-        if (event.type === 'failure' || event.type === 'attention') { missed.push(event); why.push('nobody watching: kept for their return') }
+        if (event.type === 'failure' || event.type === 'attention' || event.type === 'permission') { missed.push(event); why.push('nobody watching: kept for their return') }
         else why.push('nobody watching')
         resize('none', 'nobody watching')
         size = 'none'
@@ -223,7 +252,7 @@ export function createReactor(initial: AwarenessSettings): Reactor {
       // 3. Asleep.
       let wake = false
       if (size !== 'none' && state.self.asleep) {
-        if (event.type === 'failure' || event.type === 'attention' || importance === 'major' || event.type === 'interact') {
+        if (event.type === 'failure' || event.type === 'attention' || event.type === 'permission' || importance === 'major' || event.type === 'interact') {
           wake = true
           why.push('wakes him')
         } else resize('none', 'asleep')
@@ -248,7 +277,7 @@ export function createReactor(initial: AwarenessSettings): Reactor {
       if (out.walk && !(settings.walkToEvents && state.self.mayMove)) { delete out.walk; why.push('stays put') }
       if (state.self.talking) delete out.face // the voice owns the face
       if (wake && size !== 'none') out.wake = true
-      if (!out.say && event.message && size !== 'none' && (event.type === 'failure' || event.type === 'attention')) out.say = event.message
+      if (!out.say && event.message && size !== 'none' && (event.type === 'failure' || event.type === 'attention' || event.type === 'permission')) out.say = event.message
 
       if (size !== 'none') {
         for (const s of ['glance', 'gesture', 'big'] as const) if (SIZES.indexOf(s) <= SIZES.indexOf(size)) last[s] = now
@@ -268,10 +297,21 @@ export function createReactor(initial: AwarenessSettings): Reactor {
       return { ...oldest, ms: now - oldest.since }
     },
 
+    activeAsk(now) {
+      for (const [id, t] of asks) if (now - t.since > TASK_STALE_MS) asks.delete(id)
+      return oldest(asks)
+    },
+
     takeMissed() { const m = missed; missed = []; return m },
     setSettings(next) { settings = next },
   }
   return reactor
+}
+
+function oldest(items: ReadonlyMap<string, TaskInfo>): TaskInfo | null {
+  let first: TaskInfo | null = null
+  for (const t of items.values()) if (!first || t.since < first.since) first = t
+  return first
 }
 
 function stripUndefined<T extends object>(o: T): T {

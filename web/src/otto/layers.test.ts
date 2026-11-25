@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 /** Core files, relative to src/otto. A new pure module goes here, with its test. */
 const CORE = [
+  'awareness/avatar.ts',
   'awareness/busy.ts',
   'awareness/events.ts',
   'awareness/page.ts',

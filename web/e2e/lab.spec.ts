@@ -32,6 +32,28 @@ test('barge-in stops Otto mid-speech and the server log records it', async ({ pa
   await expect(log).not.toContainText('turn_complete') // it was cut off, not finished
 })
 
+test('the server tells Otto how things are going: a permission request reaches the page and is announced (#58)', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Server: asks permission' }).click()
+  // The question reaches the page through the whole path (wire, check, Otto's event, his judgement) and is said to screen
+  // readers, even in a conversation, where his own voice keeps the gestures.
+  await expect(page.locator('.otto-sr').filter({ hasText: 'May I send this for you?' })).toHaveCount(1)
+  // And in the panel as visible text, for a visitor who sees Otto but does not use a screen reader.
+  await expect(panel.getByText('May I send this for you?')).toBeVisible()
+  // The other answers and a job's start and end are accepted without error (the lab fails a test on any console error).
+  for (const name of ['Server: permission denied', 'Server: a long job starts', 'Server: the job succeeds']) {
+    await page.getByRole('button', { name }).click()
+  }
+  await expect(page.getByRole('region', { name: 'Simulated server' })).toContainText('avatar: {"kind":"success","id":"lab-job"')
+})
+
 test('the model hears what the app is busy with, only while a conversation is open', async ({ page }) => {
   await page.goto('/lab.html')
   await page.getByLabel('Use the real Otto').check()

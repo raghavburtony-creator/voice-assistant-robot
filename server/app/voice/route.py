@@ -12,6 +12,9 @@
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
+                             {"type":"avatar","event":{"kind":"working","id":...,"topic"?:...,"message"?:...}}   (avatar.py: how things are
+                              going, for Otto's face and body; presentation only. Kinds: thinking, listening, speaking, working, waiting,
+                              permission {id,state}, success, failure, interruption, emotion, gesture, movement)
                              (everything goes out in the order the model made it, through one writer. "interrupted" first
                               drops speech still queued, and a stalled browser cannot stall the model: output.py)
                              {"type":"ended","reason":"closed"|"service_ended"|"time_limit"}

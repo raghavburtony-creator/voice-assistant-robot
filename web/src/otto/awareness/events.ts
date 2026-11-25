@@ -36,9 +36,14 @@ export type OttoEventType =
   | 'interact'
   /** The visitor has gone quiet (Otto's own idle clock notices this too). */
   | 'idle'
+  /** Otto, or the app, is asking the visitor's permission for something. Held until it is answered (pair it by `task`). */
+  | 'permission'
+  /** A backend asked for a specific face, gesture or look (`data`: expression, gesture, intensity, look). See avatar.ts. */
+  | 'express'
 
 export const OTTO_EVENT_TYPES: readonly OttoEventType[] = [
   'success', 'failure', 'attention', 'task', 'complete', 'section', 'select', 'waiting', 'arrive', 'leave', 'interact', 'idle',
+  'permission', 'express',
 ]
 
 /** How much it matters: a minor event gets a glance at most, a major one may get the full reaction. */
