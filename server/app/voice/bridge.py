@@ -260,7 +260,9 @@ class Bridge:
         )
 
     def _resume_saved_task(self, data: object) -> None:
-        if self.continuity_resumed or self.pending_continuity is None or not isinstance(data, list):
+        if self.continuity_resumed or self.pending_continuity is None or not isinstance(data, list) or not data:
+            # A page may register its tasks in a parent effect after Otto mounts. Wait for a non-empty
+            # registry update rather than treating the first empty snapshot as proof the task disappeared.
             return
         self.continuity_resumed = True
         record = self.pending_continuity
