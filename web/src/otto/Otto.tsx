@@ -25,7 +25,7 @@ import type { StageController } from './movement/stage'
 import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
 import type { IdleControls } from './OttoStage'
-import { publishContext } from './context'
+import { clearPageContext, publishContext } from './context'
 import { getDesktopContext, isDesktopRuntime } from './desktop'
 import { capList } from './contextBudget'
 import type { IdleState } from './idle'
@@ -98,6 +98,9 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     if (firstPage.current) { firstPage.current = false; return }
     otto.notify({ type: 'section', topic: page })
   }, [page, otto])
+  // A runtime destination is a new host-supported interface. Drop the previous page's
+  // allow-lists immediately; the new page will publish its own registries below.
+  useEffect(() => { clearPageContext() }, [page])
   const [open, setOpen] = useState(false)
   const [desktopAwarenessEnabled, setDesktopAwarenessEnabled] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
@@ -198,7 +201,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     publish()
     const off = onGuideTasksChange(publish)
     return () => { off(); publishContext('guide_tasks', null) }
-  }, [])
+  }, [page])
   // And the one running now, with the visitor's step, so "where was I?" gets a real answer; cleared when it ends.
   useEffect(() => {
     const off = ottoGuide.subscribe(command => { if (command.type === 'task') publishContext('guide_task_running', taskProgress(command.event, command.spec)) })
