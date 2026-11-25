@@ -232,6 +232,9 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   }, [])
 
   const stopContext = useRef<(() => void) | null>(null)
+  // A navigation can unmount the source interface immediately. Flush debounced context first
+  // so the latest guided-task progress reaches the server before that teardown.
+  const flushContext = useRef<() => void>(() => {})
   const countInterruption = useCallback(() => setInterruptions(n => n + 1), [])
   // Set once interrupt() exists (below); the recorder's frame callback reads it.
   const interruptRef = useRef<() => boolean>(() => false)
@@ -240,13 +243,23 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     const send = (update: ContextUpdate) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'context', ...update })) }
     currentContext().forEach(send)
     const pending = new Map<string, { update: ContextUpdate; timer: number }>()
+    const flush = () => {
+      pending.forEach(item => { window.clearTimeout(item.timer); send(item.update) })
+      pending.clear()
+    }
+    flushContext.current = flush
     const unsubscribe = subscribeContext(update => {
       const waiting = pending.get(update.key)
       if (waiting) window.clearTimeout(waiting.timer)
       const merged = { ...update, announce: update.announce ?? waiting?.update.announce }
       pending.set(update.key, { update: merged, timer: window.setTimeout(() => { pending.delete(update.key); send(merged) }, CONTEXT_DEBOUNCE_MS) })
     })
-    stopContext.current = () => { unsubscribe(); pending.forEach(item => window.clearTimeout(item.timer)) }
+    stopContext.current = () => {
+      unsubscribe()
+      pending.forEach(item => window.clearTimeout(item.timer))
+      pending.clear()
+      if (flushContext.current === flush) flushContext.current = () => {}
+    }
   }, [])
 
   const clearTimer = (timer: { current: number | undefined }) => {
@@ -491,6 +504,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
             const action = toAssistantAction(message, id => findGuideTarget(id) !== null, id => findGuideTask(id) !== null,
               id => findDestination(id) !== null)
             if (action) {
+              // Preserve the latest task progress before host navigation can unmount this interface.
+              if (action.action === 'navigate') flushContext.current()
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)
               if (action.action === 'card') addCard(action.card)
