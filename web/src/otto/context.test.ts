@@ -4,7 +4,7 @@ import {
 } from './context'
 import { MAX_CONTEXT_BYTES, contextBytes } from './contextBudget'
 
-afterEach(() => publishContext(DESTINATIONS_CONTEXT_KEY, null))
+afterEach(() => { clearPageContext(); publishContext('app_tasks', null) })
 
 describe('runtime destinations', () => {
   it('publishes the shared key and fields, cleans page labels, and owns the live browser check', () => {
