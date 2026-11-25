@@ -23,6 +23,7 @@ from app.voice.output import OutputChannel
 from app.voice.app_config import PAGES, event_prompt, system_instruction
 from app.voice.continuity import ContinuityContext
 from app.voice.continuity_store import ContinuityRecord, ContinuityStore, SQLiteContinuityStore
+from app.voice.context import clear_page_context
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
@@ -173,10 +174,10 @@ def _set_page(state: dict, page: object, title: object = None) -> None:
         return
     state["page"] = page
     state["page_title"] = PAGES[page]["title"] if page in PAGES else runtime_title(title, page)
-    # Lists are page-scoped (D-23); do not let a page update carry the previous page's destinations forward.
+    # Runtime lists are page-scoped (D-23); never let the page we left authorize the next one.
     screens = state.get("screens")
     if isinstance(screens, dict):
-        screens["destinations"] = None
+        clear_page_context(screens)
 
 
 class Bridge:
@@ -245,13 +246,21 @@ class Bridge:
         if identity is None or self.continuity_withdrawn:
             return
         if data is None:
-            # The first null is the new session's empty browser state, not a completion event.
+            # The first null is a new session's empty browser state. A one-shot marker also
+            # distinguishes source-interface unmount during an accepted navigation handoff
+            # from task completion/cancellation.
             if self.seen_running_task:
+                handoff = self.live.state.pop("continuity_handoff", False) is True
+                self.seen_running_task = False
+                if handoff:
+                    return
                 self.continuity_store.delete(identity.scope, identity.identity)
                 self.pending_continuity = None
             return
         if not isinstance(data, dict):
             return
+        # Any subsequent active progress ends the one-shot handoff window.
+        self.live.state.pop("continuity_handoff", None)
         self.seen_running_task = True
         task, step = data.get("id"), data.get("stepId")
         if not isinstance(task, str) or not isinstance(step, str):
