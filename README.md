@@ -61,10 +61,12 @@ For a packaged desktop build, set `VITE_API_URL` to the reachable Otto server or
 
 The native/web boundary stays intent-based:
 - the webview may query read-only runtime information with `getDesktopStatus()`;
+- the host announces `otto://desktop-ready` and `otto://desktop-page-loaded` lifecycle events;
+- `onDesktopError()` remains the reserved native error subscription;
 - `moveDesktopTo()` accepts only `home`, `desktop-left`, `desktop-right`, `top` or `bottom`;
 - the native host calculates physical coordinates, clamps the window to the current monitor's work area and animates the transition;
-- movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`;
-- the ADK `move_desktop` tool accepts only those named destinations. It never receives coordinates or monitor geometry;
+- movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`, available through `onDesktopMovement()`;
+- the ADK `move_desktop` tool accepts only those named destinations. Pixel coordinates and monitor details stay inside the native host;
 - no arbitrary shell, filesystem, input automation or general window-control command is exposed. Broader desktop capabilities remain behind the permissioned gateway planned in DESKTOP-04.
 
 The movement controller stays on the monitor Otto currently occupies; it uses that monitor's work area (including non-primary monitors with negative desktop origins) and does not silently jump Otto between displays. Browser mode remains unchanged: movement returns an explicit unavailable result when the Tauri runtime is absent.
