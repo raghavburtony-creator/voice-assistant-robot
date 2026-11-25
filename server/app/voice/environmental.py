@@ -32,7 +32,7 @@ class EnvironmentalProposal:
 class EnvironmentalAdapter(Protocol):
     """Provider-neutral seam: adapters return candidate data, never actions."""
 
-    def propose(self, observation: object) -> object | None: ...
+    def propose(self, observation: object) -> EnvironmentalProposal | None: ...
 
 
 class DeterministicFakeEnvironmentalAdapter:
@@ -41,9 +41,9 @@ class DeterministicFakeEnvironmentalAdapter:
     def __init__(self, proposal: object | None) -> None:
         self._proposal = proposal
 
-    def propose(self, observation: object) -> object | None:
+    def propose(self, observation: object) -> EnvironmentalProposal | None:
         del observation  # The fake's result is fixed; no frame or observation is retained.
-        return self._proposal
+        return clean_environmental_proposal(self._proposal)
 
 
 def clean_environmental_proposal(value: object) -> EnvironmentalProposal | None:
