@@ -63,14 +63,17 @@ The native/web boundary stays intent-based:
 - the webview may query read-only runtime information with `getDesktopStatus()`;
 - the host announces `otto://desktop-ready` and `otto://desktop-page-loaded` lifecycle events;
 - `onDesktopError()` remains the reserved native error subscription;
-- `moveDesktopTo()` accepts only `home`, `desktop-left`, `desktop-right`, `top` or `bottom`;
+- `executeDesktopAction()` accepts only the closed native action set: minimize/restore Otto, move to one of five named positions, or launch Calculator/Text Editor;
 - the native host calculates physical coordinates, clamps the window to the current monitor's work area and animates the transition;
 - movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`, available through `onDesktopMovement()`;
-- the ADK `move_desktop` tool accepts only those named destinations. Pixel coordinates and monitor details stay inside the native host;
+- the ADK `desktop_action` tool exposes the same fixed action set; `move_desktop` routes through it for compatibility;
 - `getDesktopContext()` reports monitor work area, Otto's window position/visibility and cursor position; on Windows it also reports the foreground application's executable name and window title only.
 - The voice panel has a session-only **Share desktop context with Otto** switch. Sampling runs only while a conversation is open and the switch is on, and stops immediately when disabled or the conversation ends.
 - No screenshots, application contents, keystrokes, process ids or executable paths are sent.
-- no arbitrary shell, filesystem, input automation or general window-control command is exposed. Broader desktop capabilities remain behind the permissioned gateway planned in DESKTOP-04.
+- the desktop UI asks the visitor to approve each exact action before calling the native gateway; the Rust host independently deserializes a closed action enum and rejects unknown variants;
+- application launching is limited to Calculator and Text Editor, using fixed platform-specific executable/app identifiers and no caller-supplied arguments;
+- results distinguish verified window state, native movement completion and process spawn; launching a process is not reported as proof that its window is ready;
+- no arbitrary shell, filesystem, input automation, arbitrary application, URL, path, argument or general window-control command is exposed.
 
 The desktop-awareness boundary is opt-in and metadata-only: no context is sent to the ADK unless the visitor enables the switch in the panel. The switch resets at the end of each conversation. Active-window metadata is currently available on Windows; other platforms report it as unavailable.
 
