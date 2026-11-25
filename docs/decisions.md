@@ -6,7 +6,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 
 ## Rules for entries
 
-- Take the next free number. Next free: **D-24**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
+- Take the next free number. Next free: **D-25**, **Q-09**. Before using one, check `main` and the open PRs for the same number. `server/tests/test_docs.py` fails if a number repeats, if this line is wrong, or if the index below misses an entry.
 - A decision is a `## D-xx` section with **Decision**, **Why** and **Where** (the code or test that enforces it). Change one only in a PR that says so in its title.
 - A decision's status is in the index: `current`, `amended by D-xx` (the newer record says what changed; the old one stays), or `superseded by D-xx`. Never delete a decision or reuse its number.
 - An open question is a row in the table at the end: ID, question, what it blocks, owner, status (`open`, `answered by D-xx`, `dropped`). An issue that waits on one gets the `status: needs-decision` label and links the `Q-xx`. Use the **Question** issue template to investigate one.
@@ -42,6 +42,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-22 | Runtime authority is a chain of checks, not one component | architecture | current |
 | D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
 | D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
+| D-25 | Desktop actions require per-action approval and a closed native allow-list | security | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | open |
@@ -289,6 +290,19 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
 
+
+## D-25 Desktop actions require per-action approval and a closed native allow-list
+
+**Decision:**
+- Desktop actions are proposed by the existing ADK tool layer and pass through the existing server sink and browser action validation. No second orchestrator or autonomous native decision-maker is introduced.
+- The desktop UI must ask the visitor to approve each exact action before invoking the native command. Declining performs no action; approval is scoped to that one request.
+- The native command accepts only a closed enum: minimize Otto, restore Otto, move Otto to one of five named positions, launch Calculator, or launch Text Editor. Unknown actions are rejected by native deserialization.
+- Application launching uses fixed platform-specific application identifiers with no caller-provided executable, URL, path or arguments. No shell command, arbitrary application, filesystem operation, keystroke or general input automation is exposed.
+- Results distinguish verified window state, movement accepted/completed by the native window API, and a process successfully spawned. A spawned process is not described as a verified, ready application window.
+
+**Why:** Desktop actions can affect the visitor's environment. Server and browser allow-lists prevent model-generated arbitrary requests, per-action approval gives the visitor the final say, and native validation prevents an untrusted webview payload from widening the action set.
+
+**Where:** `server/app/voice/tools.py` (`desktop_action`), `server/app/voice/app_config.py`, `web/src/otto/messages.ts`, `web/src/App.tsx` (per-action confirmation), `web/src/otto/desktop.ts`, `web/src-tauri/src/lib.rs` (native enum and executor), and their tests.
 
 ## D-24 Desktop context is opt-in, metadata-only and limited to the active conversation
 
