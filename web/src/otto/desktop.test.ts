@@ -61,6 +61,13 @@ describe('desktop action bridge', () => {
   it('requires a fresh matching observation before reporting a native move as successful', async () => {
     const invoke = vi.fn()
       .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1500, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+      .mockResolvedValueOnce({
         action: 'move_left', ok: true, status: 'completed',
         verification: 'native_api_completed', message: 'Native movement completed.',
       })
@@ -76,13 +83,21 @@ describe('desktop action bridge', () => {
     await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
       ok: true, status: 'completed', verification: 'verified',
     })
-    expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_action', { action: 'move_left' })
-    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_context')
+    expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_context')
+    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_action', { action: 'move_left' })
+    expect(invoke).toHaveBeenNthCalledWith(3, 'desktop_context')
     delete window.__TAURI__
   })
 
   it('reports failure when native movement completes but observation disagrees', async () => {
     const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1500, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
       .mockResolvedValueOnce({
         action: 'move_left', ok: true, status: 'completed',
         verification: 'native_api_completed', message: 'Native movement completed.',
