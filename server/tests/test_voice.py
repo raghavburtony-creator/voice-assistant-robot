@@ -176,15 +176,24 @@ def test_navigate_queues_an_action_and_moves_the_page():
 def test_navigate_accepts_only_a_destination_the_current_page_reported():
     sink.open("tool-test")
     ctx = _context()
-    ctx.state["screens"] = {"destinations": {"destinations": [
-        {"id": "project.42", "label": "Project Forty Two"},
-        {"id": "bad path", "label": "Bad"},
-    ]}}
+    ctx.state["screens"] = {
+        "destinations": {"destinations": [
+            {"id": "project.42", "label": "Project Forty Two"},
+            {"id": "bad path", "label": "Bad"},
+        ]},
+        "guide_targets": {"targets": [{"id": "save", "label": "Save"}]},
+        "guide_tasks": {"tasks": [{"id": "checkout", "stepIds": ["details", "payment"]}]},
+        "guide_task_running": {"id": "checkout", "stepId": "payment"},
+    }
     assert tools.navigate_to("project.42", ctx) == {"ok": True, "now_on": "Project Forty Two"}
     assert sink.drain("tool-test") == [{"action": "navigate", "page": "project.42"}]
     assert ctx.state["page"] == "project.42" and ctx.state["page_title"] == "Project Forty Two"
-    # The list belonged to the page we just left. It is cleared until the new page reports its own list.
+    # Only the host-reported id crosses the action boundary; old page registries are invalidated.
+    assert ctx.state["continuity_handoff"] is True
     assert ctx.state["screens"]["destinations"] is None
+    assert ctx.state["screens"]["guide_targets"] is None
+    assert ctx.state["screens"]["guide_tasks"] is None
+    assert ctx.state["screens"]["guide_task_running"] == {"id": "checkout", "stepId": "payment"}
     assert "error" in tools.navigate_to("project.42", ctx)
     assert sink.drain("tool-test") == []
     sink.close("tool-test")
@@ -217,9 +226,16 @@ def test_navigate_refuses_unreported_malformed_urls_and_paths():
 def test_static_navigation_drops_destinations_from_the_page_left_behind():
     sink.open("tool-test")
     ctx = _context()
-    ctx.state["screens"] = {"destinations": {"destinations": [{"id": "settings", "label": "Settings"}]}}
+    ctx.state["screens"] = {
+        "destinations": {"destinations": [{"id": "settings", "label": "Settings"}]},
+        "guide_targets": {"targets": [{"id": "save"}]},
+        "guide_tasks": {"tasks": [{"id": "checkout"}]},
+    }
     assert tools.navigate_to("features", ctx)["ok"] is True
     assert ctx.state["screens"]["destinations"] is None
+    assert ctx.state["screens"]["guide_targets"] is None
+    assert ctx.state["screens"]["guide_tasks"] is None
+    assert "continuity_handoff" not in ctx.state
     assert "error" in tools.navigate_to("settings", ctx)
     assert sink.drain("tool-test") == [{"action": "navigate", "page": "features"}]
     sink.close("tool-test")
