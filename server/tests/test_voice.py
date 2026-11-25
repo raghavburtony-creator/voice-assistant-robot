@@ -543,9 +543,15 @@ def test_a_frame_reaches_the_model_as_a_jpeg_only_while_a_share_is_on():
     assert live.images == []
 
 
-def test_a_share_names_only_camera_or_screen():
+def test_a_share_names_only_camera_or_screen_and_is_mirrored_to_ephemeral_tool_state():
+    bridge, live = run_bridge({"type": "capture", "source": "camera"})
+    assert bridge.capture == "camera" and live.state["capture_source"] == "camera"
+    bridge, live = run_bridge({"type": "capture", "source": "screen"})
+    assert bridge.capture == "screen" and live.state["capture_source"] == "screen"
+    bridge, live = run_bridge({"type": "capture", "source": "camera"}, {"type": "capture", "source": None})
+    assert bridge.capture is None and live.state["capture_source"] is None
     bridge, live = run_bridge({"type": "capture", "source": "microphone"}, frame())
-    assert bridge.capture is None and live.images == []
+    assert bridge.capture is None and live.state["capture_source"] is None and live.images == []
 
 
 def test_frames_that_are_not_jpeg_too_big_or_not_base64_are_dropped():
