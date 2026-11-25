@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPage, PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
 import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
-import { moveDesktopTo } from './otto/desktop'
+import { executeDesktopAction } from './otto/desktop'
 
 function pageFromHash(): PageId {
   const id = window.location.hash.slice(1)
@@ -47,18 +47,31 @@ export default function App() {
       if (isPage(action.page)) goTo(action.page)
       return
     }
-    if (action.action === 'desktop_move') {
-      const movementTask = events.task(`desktop-movement-${Date.now()}`, {
+    if (action.action === 'desktop_action') {
+      const labels = {
+        minimize_otto: 'minimize Otto',
+        restore_otto: 'restore Otto',
+        move_home: 'move Otto to the centre of the desktop',
+        move_left: 'move Otto to the left side of the desktop',
+        move_right: 'move Otto to the right side of the desktop',
+        move_top: 'move Otto to the top of the desktop',
+        move_bottom: 'move Otto to the bottom of the desktop',
+        launch_calculator: 'launch Calculator',
+        launch_text_editor: 'launch Text Editor',
+      } as const
+      const description = labels[action.desktop_action]
+      if (!window.confirm(`Allow Otto to ${description}?\\n\\nThis action will run only if you approve it.`)) return
+
+      const desktopTask = events.task(`desktop-action-${Date.now()}`, {
         importance: 'normal',
-        topic: 'desktop-movement',
-        message: `Otto is moving to ${action.destination}.`,
-        data: { destination: action.destination },
+        topic: 'desktop-action',
+        message: `Otto is requesting permission to ${description}.`,
+        data: { action: action.desktop_action },
       })
-      void moveDesktopTo(action.destination).then(result => {
-        const message = result.ok ? `Otto moved to ${action.destination}.` : (result.error ?? `Otto could not move to ${action.destination}.`)
-        if (result.ok) movementTask.succeed(message)
-        else movementTask.fail(message)
-      }).catch(() => movementTask.fail(`Otto could not move to ${action.destination}.`))
+      void executeDesktopAction(action.desktop_action).then(result => {
+        if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
+        else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
+      }).catch(() => desktopTask.fail(`Otto could not ${description}.`))
       return
     }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
