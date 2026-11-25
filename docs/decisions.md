@@ -44,11 +44,12 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
 | D-25 | Desktop actions require per-action approval and a closed native allow-list | security | current |
 | D-26 | Continuity identity is supplied by the host; cross-session task state is opt-in and bounded | continuity, privacy | current |
+| D-27 | The server voice layer is not a pure core/shell architecture | layers | current |
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
 | Q-03 | Who is the visitor, across sessions and interfaces? | privacy | answered by D-26 |
 | Q-04 | Is runtime authority a chain, or one component? | architecture | answered by D-22 |
-| Q-05 | How are the server's layers enforced? | layers | open |
+| Q-05 | How are the server's layers enforced? | layers | dropped |
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | open |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
