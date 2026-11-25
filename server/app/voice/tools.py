@@ -17,7 +17,11 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.context import clear_page_context
 from app.voice.sink import sink
-from app.voice.environmental import accept_environmental_proposal
+from app.voice.environmental import (
+    EnvironmentalConfidence,
+    EnvironmentalTopic,
+    accept_environmental_proposal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -309,10 +313,6 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
             card["follow_ups"] = chips
     _send(tool_context, {"action": "card", "card": card})
     return {"ok": True, "shown": "in the voice panel"}
-
-
-EnvironmentalTopic = Literal["object", "activity", "scene_change", "potential_hazard"]
-EnvironmentalConfidence = Literal["sufficient", "uncertain"]
 
 
 def notice_environmental_observation(
