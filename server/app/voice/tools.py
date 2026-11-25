@@ -336,11 +336,15 @@ def notice_environmental_observation(
     if proposal is None:
         return {"accepted": False, "note": "No environmental event was emitted. The camera share, fresh frame, confidence or proposal limits may not permit it."}
     queued = sink.put(tool_context.session.id, {
-        "environmental": {"topic": proposal.topic, "message": proposal.message},
+        "environmental": {
+            "generation": proposal.generation,
+            "topic": proposal.proposal.topic,
+            "message": proposal.proposal.message,
+        },
     })
     if not queued:
         return {"accepted": False, "note": "The proposal could not be delivered in this session."}
-    return {"accepted": True, "event": "attention", "topic": proposal.topic, "note": "A minor attention proposal was sent to Otto's existing awareness system. No action was taken."}
+    return {"accepted": True, "event": "attention", "topic": proposal.proposal.topic, "note": "A minor attention proposal was sent to Otto's existing awareness system. No action was taken."}
 
 
 TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, desktop_action, show_card, notice_environmental_observation)]
