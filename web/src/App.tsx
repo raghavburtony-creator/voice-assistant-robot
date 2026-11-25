@@ -54,7 +54,7 @@ export default function App() {
           importance: 'normal',
           topic: 'desktop-movement',
           message: result.ok ? `Otto moved to ${action.destination}.` : (result.error ?? 'Otto could not move to that desktop position.'),
-          data: { destination: action.destination, monitor: result.monitor },
+          data: { destination: action.destination },
         })
       })
       return
