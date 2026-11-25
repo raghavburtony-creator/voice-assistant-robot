@@ -86,6 +86,55 @@ def get_perception_context(tool_context: ToolContext) -> dict:
     }
 
 
+
+def get_desktop_context(tool_context: ToolContext) -> dict:
+    """Return desktop geometry and limited active-window metadata only while the visitor has enabled desktop awareness."""
+    screens = tool_context.state.get("screens") or {}
+    raw = screens.get("desktop_context") if isinstance(screens, dict) else None
+    if not isinstance(raw, dict) or raw.get("enabled") is not True:
+        return {"enabled": False, "note": "Desktop awareness is off. Ask the user to enable it in the voice panel."}
+
+    def number(value: object) -> int | None:
+        return value if type(value) is int and -10_000_000 <= value <= 10_000_000 else None
+
+    def geometry(value: object, keys: tuple[str, ...]) -> dict | None:
+        if not isinstance(value, dict):
+            return None
+        result = {key: number(value.get(key)) for key in keys}
+        return result if all(item is not None for item in result.values()) else None
+
+    monitor = geometry(raw.get("monitor"), ("x", "y", "width", "height"))
+    otto = geometry(raw.get("otto"), ("x", "y", "width", "height"))
+    cursor = geometry(raw.get("cursor"), ("x", "y"))
+    otto_data = raw.get("otto")
+    visible = otto_data.get("visible") if isinstance(otto_data, dict) else None
+    if monitor is None or otto is None or cursor is None or type(visible) is not bool:
+        return {"enabled": True, "available": False, "note": "Desktop metadata is temporarily unavailable."}
+
+    active = raw.get("activeWindow")
+    active_window = None
+    if isinstance(active, dict):
+        app = active.get("application")
+        title = active.get("title")
+        active_window = {
+            "application": "".join(ch for ch in app if ch.isprintable())[:80] if isinstance(app, str) else "",
+            "title": "".join(ch for ch in title if ch.isprintable())[:120] if isinstance(title, str) else "",
+        }
+        if not active_window["application"] and not active_window["title"]:
+            active_window = None
+
+    return {
+        "enabled": True,
+        "available": True,
+        "platform": raw.get("platform")[:20] if isinstance(raw.get("platform"), str) else "unknown",
+        "monitor_work_area": monitor,
+        "otto_window": {**otto, "visible": visible},
+        "cursor_position": cursor,
+        "active_window": active_window,
+        "note": "Metadata only. No screenshot, application contents, keystrokes, process identifiers or executable paths are available.",
+    }
+
+
 def get_screen_context(tool_context: ToolContext) -> dict:
     """What the user has open right now: the current page and whatever the page reported about itself."""
     state = tool_context.state
@@ -224,5 +273,5 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, show_card)]
+TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, show_card)]
 TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
