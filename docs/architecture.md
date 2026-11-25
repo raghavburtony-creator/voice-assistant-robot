@@ -57,6 +57,14 @@ Issue #6 called this chain "Otto's orchestrator". Q-04 asked whether it should b
 
 Engineering agents (`.claude/agents/`) have no runtime authority and no architectural authority. They work inside the decisions in [decisions.md](decisions.md), and a person reviews their pull requests.
 
+## Sign-language input boundary (D-29)
+
+The current `useScreenShare.ts` camera path is deliberately sparse: `FRAME_INTERVAL_MS` is 1,100 ms and `MAX_FRAME_SIDE` is 768 px (`capture.ts`). It sends still JPEGs through `useVoiceAssistant.ts` to `Bridge.send_frame` and Gemini Live. This remains the visual-context feature described by D-21; it is not repurposed as a sign-language recognizer. Google's Live API documentation likewise describes video input as discrete image frames at 1 FPS, which is not evidence of continuous sign-language recognition support.
+
+The sign-language path is therefore a separate, provider-neutral temporal recognition adapter with its own visitor-started consent notice, visible active state, bounded in-memory capture and Stop lifecycle. It returns typed partial/final/unrecognized text updates to the existing conversation input path. The panel labels provisional results, permits correction/confirmation/discard, and shows Otto's replies through the existing text channel. Recognition output is untrusted input: it cannot invoke tools or actions, and any action remains subject to D-02 and D-22. No raw video is retained by Otto. The external provider's processing and retention terms must be verified and disclosed before remote inference is enabled.
+
+The first language and pilot task are not assumed from the deployment country. Q-09 requires community confirmation, an agreed evaluation task, and a lawful, consented dataset or community-governed collection plan before a model is selected. See [D-29 and Q-09](decisions.md).
+
 ## Target: an embodied, accessible assistant that keeps track of the task
 
 Otto is moving from a voice guide on one page to an assistant that knows what the visitor is trying to do, keeps track of it across reloads and interfaces, and later takes in more than voice and text. The capabilities are tracked as epics (see [roadmap.md](roadmap.md)). This table shows what each one reuses and what it may *not* rebuild.
@@ -67,7 +75,7 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 | **Task continuity**: a task survives a reload, then a new session, then another interface | The same task state, saved through storage.ts (already guarded): within a tab, as ids only (D-20); cross-session state uses the host-supplied opaque identity and bounded continuity record (D-26) | A general visitor-memory system, identity invented by the kit, or a second orchestration path | Q-03 answered by D-26; implementation is the E2 slice |
 | **Cross-application**: Otto acts in more than one app | Reported-id allow-lists (the show_target pattern, D-14) for targets, tasks and destinations; commands registered by the deployment (D-23); continuity identity scoped by the host (D-26) | Free-form actions, URLs from the model, a command the page grants itself, or global identity shared between unrelated hosts | No. Q-03 is answered by D-26; implementation must keep host/app scope |
 | **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17), the existing session (`send_realtime`) | A capture path that skips the visitor's press, keeps a frame, or opens a second channel (D-21) | none (Q-07 answered by D-21) |
-| **Sign language** | Multimodal input; the panel as the text channel (D-06) | A separate output channel: what Otto signs also appears as text | none (Q-07 answered by D-21) |
+| **Sign language** | A bounded, visitor-started temporal capture adapter; provider-neutral recognition updates; the existing conversation input and panel text channel (D-06, D-29) | D-21's 1 FPS visual-context feed as a sign recognizer; a parallel conversation, event bus or action path; raw-video retention | Q-09: initial sign language, pilot task, community validation and dataset rights |
 | **Environmental intelligence** | Multimodal input; awareness events as the vocabulary | A second event bus beside `createOttoEvents` | none (Q-07 answered by D-21) |
 | **Spatial / AR presence** | The robot's state (`robot/robot.ts`, gestures, movement rules), which is already pure | A second robot model with its own states | Specify a target device/runtime and user-facing rendering and interaction requirements in issue #12 before choosing a renderer (D-28) |
 
