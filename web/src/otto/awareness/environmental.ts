@@ -2,6 +2,7 @@
 export const ENVIRONMENTAL_TOPICS = ["object", "activity", "scene_change", "potential_hazard"] as const
 export type EnvironmentalTopic = (typeof ENVIRONMENTAL_TOPICS)[number]
 export type EnvironmentalProposal = { topic: EnvironmentalTopic; message: string }
+export type EnvironmentalAttention = { type: 'attention'; importance: 'minor'; topic: EnvironmentalTopic; message: string }
 
 // eslint-disable-next-line no-control-regex
 const cleanText = (value: unknown): string | null => {
@@ -17,4 +18,12 @@ export function parseEnvironmentalProposal(value: unknown): EnvironmentalProposa
   const topic = ENVIRONMENTAL_TOPICS.find(item => item === proposal.topic)
   const message = cleanText(proposal.message)
   return topic && message ? { topic, message } : null
+}
+
+
+/** The browser's independent lifecycle gate: a screen share or a stopped camera cannot create an event. */
+export function toEnvironmentalAttention(source: string | null, value: unknown): EnvironmentalAttention | null {
+  if (source !== "camera") return null
+  const proposal = parseEnvironmentalProposal(value)
+  return proposal ? { type: "attention", importance: "minor", ...proposal } : null
 }
