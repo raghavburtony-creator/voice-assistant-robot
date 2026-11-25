@@ -29,6 +29,7 @@ const CORE = [
   'runtimeId.ts',
   'soundCues.ts',
   'speechGate.ts',
+  'signRecognition.ts',
 ]
 
 const raw = import.meta.glob(['/src/**/*.{ts,tsx}', '!/src/**/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
