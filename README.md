@@ -522,6 +522,7 @@ Otto chirps: six tiny cues synthesised with Web Audio, no audio files (`web/src/
 ## Deploying
 
 - **Server**: any host that supports WebSockets (Render, Railway, Fly). Set `GEMINI_API_KEY` and `CORS_ORIGINS` (your site's exact origin; no wildcards). Free tiers sleep, and the panel shows "Waking Otto up" while the server starts.
+- **Continuity (D-26)**: cross-session continuity is off by default. To enable CI-1, set `CONTINUITY_TRUST_PROXY=true` only when a trusted host/deployment proxy injects `X-Otto-Continuity-Enabled: true` and an opaque `X-Otto-Continuity-Identity` header. The identity is consumed only on the server and is never put into browser messages, page context, prompts or logs. Without the trusted boundary, Otto keeps the existing same-tab D-20 behaviour.
 - **Web**: any static host. Set `VITE_API_URL` to the server's URL before `npm run build`.
 
 ## Where it came from
