@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "build:lib": "vite build -c vite.lib.config.ts && vite build -c vite.adapters.config.ts && tsc -p tsconfig.lib.json && node scripts/check-dist.mjs",
-    "check:dist": "node scripts/check-dist.mjs"
+    "check:dist": "node scripts/check-dist.mjs",
+    "desktop:dev": "npx --yes @tauri-apps/cli@^2 dev",
+    "desktop:build": "npx --yes @tauri-apps/cli@^2 build"
   },
   "dependencies": {
     "react": "^19",
