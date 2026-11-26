@@ -27,7 +27,7 @@ def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
     assert proposal["content"] == "Contact me at [email] about the project"
     assert proposal["redacted"] is True
     assert "visitor@example.com" not in str(state)
-    assert state[PENDING_MEMORY_KEY][request_id]["sensitive"] is True
+    assert state[PENDING_MEMORY_KEY][proposal["request_id"]]["sensitive"] is True
 
 
 def test_rejects_invalid_kind_empty_text_and_overlong_text():
@@ -58,19 +58,19 @@ def test_browser_confirmation_consumes_a_matching_proposal_once():
     state = {}
     proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
     assert proposal is not None
-    assert pending_memory_proposal(state, request_id, now=101) == proposal
-    status, saved = consume_memory_proposal(state, request_id, True, now=102)
+    assert pending_memory_proposal(state, proposal["request_id"], now=101) == proposal
+    status, saved = consume_memory_proposal(state, proposal["request_id"], True, now=102)
     assert status == "accepted"
     assert saved == {"content": "Prefers concise answers", "kind": "semantic", "sensitive": False}
-    assert pending_memory_proposal(state, request_id, now=102) is None
-    assert consume_memory_proposal(state, request_id, True, now=103) == (None, None)
+    assert pending_memory_proposal(state, proposal["request_id"], now=102) is None
+    assert consume_memory_proposal(state, proposal["request_id"], True, now=103) == (None, None)
 
 
 def test_not_now_discards_and_expired_confirmation_is_rejected():
     state = {}
     proposal = stage_memory_proposal(state, "Temporary note", "episodic", now=100)
     assert proposal is not None
-    assert consume_memory_proposal(state, request_id, False, now=101) == ("discarded", None)
+    assert consume_memory_proposal(state, proposal["request_id"], False, now=101) == ("discarded", None)
     expired = stage_memory_proposal(state, "Old note", "semantic", now=200)
     assert expired is not None
     assert consume_memory_proposal(
@@ -83,8 +83,8 @@ def test_invalid_or_untrusted_confirmation_is_ignored():
     proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
     assert proposal is not None
     assert consume_memory_proposal(state, "not-an-id", True, now=101) == (None, None)
-    assert consume_memory_proposal(state, request_id, "true", now=101) == (None, None)
-    assert request_id in state[PENDING_MEMORY_KEY]
+    assert consume_memory_proposal(state, proposal["request_id"], "true", now=101) == (None, None)
+    assert proposal["request_id"] in state[PENDING_MEMORY_KEY]
 
 
 def test_memory_policy_is_denied_without_the_trusted_host_opt_in():
