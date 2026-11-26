@@ -228,7 +228,12 @@ class Bridge:
             return
         # Native outcomes are audit-only: never expose them to the model as page context.
         if key == "desktop_action_result":
-            POLICY_ENGINE.audit_outcome(self.live, data)
+            outcomes = data.get("outcomes") if isinstance(data, dict) else None
+            if isinstance(outcomes, list):
+                for outcome in outcomes[-8:]:
+                    POLICY_ENGINE.audit_outcome(self.live, outcome)
+            else:
+                POLICY_ENGINE.audit_outcome(self.live, data)
             return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
