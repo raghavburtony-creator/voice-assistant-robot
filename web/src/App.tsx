@@ -68,11 +68,11 @@ export default function App() {
         data: { action: action.desktop_action },
       })
       void executeDesktopAction(action.desktop_action).then(result => {
-        setDesktopActionOutcome({ request_id: action.request_id, action: result.action, ok: result.ok, status: result.status, verification: result.verification })
+        setDesktopActionOutcome(previous => ({ outcomes: [...(Array.isArray(previous?.outcomes) ? previous.outcomes : []), { request_id: action.request_id, action: result.action, ok: result.ok, status: result.status, verification: result.verification }].slice(-8) }))
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
       }).catch(() => {
-        setDesktopActionOutcome({ request_id: action.request_id, action: action.desktop_action, ok: false, status: 'failed', verification: 'unavailable' })
+        setDesktopActionOutcome(previous => ({ outcomes: [...(Array.isArray(previous?.outcomes) ? previous.outcomes : []), { request_id: action.request_id, action: action.desktop_action, ok: false, status: 'failed', verification: 'unavailable' }].slice(-8) }))
         desktopTask.fail(`Otto could not ${description}.`)
       })
       return
