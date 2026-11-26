@@ -113,7 +113,7 @@ async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail:
                 asyncio.create_task(bridge.output_pump(), name="output"),
             })
         finally:
-            await bridge.tasks.close()  # no task outlives its session
+            await bridge.close()  # no task outlives its session
 
 
 @router.websocket("/live")
