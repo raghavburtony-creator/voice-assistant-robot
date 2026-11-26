@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import torch
 
+from .features import FEATURE_SCHEMA_VERSION, FEATURE_SIZE
 from .model import TemporalConvTransformer
 
 
 def export_checkpoint(checkpoint_path: str | Path, output_path: str | Path) -> Path:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    if checkpoint.get("feature_schema_version") != FEATURE_SCHEMA_VERSION:
+        raise ValueError("Checkpoint feature schema version is incompatible with this exporter")
+    if int(checkpoint.get("input_features", -1)) != FEATURE_SIZE:
+        raise ValueError("Checkpoint feature width is incompatible with this exporter")
     model = TemporalConvTransformer(
         input_features=int(checkpoint["input_features"]),
         classes=len(checkpoint["labels"]),
@@ -46,7 +52,24 @@ def export_checkpoint(checkpoint_path: str | Path, output_path: str | Path) -> P
 
     import onnx
 
-    onnx.checker.check_model(onnx.load(str(destination)))
+    exported = onnx.load(str(destination))
+    metadata = {
+        "otto_bsl_feature_schema_version": str(FEATURE_SCHEMA_VERSION),
+        "otto_bsl_feature_size": str(FEATURE_SIZE),
+        "otto_bsl_sequence_frames": str(checkpoint["sequence_frames"]),
+        "otto_bsl_labels": json.dumps(checkpoint["labels"], separators=(",", ":")),
+        "otto_bsl_task": "personal-bsl-isolated-sign-prototype",
+    }
+    existing = {item.key for item in exported.metadata_props}
+    for key, value in metadata.items():
+        if key not in existing:
+            item = exported.metadata_props.add()
+            item.key = key
+        else:
+            item = next(prop for prop in exported.metadata_props if prop.key == key)
+        item.value = value
+    onnx.checker.check_model(exported)
+    onnx.save(exported, str(destination))
     return destination
 
 

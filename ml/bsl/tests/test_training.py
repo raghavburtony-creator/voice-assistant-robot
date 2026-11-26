@@ -74,4 +74,9 @@ def test_training_reports_signer_split_and_exports_valid_onnx(tmp_path):
     checkpoint = output_dir / "bsl_temporal_candidate.pt"
     onnx_path = export_checkpoint(checkpoint, output_dir / "bsl_temporal_candidate.onnx")
     assert onnx_path.is_file() and onnx_path.stat().st_size > 0
+    import onnx
+    exported = onnx.load(str(onnx_path))
+    metadata = {item.key: item.value for item in exported.metadata_props}
+    assert metadata["otto_bsl_feature_schema_version"] == str(FEATURE_SCHEMA_VERSION)
+    assert json.loads(metadata["otto_bsl_labels"]) == ["hello", "thanks"]
     assert 0.0 <= report["macro_f1"] <= 1.0
