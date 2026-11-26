@@ -134,7 +134,7 @@ async def connect_adk(language: str, page: str, page_title: str, detail: str) ->
     from app.voice.model import keyed_model
     from app.voice.tools import TOOLS
 
-# D-22: keep the existing ADK agent in the voice bridge; do not introduce
+    # D-22: keep the existing ADK agent in the voice bridge; do not introduce
     # a separate runtime orchestrator or a parallel tool-routing authority.
     agent = LlmAgent(
         name="voice_guide",
