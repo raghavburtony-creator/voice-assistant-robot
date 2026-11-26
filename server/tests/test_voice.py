@@ -1189,3 +1189,25 @@ def test_bridge_accepts_only_a_pending_native_receipt_for_session_audit():
     assert live.state["tool_policy_audit"][-1]["consent_status"] == "approved"
     assert live.state["tool_policy_audit"][-1]["verification_status"] == "pending"
     live.close()
+
+
+
+def test_native_receipt_rejects_wrong_json_types_without_raising():
+    from app.voice.policy import POLICY_ENGINE, PolicyDecision
+
+    state = {}
+    decision = PolicyDecision("f" * 32, "confirmation_required", "high", "desktop_action_approval",
+        "approval required", "action:launch_calculator", "pending")
+    POLICY_ENGINE.audit(SimpleNamespace(state=state), tools.REGISTRY["desktop_action"].metadata, decision, "awaiting_confirmation")
+    malformed = {
+        "request_id": "f" * 32, "action": "launch_calculator",
+        "consent_certificate": {
+            "certificate_id": "f" * 32 + "-123", "request_id": "f" * 32,
+            "action": "launch_calculator", "decision": [], "method": "native_os_dialog", "issued_at_unix_ms": 123,
+        },
+        "result": {"ok": True, "status": [], "verification": "verified"},
+    }
+    assert POLICY_ENGINE.record_host_result(state, malformed) is False
+    malformed["consent_certificate"]["decision"] = "approved"
+    assert POLICY_ENGINE.record_host_result(state, malformed) is False
+    assert "f" * 32 in state["tool_policy_pending"]

@@ -186,7 +186,7 @@ async fn desktop_action(app: AppHandle, action: DesktopAction, request_id: Strin
             let result = window.unminimize().and_then(|_| window.show()).and_then(|_| window.set_focus());
             if let Err(error) = result {
                 let mut result = action_result(action, false, "failed", "unavailable", format!("Otto could not be restored: {error}"));
-                result.consent_certificate = Some(consent_certificate(request_id.clone(), action, "approved"));
+                result.consent_certificate = Some(approved_certificate.clone());
                 return result;
             }
             match (window.is_minimized(), window.is_visible()) {

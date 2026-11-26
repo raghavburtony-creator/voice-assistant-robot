@@ -236,15 +236,15 @@ class PolicyEngine:
             return False
         decision, issued_at = certificate.get("decision"), certificate.get("issued_at_unix_ms")
         method, certificate_id = certificate.get("method"), certificate.get("certificate_id")
-        if (certificate.get("request_id") != request_id or certificate.get("action") != action
-            or decision not in {"approved", "denied"} or method != "native_os_dialog"
-            or type(issued_at) is not int or issued_at <= 0
+        if (not isinstance(decision, str) or decision not in {"approved", "denied"}
+            or certificate.get("request_id") != request_id or certificate.get("action") != action
+            or method != "native_os_dialog" or type(issued_at) is not int or issued_at <= 0
             or not isinstance(certificate_id, str) or certificate_id != f"{request_id}-{issued_at}"):
             return False
         status, ok, verification = result.get("status"), result.get("ok"), result.get("verification")
-        if status not in {"completed", "started", "failed", "denied"} or type(ok) is not bool:
+        if not isinstance(status, str) or status not in {"completed", "started", "failed", "denied"} or type(ok) is not bool:
             return False
-        if verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}:
+        if not isinstance(verification, str) or verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}:
             return False
         if verification == "verified" and (not ok or status != "completed"):
             return False
