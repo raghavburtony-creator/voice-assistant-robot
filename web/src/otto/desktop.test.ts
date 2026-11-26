@@ -155,7 +155,16 @@ describe('desktop awareness bridge', () => {
     await expect(getDesktopContext()).resolves.toBeNull()
   })
 
-  it('requests desktop metadata from the native host', async () => {
+  it('refuses desktop metadata when permission is disabled', async () => {
+    const invoke = vi.fn()
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+    await expect(getDesktopContext()).resolves.toBeNull()
+    expect(invoke).not.toHaveBeenCalled()
+    delete window.__TAURI__
+  })
+
+  it('requests desktop metadata from the native host when permission is enabled', async () => {
+    setDesktopPermissionEnabled(true)
     const invoke = vi.fn().mockResolvedValue({
       platform: 'windows',
       monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
