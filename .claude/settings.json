@@ -1,9 +1,6 @@
 {
   "permissions": {
     "deny": [
-      "Bash(git checkout -b:*)",
-      "Bash(git switch -c:*)",
-      "Bash(git switch --create:*)",
       "Bash(git push origin main:*)",
       "Bash(git push -u origin main:*)",
       "Bash(git push origin HEAD:main:*)",
