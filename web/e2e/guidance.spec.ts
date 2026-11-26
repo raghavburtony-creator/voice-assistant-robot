@@ -127,9 +127,9 @@ test('the model hears which task is running and which step, only while a convers
   await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
   // Opening the conversation sends it; each step the visitor takes updates it (sends are debounced, so poll).
   await expect(async () => { await ask.click(); await expect(server).toContainText('"id":"lab-follow"') }).toPass()
-  await expect(server).toContainText('"step":1,"total":3')
+  await expect(server).toContainText('"step":1,"stepId":"f1","total":3')
   await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
-  await expect(async () => { await ask.click(); await expect(server).toContainText('"step":2,"total":3') }).toPass()
+  await expect(async () => { await ask.click(); await expect(server).toContainText('"step":2,"stepId":"f2","total":3') }).toPass()
   // Ended: cleared, so the model never answers from a stale step.
   await page.getByRole('button', { name: 'App: visitor left' }).click()
   await expect(async () => { await ask.click(); await expect(server.locator('li').first()).toHaveText(/running task: null/) }).toPass()
@@ -155,7 +155,7 @@ test('"where am I?" is answered with the current step, from the context the page
   await page.getByRole('button', { name: 'Start it', exact: true }).click()
   await page.locator('[data-otto-target="lab-left"]').dispatchEvent('click')
   // Context sends are debounced: wait until the server has step 2 before asking.
-  await expect(async () => { await known.click(); await expect(server.locator('li').first()).toContainText('"step":2,"total":3') }).toPass()
+  await expect(async () => { await known.click(); await expect(server.locator('li').first()).toContainText('"step":2,"stepId":"f2","total":3') }).toPass()
   await ask('Where was I?')
   await expect(panel).toContainText('You\'re on step 2 of 3 of A task Otto follows: Now click the card beside me.')
 })
@@ -207,8 +207,8 @@ test('a guided task resumes in a fresh session from the server continuity record
   await expect(status).toHaveText('No task running.')
   await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
   panel = page.getByRole('region', { name: 'Voice guide' })
-  await panel.getByRole('button', { name: 'Start talking' }).click()
-  await panel.getByRole('button', { name: 'Use text only' }).click()
+  // The first session's "Use text only" choice is remembered, so the fresh session offers typing straight away.
+  await panel.getByRole('button', { name: 'Start typing' }).click()
   await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
   await expect(status).toHaveText('Task: step 2 of 3: f2')
   await expect(page.locator('#lab-guides + ol')).toContainText('task step 2/3 (resume): f2')

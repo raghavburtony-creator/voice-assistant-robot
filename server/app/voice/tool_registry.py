@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, get_type_hints
@@ -34,6 +34,9 @@ class ToolMetadata:
     supports_async: bool
     verification_required: bool
     side_effects: tuple[str, ...] = ()
+    #: The tool's own `error` text is reviewed to be safe for the model to read (it says how to correct the call). Off by
+    #: default: an unreviewed tool's error text is dropped from `data`, and the envelope's `error` carries a code instead.
+    model_visible_errors: bool = False
 
 
 # These are descriptive labels, not a permission system. Existing tool functions,
@@ -44,7 +47,7 @@ TOOL_FAMILIES = frozenset({
 })
 
 
-TOOL_METADATA: tuple[ToolMetadata, ...] = (
+_FIRST_PARTY_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("navigate_to", "browser", "Navigate to a known page or reported destination.", "medium", "voice_session", 10, False, False, ("browser_navigation",)),
     ToolMetadata("explain_page", "browser", "Explain a known page and its usage.", "low", "voice_session", 5, False, False),
     ToolMetadata("get_screen_context", "screen", "Read the current page and its reported context.", "low", "voice_session", 5, False, False),
@@ -59,6 +62,9 @@ TOOL_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("show_card", "browser", "Show bounded plain text in the voice panel.", "low", "voice_session", 5, False, False, ("voice_panel_card",)),
     ToolMetadata("notice_environmental_observation", "camera", "Propose a bounded attention event from a fresh, actively shared camera frame.", "medium", "active_camera_share", 5, False, True, ("awareness_event_proposal",)),
 )
+
+# Every tool above is first-party, and its error strings are written for the model to read.
+TOOL_METADATA: tuple[ToolMetadata, ...] = tuple(replace(item, model_visible_errors=True) for item in _FIRST_PARTY_METADATA)
 
 
 @dataclass(frozen=True)
@@ -312,7 +318,8 @@ class ToolRegistry:
             return cls._envelope(
                 metadata=metadata,
                 status="error" if failed else "success",
-                data=result,
+                # An unreviewed tool's error text may be internal detail; the envelope's `error` carries a safe code instead.
+                data={k: v for k, v in result.items() if k != "error"} if failed and not metadata.model_visible_errors else result,
                 started_at=started_at,
                 evidence=evidence,
                 provenance=provenance,
