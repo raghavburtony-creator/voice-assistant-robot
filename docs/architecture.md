@@ -29,6 +29,25 @@ Each part of the kit has one job:
 
 In the web kit, **core** files hold the rules and **shell** files hold the adapters and React (D-13, enforced by `layers.test.ts`). The server has the same split (adapters `route.py` and `bridge.py`, checked actions in `tools.py`, app settings in `app_config.py`), but no test enforces it there (Q-05).
 
+### Structured tool results (OBS-01)
+
+Every registered tool returns the same envelope. The envelope separates what the tool returned from what the system knows about its execution and any resulting effect:
+
+| Field | Meaning |
+|---|---|
+| `status` | Tool invocation outcome: `success` or `error`. It does not claim that an external side effect was verified. |
+| `data` | The tool's original structured result. |
+| `evidence` | Explicit evidence supplied by the tool, such as an observed state or returned artifact. Empty when none was produced; never inferred from a model statement. |
+| `provenance` | Source attribution. Defaults to the registered tool name and execution source; a tool may provide more specific provenance. |
+| `verification` | Whether verification is required and its state: `not_required`, `pending`, `passed`, `failed` or `not_run`. |
+| `error` | A safe, structured error code/message, or null. Internal exception details and untrusted arguments are not echoed. |
+| `timestamps` | UTC start and completion timestamps for the tool invocation. |
+| `side_effects` | Declared categories of effects the tool may request or produce. These are metadata, not proof that an effect occurred. |
+
+**Interpretation rules:** execution success and verification success are independent. A tool can return `status: success` with `verification.status: pending` when it has only queued an action or requested visitor approval. A failed verification remains visible as `verification.status: failed`; it must not be rewritten as an execution error or announced as a verified success. If execution fails before verification, the verification state is `not_run`. Evidence and provenance are included only when supplied by the tool; an empty evidence list means no evidence was returned, not that an action was verified.
+
+The gateway validates model arguments before calling the existing tool function, catches unexpected execution failures without exposing exception details, and wraps the result. It does not grant permissions, execute browser/native actions itself, or replace the browser and native checks in D-02, D-22 and D-25.
+
 ### Who decides at runtime
 
 Authority is a chain, not one component (D-22). Each link can only narrow what the one before it allowed:
