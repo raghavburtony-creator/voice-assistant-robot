@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { COMMANDS, isPage, type CommandName } from '../otto.config'
 import { GUIDE_TASK_MOVES, type GuideTaskMove } from './guidance/task'
 import { isRuntimeId } from './runtimeId'
-import { DESKTOP_ACTIONS, type DesktopAction } from './desktop'
+import { DESKTOP_ACTIONS, type DesktopAction, type DesktopActionReport } from './desktop'
 
 const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), limitSeconds: z.number().finite().positive().optional().catch(undefined) }),
@@ -36,6 +36,8 @@ export type AssistantCard = { title: string; body: string; code?: string; follow
 export type AssistantAction = { action: 'navigate'; page: string } | { action: 'command'; name: CommandName } | { action: 'guide'; target: string }
   | { action: 'task'; task: string } | { action: 'task_resume'; task: string; step: string } | { action: 'task_move'; move: GuideTaskMove } | { action: 'card'; card: AssistantCard } | { action: 'desktop_action'; desktop_action: DesktopAction; request_id: string }
 
+export type ReportDesktopActionResult = (report: DesktopActionReport) => boolean
+
 // The same caps as server/app/voice/tools.py (CARD_*): the browser's own check, not a trust in the server's (D-02).
 // eslint-disable-next-line no-control-regex
 const line = (max: number) => z.string().transform(v => v.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max))
@@ -59,7 +61,6 @@ export function toAssistantCard(value: unknown): AssistantCard | null {
 const isMove = (value: unknown): value is GuideTaskMove => typeof value === 'string' && (GUIDE_TASK_MOVES as readonly string[]).includes(value)
 const isCommand = (value: unknown): value is CommandName => typeof value === 'string' && (COMMANDS as readonly string[]).includes(value)
 const isDesktopAction = (value: unknown): value is DesktopAction => typeof value === 'string' && (DESKTOP_ACTIONS as readonly string[]).includes(value)
-const isPolicyRequestId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{32}$/.test(value)
 
 /** The action in a server message, or null when it is unknown or unusable. This is the browser's own allow-list. */
 export function toAssistantAction(message: { action: string; page?: unknown; name?: unknown; target?: unknown; task?: unknown; step?: unknown; move?: unknown; card?: unknown; destination?: unknown; desktop_action?: unknown; request_id?: unknown },
@@ -73,6 +74,9 @@ export function toAssistantAction(message: { action: string; page?: unknown; nam
   if (message.action === 'task_resume' && isRuntimeId(message.task) && isTask?.(message.task) && isRuntimeId(message.step)) return { action: 'task_resume', task: message.task, step: message.step }
   if (message.action === 'task_move' && isMove(message.move)) return { action: 'task_move', move: message.move }
   if (message.action === 'card') { const card = toAssistantCard(message.card); return card ? { action: 'card', card } : null }
-  if (message.action === 'desktop_action' && isDesktopAction(message.desktop_action) && isPolicyRequestId(message.request_id)) return { action: 'desktop_action', desktop_action: message.desktop_action, request_id: message.request_id }
+  if (message.action === 'desktop_action' && isDesktopAction(message.desktop_action)
+    && typeof message.request_id === 'string' && /^[0-9a-f]{32}$/.test(message.request_id)) {
+    return { action: 'desktop_action', desktop_action: message.desktop_action, request_id: message.request_id }
+  }
   return null
 }

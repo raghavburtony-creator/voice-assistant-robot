@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX } from '../otto.config'
+import { toOttoEvents, type AvatarEvent } from './awareness/avatar'
 import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
@@ -48,11 +49,12 @@ import { useWakeWord, type WakeState } from './useWakeWord'
 import VoiceAssistant from './VoiceAssistant'
 import { useWakeSetting } from './wakeWord'
 import './voice.css'
+import type { ReportDesktopActionResult } from './messages'
 
 type Props = {
   /** The current static page id, or a valid runtime destination id (D-23). URLs and paths are refused. */
   page: string
-  onAction: (action: AssistantAction) => void
+  onAction: (action: AssistantAction, reportDesktopResult: ReportDesktopActionResult) => void
   /** Hide the 3D robot and keep only the panel (for a small or low-power page). Default true. */
   showRobot?: boolean
   /** Lets your code play gestures (`gestures.play('celebrate')`). Optional; keep the same object between renders. */
@@ -116,7 +118,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const ownGuide = useMemo(createOttoGuide, [])
   const ottoGuide = guide ?? ownGuide
   // A voice 'guide' action (already checked against the page's targets) is shown by Otto's body; the model speaks.
-  const handleAction = useCallback((action: AssistantAction) => {
+  const handleAction = useCallback((action: AssistantAction, reportDesktopResult: ReportDesktopActionResult) => {
     if (action.action === 'guide') ottoGuide.show({ target: action.target, reason: 'asked', say: null })
     // A voice 'task' action (checked against the page's offered tasks): Otto walks the visitor through it, step by step.
     if (action.action === 'task') { const spec = findGuideTask(action.task); if (spec) ottoGuide.startTask(spec) }
@@ -127,9 +129,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     }
     // A voice 'task_move' (checked against the fixed moves): stop the running task, or go back or on a step.
     if (action.action === 'task_move') ottoGuide.move(action.move)
-    onAction(action)
+    onAction(action, reportDesktopResult)
   }, [ottoGuide, onAction])
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket,
+  // The server's avatar events (working, asking permission...) go through the one event path (D-19): Otto's own judgement decides.
+  const handleAvatar = useCallback((avatar: AvatarEvent) => toOttoEvents(avatar).forEach(event => otto.notify(event)), [otto])
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket, onAvatar: handleAvatar,
     onEnvironmental: event => otto.notify(event) })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
   // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.

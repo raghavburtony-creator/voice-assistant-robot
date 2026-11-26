@@ -14,7 +14,6 @@ from typing import Literal, get_args
 from google.adk.tools import ToolContext
 
 from app.voice.tool_registry import ToolRegistry
-from app.voice.policy import current_request_id
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
@@ -54,8 +53,13 @@ def _reported(tool_context: ToolContext, key: str, field: str) -> dict[str, dict
     return {e["id"]: e for e in entries if isinstance(e, dict) and is_runtime_id(e.get("id"))}
 
 
-def _send(tool_context: ToolContext, action: dict) -> None:
-    sink.put(tool_context.session.id, action)
+def _send(tool_context: ToolContext, action: dict) -> bool:
+    policy = tool_context.state.get("_active_policy_decision")
+    if action.get("action") == "desktop_action" and isinstance(policy, dict):
+        request_id = policy.get("request_id")
+        if isinstance(request_id, str):
+            action = {**action, "request_id": request_id}
+    return sink.put(tool_context.session.id, action)
 
 
 def navigate_to(page: str, tool_context: ToolContext) -> dict:
@@ -235,8 +239,8 @@ def desktop_action(action: DesktopAction, tool_context: ToolContext) -> dict:
     """
     if action not in get_args(DesktopAction):
         return {"ok": False, "error": "Unsupported desktop action."}
-    request_id = current_request_id()
-    _send(tool_context, {"action": "desktop_action", "desktop_action": action, **({"request_id": request_id} if request_id else {})})
+    if not _send(tool_context, {"action": "desktop_action", "desktop_action": action}):
+        return {"ok": False, "error": "The desktop action request could not be queued."}
     return {
         "ok": True,
         "requested": action,

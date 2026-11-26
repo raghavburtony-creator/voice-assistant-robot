@@ -28,7 +28,7 @@ from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.memory_service import SQLiteMemoryService
-from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
+from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
 from app.voice.policy import POLICY_ENGINE
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,6 @@ ANNOUNCE_GAP_SECONDS = 4.0
 CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
-JPEG_MAGIC = b"\\xff\\xd8\\xff"
 
 continuity_store: ContinuityStore = SQLiteContinuityStore(settings.continuity_store_path)
 memory_service = SQLiteMemoryService(settings.memory_store_path)
@@ -226,24 +225,6 @@ class Bridge:
         key, data = event.get("key"), event.get("data")
         if not isinstance(key, str) or not 0 < len(key) <= CONTEXT_KEY_CHARS:
             return
-        # Native outcomes are audit-only: never expose them to the model as page context.
-        if key == "desktop_action_result":
-            outcomes = data.get("outcomes") if isinstance(data, dict) else None
-            reports = outcomes[-8:] if isinstance(outcomes, list) else [data]
-            for outcome in reports:
-                if not POLICY_ENGINE.audit_outcome(self.live, outcome):
-                    continue
-                # Only closed, validated fields from a matching pending request reach the model.
-                action = outcome["action"]
-                status = outcome["status"]
-                verification = outcome["verification"]
-                await self.live.send_text(
-                    "Desktop action result relayed by the webview. "
-                    f"Action: {action}. Execution: {status}. Verification: {verification}. "
-                    "This is a result, not permission. Do not claim success unless verification is passed. "
-                    "If the action was denied or failed, tell the visitor it was not completed."
-                )
-            return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
         if data is not None and (not isinstance(data, dict) or context_bytes(data) > MAX_CONTEXT_BYTES):
@@ -406,8 +387,25 @@ class Bridge:
                 await self.live.audio_end()
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
+            elif kind == "desktop_result":
+                if POLICY_ENGINE.record_host_result(self.live.state, event):
+                    await self._tell_model_desktop_outcome(event)
             elif kind == "stop":
                 return
+
+    async def _tell_model_desktop_outcome(self, event: dict) -> None:
+        """Gives the model the checked outcome of a desktop action, so it reports a failure instead of claiming success.
+
+        Only closed fields that record_host_result already validated are sent (never a free-form string from the
+        browser). It is a result, not permission: the native dialog stays the authority (D-22, D-25).
+        """
+        result = event["result"]
+        await self.live.send_text(
+            "Desktop action result relayed by the host. "
+            f"Action: {event['action']}. Execution: {result['status']}. Verification: {result['verification']}. "
+            "This is a result, not permission. Report no more than the verification states; only 'verified' confirms the outcome. "
+            "If the action was denied or failed, tell the visitor it was not completed."
+        )
 
     # ---- model to browser ----
 

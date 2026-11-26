@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPage, PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
 import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
-import { executeDesktopAction } from './otto/desktop'
+import { executeDesktopAction, type DesktopActionReport } from './otto/desktop'
 
 function pageFromHash(): PageId {
   const id = window.location.hash.slice(1)
@@ -15,7 +15,6 @@ export default function App() {
   const [page, setPage] = useState<PageId>(pageFromHash)
   const [message, setMessage] = useState('')
   const [dark, setDark] = useState(false)
-  const [desktopActionOutcome, setDesktopActionOutcome] = useState<Record<string, unknown> | null>(null)
   const guide = useMemo(createOttoGuide, [])
   const events = useMemo(createOttoEvents, [])
   // A task Otto can walk you through, and see you do: he notices each step himself (no "next" button). The voice can
@@ -43,7 +42,7 @@ export default function App() {
   const goTo = (next: PageId) => { window.location.hash = next }
 
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
-  const onAction = useCallback((action: AssistantAction) => {
+  const onAction = useCallback((action: AssistantAction, reportDesktopResult: (report: DesktopActionReport) => boolean) => {
     if (action.action === 'navigate') {
       if (isPage(action.page)) goTo(action.page)
       return
@@ -67,14 +66,23 @@ export default function App() {
         message: `Otto is requesting permission to ${description}.`,
         data: { action: action.desktop_action },
       })
-      void executeDesktopAction(action.desktop_action).then(result => {
-        setDesktopActionOutcome(previous => ({ outcomes: [...(Array.isArray(previous?.outcomes) ? previous.outcomes : []), { request_id: action.request_id, action: result.action, ok: result.ok, status: result.status, verification: result.verification }].slice(-8) }))
+      void executeDesktopAction(action.desktop_action, action.request_id).then(result => {
+        reportDesktopResult({
+          request_id: action.request_id,
+          action: action.desktop_action,
+          consent_certificate: result.consentCertificate ? {
+            certificate_id: result.consentCertificate.certificateId,
+            request_id: result.consentCertificate.requestId,
+            action: result.consentCertificate.action,
+            decision: result.consentCertificate.decision,
+            method: result.consentCertificate.method,
+            issued_at_unix_ms: result.consentCertificate.issuedAtUnixMs,
+          } : null,
+          result: { ok: result.ok, status: result.status, verification: result.verification },
+        })
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
-      }).catch(() => {
-        setDesktopActionOutcome(previous => ({ outcomes: [...(Array.isArray(previous?.outcomes) ? previous.outcomes : []), { request_id: action.request_id, action: action.desktop_action, ok: false, status: 'failed', verification: 'unavailable' }].slice(-8) }))
-        desktopTask.fail(`Otto could not ${description}.`)
-      })
+      }).catch(() => desktopTask.fail(`Otto could not ${description}.`))
       return
     }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
@@ -88,8 +96,6 @@ export default function App() {
 
   // What Otto can read with get_screen_context. The third argument names an event in app_config.py EVENTS: Otto reacts to it once.
   useAssistantContext('demo', { theme: dark ? 'dark' : 'light', message: message || null }, message ? 'message_shown' : undefined)
-  // Report only bounded native result metadata; the server matches it to the exact pending authorization.
-  useAssistantContext('desktop_action_result', desktopActionOutcome)
 
   // The tour: keep its handle, show where the visitor is in it, and let them step, go back or stop.
   const [tour, setTour] = useState<{ handle: GuideTaskHandle; index: number; total: number } | null>(null)

@@ -22,3 +22,6 @@ web/test-results/
 # Tauri build output
 web/src-tauri/target/
 web/src-tauri/gen/
+
+# Runtime data (the continuity store)
+server/data/

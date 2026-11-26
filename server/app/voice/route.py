@@ -7,10 +7,10 @@
                              | {"type":"capture","source":"camera"|"screen"|null,"generation":...}   (a share starts or stops; generation is monotonically increasing, D-21/D-30)
                              | {"type":"frame","data":<base64 JPEG>}   (while sharing: at most 1/s, 256 KB; others dropped)
                              | {"type":"continuity_clear"}   (visitor withdrawal: deletes the saved task and suppresses saves for this session)
+                             | {"type":"desktop_result","request_id":...,"action":...,"consent_certificate":...,"result":...}   (native-host receipt and result; audit only, never execution authority)
     server -> client  text   {"type":"ready","limitSeconds":600} | {"type":"transcript","role":"user"|"assistant","text":...}
                              {"type":"action","action":"navigate","page":...} | {"type":"action","action":"command","name":...}
                              {"type":"action","action":"guide","target":...} | {"type":"action","action":"task","task":...}
-                             {"type":"action","action":"desktop_action","desktop_action":<DesktopAction>,"request_id":<32 lowercase hex chars>}  (server-issued policy request id; browser validates both fields)
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
