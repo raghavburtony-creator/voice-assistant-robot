@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { confirmedTextForConversation, FakeSignRecognitionAdapter, SIGN_TEXT_MAX_CHARS, SignRecognitionGate } from './signRecognition'
+import { confirmedTextForConversation, SIGN_TEXT_MAX_CHARS, SignRecognitionGate } from './signRecognition'
 const update = (overrides: Record<string, unknown> = {}) => ({
   sessionId: 'session-a', sequence: 1, capturedAtMs: 100, utteranceId: 'utterance-a', language: 'xx',
   kind: 'partial', text: 'hello', ...overrides,
@@ -56,19 +56,24 @@ describe('SignRecognitionGate', () => {
     expect(new SignRecognitionGate('session-a', 'ms-MU')).toBeInstanceOf(SignRecognitionGate)
   })
 })
-describe('FakeSignRecognitionAdapter', () => {
-  it('emits deterministic partial, correction, final and unrecognized fixtures', () => {
-    const fixtures = [update(), update({ sequence: 2, text: 'corrected' }), update({ sequence: 3, kind: 'final', text: 'final' }), update({ sequence: 4, utteranceId: 'utterance-b', kind: 'unrecognized', reason: 'uncertain' })]
-    const received: unknown[] = []
-    new FakeSignRecognitionAdapter(fixtures).run(value => received.push(value))
-    expect(received).toEqual(fixtures)
+describe('confidence', () => {
+  it('is kept when valid and makes the update malformed when not', () => {
+    const gate = new SignRecognitionGate('session-a', 'xx')
+    expect(gate.accept(update({ confidence: 0.4 }))).toMatchObject({ accepted: true, update: { confidence: 0.4 } })
+    for (const [i, confidence] of [-0.1, 1.1, NaN, Infinity, '0.5', null].entries()) {
+      expect(gate.accept(update({ sequence: 2 + i, capturedAtMs: 110 + i, confidence }))).toEqual({ accepted: false, reason: 'malformed' })
+    }
+    expect(gate.accept(update({ sequence: 20, capturedAtMs: 200, confidence: 0 }))).toMatchObject({ accepted: true, update: { confidence: 0 } })
   })
-  it('stops emitting immediately when stopped by a consumer', () => {
-    const adapter = new FakeSignRecognitionAdapter([update(), update({ sequence: 2 })])
-    const received: unknown[] = []
-    adapter.run(value => { received.push(value); adapter.stop() })
-    expect(received).toHaveLength(1)
-    adapter.run(value => received.push(value))
-    expect(received).toHaveLength(1)
+  it('never lets unrecognized carry text or confidence', () => {
+    const gate = new SignRecognitionGate('session-a', 'xx')
+    const r = gate.accept(update({ kind: 'unrecognized', reason: 'uncertain', text: 'fluent words', confidence: 0.1 }))
+    expect(r.accepted && r.update).toEqual({ sessionId: 'session-a', sequence: 1, capturedAtMs: 100, utteranceId: 'utterance-a', language: 'xx', kind: 'unrecognized', reason: 'uncertain' })
+  })
+  it('rejects unknown kinds and non-objects', () => {
+    const gate = new SignRecognitionGate('session-a', 'xx')
+    for (const v of [null, undefined, 'x', 3, [], {}, update({ kind: 'other' }), update({ kind: 'unrecognized', reason: 'made-up' }), update({ text: 7 })]) {
+      expect(gate.accept(v).accepted).toBe(false)
+    }
   })
 })

@@ -29,6 +29,8 @@ import { EmbodiedSandbox } from './lab/EmbodiedSandbox'
 import { VAD } from './otto.config'
 import { VoiceActivityDetector } from './otto/gemini/vad'
 import { FakeVoiceServer } from './lab/fakeServer'
+import { FAKE_SIGN_SCRIPTS, FakeSignRecognizer, type FakeSignScriptName } from './lab/fakeSignRecognizer'
+import { SignRecognizerProvider } from './otto/sign/useSignRecognizer'
 import { analyserMouth, fakeMouth, MOUTH_BANDS, type MouthSource } from './otto/mouth'
 import { createOttoStage } from './otto/movement/useStage'
 import type { StageEvent } from './otto/movement/stage'
@@ -171,6 +173,9 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
 
   // The real Otto against a simulated server, instead of the lab's own robot.
   const [full, setFull] = useState(false)
+  // A scripted sign reader (lab only, D-29): no camera and no model. Remade for each choice of script.
+  const [signScript, setSignScript] = useState<FakeSignScriptName>('reads')
+  const signReader = useMemo(() => new FakeSignRecognizer(FAKE_SIGN_SCRIPTS[signScript]), [signScript])
   const server = useMemo(() => new FakeVoiceServer(addServer), [addServer])
   useEffect(() => () => server.dispose(), [server])
 
@@ -537,6 +542,11 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
             the bubble in step with the audio, and barge-in. Open the panel (click Otto, or Alt+O), choose to type, and ask anything.
           </p>
           <label className="lab-inline"><input type="checkbox" checked={full} onChange={e => { manual(); quiet(); setFull(e.target.checked) }} /> Use the real Otto</label>
+          <label className="lab-inline">Sign reader script (scripted, no camera or model)
+            <select value={signScript} disabled={!full} onChange={e => setSignScript(e.target.value as FakeSignScriptName)}>
+              {(Object.keys(FAKE_SIGN_SCRIPTS) as FakeSignScriptName[]).map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
           <div className="lab-row">
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.reply()) addServer('not connected: open the panel and start first') }}>Otto answers</button>
             <button type="button" className={btn} disabled={!full} onClick={() => { if (!server.bargeIn()) addServer('Otto is not speaking') }}>Barge in (the server hears you)</button>
@@ -575,8 +585,10 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
     {panel && <div className="lab-panel" role="region" aria-label="Simulated panel">A simulated panel: Otto keeps clear of it.</div>}
 
     {full
-      ? <Otto page="home" onAction={action => addServer(`action: ${JSON.stringify(action)}`)} gestures={channel} stage={stage}
+      ? <SignRecognizerProvider recognizer={signReader}>
+        <Otto page="home" onAction={action => addServer(`action: ${JSON.stringify(action)}`)} gestures={channel} stage={stage}
           createSocket={server.createSocket} idleControls={idle} events={events} config={config} guide={guide} />
+      </SignRecognizerProvider>
       : <OttoStage className="otto-dock" stage={stage} pose={shownPose} expression={shownExpression} say={shownSay}
           mouth={shownMouth} gestures={channel} busy={busy} obstacles={panel ? ['.lab-panel'] : undefined} obstaclesKey={panel}
           idleTimes={shortIdle ? SHORT_IDLE : undefined} onIdleState={s => { idleRef.current = s; setIdleState(s) }} idleControls={idle}

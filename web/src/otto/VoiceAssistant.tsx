@@ -7,6 +7,7 @@ import { isDesktopRuntime, setDesktopPermissionEnabled } from './desktop'
 import type { AnswerLength } from './consent'
 import type { AssistantCard } from './messages'
 import ScreenShare, { canShare } from './ScreenShare'
+import SignInput from './sign/SignInput'
 import { Button, Icon, IconButton, Notice } from './ui'
 import { NO_RETRY_CODES, type useVoiceAssistant } from './useVoiceAssistant'
 import { recognitionCtor, useWakeSetting } from './wakeWord'
@@ -195,6 +196,9 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
     </Notice>}
 
     {canShare() && <ScreenShare open={connected} sendCapture={assistant.sendCapture} sendFrame={assistant.sendFrame} />}
+
+    {/* Sign input (D-29): renders nothing unless the app plugs in a recognizer; the kit ships none. */}
+    <SignInput open={connected} sendText={assistant.sendText} />
 
     {active && isDesktopRuntime() && <fieldset className="voice-assistant__lengths">
       <legend>Desktop awareness</legend>

@@ -1,5 +1,5 @@
 // Proves the subpath separation on the built files. Run by `npm run build:lib` (after all builds).
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,6 +48,11 @@ const gemini = closure('gemini.js')
 for (const [f, src] of gemini) {
   if (/(?:from\s*|import\s*\(?\s*)["']react(?:-dom)?(?:\/[^"']*)?["']/.test(src)) fail(`${f} imports react`)
   if (src.includes('customElements')) fail(`${f} references customElements`)
+}
+
+// The lab's scripted sign reader (D-29) must not reach any published file. A string literal survives minification.
+for (const f of readdirSync(dist).filter(n => n.endsWith('.js'))) {
+  if (read(f).includes('the lab simulator (no camera is used)')) fail(`${f} contains the lab-only fake sign recognizer`)
 }
 
 for (const f of ['react', 'gemini', 'element'].map(n => `types/otto/${n}/index.d.ts`)) {
