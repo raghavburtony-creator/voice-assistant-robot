@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import time
 import uuid
 from pathlib import Path
@@ -12,6 +13,15 @@ import numpy as np
 
 from .features import LANDMARK_COUNT, sequence_features
 from .manifest import MANIFEST_COLUMNS
+
+_LABEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+
+
+def validate_label_id(label: str) -> str:
+    """Validate a label before it is used in any output path."""
+    if not isinstance(label, str) or not _LABEL_ID.fullmatch(label):
+        raise ValueError("label must be a 1-64 character ID using letters, digits, dot, underscore or hyphen")
+    return label
 
 
 def _copy_landmarks(destination: np.ndarray, start: int, source: object) -> None:
@@ -44,6 +54,13 @@ def _append_manifest(path: Path, row: dict[str, str]) -> None:
 
 
 def collect(args: argparse.Namespace) -> int:
+    # Validate before creating directories: the label is also used in the local output path.
+    validate_label_id(args.label)
+    if not args.session_id.strip() or not args.signer_id.strip():
+        raise RuntimeError("signer-id and session-id are required")
+    if args.takes < 1:
+        raise RuntimeError("takes must be at least one")
+
     # Optional imports keep the manifest, feature and model tests independent of camera drivers.
     try:
         import cv2
@@ -55,10 +72,6 @@ def collect(args: argparse.Namespace) -> int:
 
     if not args.consent_confirmed:
         raise RuntimeError("confirm the signer has explicitly consented with --consent-confirmed")
-    if not args.session_id.strip() or not args.signer_id.strip():
-        raise RuntimeError("signer-id and session-id are required")
-    if args.takes < 1:
-        raise RuntimeError("takes must be at least one")
 
     data_root = Path(args.data_root).resolve()
     raw_root = data_root / "raw" / args.label

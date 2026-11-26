@@ -164,3 +164,18 @@ def test_third_party_license_must_be_explicitly_verified(tmp_path):
 
     with pytest.raises(ManifestError, match="third-party data requires"):
         load_manifest(manifest, data_root)
+
+
+def test_training_split_must_contain_every_label():
+    from otto_sign.train import _check_class_coverage
+
+    records = [
+        _record("a", "train-session", "signer-a", "HELLO"),
+        _record("b", "validation-session", "signer-b", "HELLO"),
+        _record("c", "test-session", "signer-c", "HELLO"),
+        _record("d", "validation-session", "signer-b", "THANK_YOU"),
+    ]
+    assignments = {"a": "train", "b": "validation", "c": "test", "d": "validation"}
+
+    with pytest.raises(ManifestError, match="training split is missing labels"):
+        _check_class_coverage(records, assignments)

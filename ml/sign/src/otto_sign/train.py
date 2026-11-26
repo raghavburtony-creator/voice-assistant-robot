@@ -142,6 +142,8 @@ def train(args: argparse.Namespace) -> dict:
     plan = build_split_plan(records, seed=args.seed)
     _check_class_coverage(records, plan.assignments)
     labels = sorted({record.label for record in records})
+    if len(labels) < 2:
+        raise ManifestError("at least two distinct BSL sign labels are required to train a classifier")
     label_to_index = {label: index for index, label in enumerate(labels)}
     feature_rows = _load_feature_rows(records, data_root, args.frame_count)
 
