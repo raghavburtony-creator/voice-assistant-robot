@@ -179,7 +179,10 @@ class AuditLog:
                 or record.get("outcome_received") is True):
             return False
         record["execution_status"] = status if ok else ("denied" if status == "denied" else "failed")
-        record["consent_status"] = "approved" if status != "denied" else "denied"
+        record["consent_status"] = "denied" if status == "denied" else (
+            "approved" if status in {"completed", "started"} or verification in {"not_verified", "native_api_completed", "process_spawned"}
+            else "unknown"
+        )
         record["verification_result"] = verification
         record["verification_status"] = {
             "verified": "passed",
