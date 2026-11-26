@@ -165,15 +165,21 @@ class ToolRegistry:
 
         @wraps(function)
         def call(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            context = None
             try:
                 bound = signature.bind(*args, **kwargs)
                 bound.apply_defaults()
+                context = bound.arguments.get("tool_context")
                 for name, validator in validators.items():
                     if name in bound.arguments:
                         bound.arguments[name] = validator.validate_python(bound.arguments[name])
             except (TypeError, ValidationError):
+                if context is None:
+                    try:
+                        context = signature.bind_partial(*args, **kwargs).arguments.get("tool_context")
+                    except TypeError:
+                        context = kwargs.get("tool_context")
                 decision = POLICY_ENGINE.invalid_arguments(metadata)
-                context = kwargs.get("tool_context")
                 POLICY_ENGINE.audit(context, metadata, decision, "denied")
                 return {
                     "status": "error",
