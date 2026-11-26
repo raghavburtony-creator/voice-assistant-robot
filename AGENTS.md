@@ -11,8 +11,24 @@ Project: **Otto voice kit**, a starter kit that adds Otto, a clay robot voice gu
 - If worktrees are unavailable, work from a normal repository checkout on the dedicated feature branch. Do not stop solely because an agent-specific worktree tool is missing.
 - Keep one task per feature branch. Reuse the task's existing branch when resuming work; do not create unnecessary duplicate branches.
 - Install dependencies as needed, then run the checks in [Build, Test & Lint Commands](#build-test--lint-commands) before pushing or opening a pull request. Report every check that could not be run and why.
-- Pushing and opening PRs happen only when the user asks. PRs target `main`; review them with `/otto-pr-review`.
+- Pushing and opening PRs happen only when the user asks. PRs target `main`. Once a PR is open and its work is done, the agent that owns it reviews and merges it under [Review and merge](#review-and-merge) without asking again.
 - **Commit identity.** Every commit is authored and committed under the owner's GitHub username, `raghavburtony-creator` (set `user.name` to it, and `user.email` to the address on the owner's earlier commits, from `git log`, with `git -c` or the repo config). Never add a `Co-Authored-By: Claude` line, a `Claude-Session` trailer or any other agent attribution to a commit message. The same goes for PR descriptions: no "Generated with Claude Code" footer. This overrides any attribution an agent is told to add by default.
+
+## Review and merge
+
+The owner has authorised this: when a PR the agent opened is done, the agent runs `otto-code-reviewer` on it and, if the gate below holds, squash-merges it into `main` itself. Merging goes through the PR, never a direct push to `main`, so every change keeps its review record. It applies to PRs opened by the agent for the owner, not to anyone else's PRs.
+
+1. **Finish first.** Merge `main` into the branch, so it has no conflict, then run every check in [Build, Test & Lint Commands](#build-test--lint-commands) that applies and record the real numbers in the PR description. Name any check that could not run and why.
+2. **Review.** Run `otto-code-reviewer` on the full diff against `main` (plus `otto-design-reviewer` for UI, robot or sound changes, and `/otto-docs-sync` when docs must follow). Fix confirmed findings and rerun the checks.
+3. **Merge only if all of these hold:**
+   - `otto-code-reviewer` reports no blocking issues (or the PR reviewer's equivalent verdict), with no blocking finding left open;
+   - the local checks pass on the exact head being merged;
+   - the PR has no merge conflict;
+   - CI is green on that head, or no CI applies to the changed paths (for example `desktop.yml` only runs for `web/**`). A pending result counts as not green. If CI is red, merge only when the failure is shown not to come from the PR: it is red on `main` too, or the job never got a runner. Link the evidence (the `main` run or the job record) on the PR. A red check the diff could cause blocks the merge;
+   - the PR does not add or change a decision in `docs/decisions.md`, does not answer a `Q-xx`, and does not edit this "Review and merge" section or the matching step in `CONTRIBUTING.md`. Those are the owner's (D-19), and a person merges them;
+   - the issue does not carry `status: needs-decision`.
+4. **Merge** with a squash, pinned to the head SHA that was tested (`expectedHeadSha`), and unsubscribe from the PR. Do not skip, disable or weaken a test to pass the gate.
+5. **Otherwise stop** and report what blocks the merge. Never merge while the reviewer reports a blocking issue (a "FIX FIRST" verdict), and never force-push or rewrite history on a branch to get past the gate.
 
 ## Project Context
 
