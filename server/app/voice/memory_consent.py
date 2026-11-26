@@ -75,7 +75,8 @@ def pending_memory_proposal(state: object, request_id: object, *, now: float | N
     """Return a pending proposal only while its exact one-use request remains valid."""
     if not _supports_state(state) or not _valid_request_id(request_id):
         return None
-    item = _prune(state, time.time() if now is None else now).get(request_id)
+    pending = _prune(state, time.time() if now is None else now)
+    item = pending.get(request_id)
     if not isinstance(item, dict) or not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
         pending.pop(request_id, None)
         _write_pending(state, pending)

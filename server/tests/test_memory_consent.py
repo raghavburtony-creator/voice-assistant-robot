@@ -43,6 +43,17 @@ def test_adk_state_object_can_reject_and_discard_a_proposal():
     assert pending_memory_proposal(state, proposal["request_id"], now=101) is None
 
 
+def test_pending_lookup_drops_malformed_entries_without_dict_pop_support():
+    state = State({}, {})
+    malformed_id = "a" * 32
+    state[PENDING_MEMORY_KEY] = {
+        malformed_id: {"kind": "unknown", "content": "bad", "created_at": 100},
+    }
+
+    assert pending_memory_proposal(state, malformed_id, now=101) is None
+    assert malformed_id not in state[PENDING_MEMORY_KEY]
+
+
 def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
     state = {}
     proposal = stage_memory_proposal(
