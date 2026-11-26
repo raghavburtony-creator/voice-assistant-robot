@@ -10,7 +10,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Mapping, get_type_hints
+from typing import Any, Callable, get_type_hints
 
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
@@ -30,6 +30,14 @@ class ToolMetadata:
 
 # These are policy labels, not a second permission system. Existing tool
 # functions and the browser remain authoritative for consent and action checks.
+# The canonical capability taxonomy. A family is populated only when a real,
+# permission-bounded implementation is registered; no placeholder tools are exposed.
+TOOL_FAMILIES = frozenset({
+    "browser", "computer", "files", "screen", "camera",
+    "web_research", "memory", "tasks",
+})
+
+
 TOOL_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("navigate_to", "browser", "Navigate to a known page or reported destination.", "medium", "voice_session", 10, False, False),
     ToolMetadata("explain_page", "browser", "Explain a known page and its usage.", "low", "voice_session", 5, False, False),
