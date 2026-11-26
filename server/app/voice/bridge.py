@@ -29,6 +29,7 @@ from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
+from app.voice.policy import POLICY_ENGINE
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,10 @@ class Bridge:
     async def update_context(self, event: dict) -> None:
         key, data = event.get("key"), event.get("data")
         if not isinstance(key, str) or not 0 < len(key) <= CONTEXT_KEY_CHARS:
+            return
+        # Native outcomes are audit-only: never expose them to the model as page context.
+        if key == "desktop_action_result":
+            POLICY_ENGINE.audit_outcome(self.live, data)
             return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
