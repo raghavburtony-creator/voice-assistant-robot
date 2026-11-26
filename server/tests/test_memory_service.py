@@ -59,6 +59,9 @@ def test_update_and_forget_are_explicit_and_identity_scoped(memory):
     assert memory.forget("demo", "opaque-b", record.id, explicit=True) is False
     assert memory.forget("demo", "opaque-a", record.id, explicit=True) is True
     assert memory.recall("demo", "opaque-a", now=102) == []
+    audit = memory.audit_events("demo", "opaque-a")
+    assert [item["action"] for item in audit] == ["forget", "update", "remember"]
+    assert all("content" not in item for item in audit)
 
 
 def test_resurface_ranks_relevant_records_without_emitting_actions(memory):
@@ -70,9 +73,7 @@ def test_resurface_ranks_relevant_records_without_emitting_actions(memory):
         "demo", "opaque-a", "Prefers concise explanations", provenance="explicit request",
         explicit=True, now=101,
     )
-    found = memory.resurface("demo", "opaque-a", "Python backend", now=101) if False else memory.resurface(
-        "demo", "opaque-a", "Python backend"
-    )
+    found = memory.resurface("demo", "opaque-a", "Python backend", now=101)
     assert len(found) == 1
     assert found[0].content == "Uses Python for backend work"
 
