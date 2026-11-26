@@ -94,6 +94,7 @@ export class FakeVoiceServer {
   private continuitySeenRunning = false
   private memoryRequestCounter = 0
   private pendingMemory: { request_id: string; content: string; kind: 'episodic' | 'semantic' } | null = null
+  private resolvedMemory: string[] = []
   private readonly savedMemories: string[] = []
   private continuitySaved: { task: string; step: string; savedAt: number } | null = (() => {
     try { return JSON.parse(localStorage.getItem('otto-lab:continuity-task') || 'null') } catch { return null }
@@ -126,8 +127,17 @@ export class FakeVoiceServer {
         const status = message.accepted ? 'saved' : 'discarded'
         if (message.accepted) this.savedMemories.push(pending.content)
         this.pendingMemory = null
+        this.resolvedMemory.push(pending.request_id)
         this.send({ type: 'memory_result', request_id: pending.request_id, status })
         this.log(`memory: ${status}`)
+      } else if (
+        typeof message.request_id === 'string' && /^[0-9a-f]{32}$/.test(message.request_id)
+        && typeof message.accepted === 'boolean' && !this.resolvedMemory.includes(message.request_id)
+      ) {
+        // Like the server: a well-formed id that is not open (expired, or never staged) is answered, so the panel never
+        // waits; a repeat of one already answered stays silent.
+        this.send({ type: 'memory_result', request_id: message.request_id, status: 'expired' })
+        this.log('memory: expired')
       }
       return
     }

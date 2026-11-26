@@ -79,6 +79,19 @@ function errorMessage(code: string, serverText: string): string {
 }
 
 /** A retry cannot help when the server is not set up or refused the start. */
+/** The statuses a proposal can still move out of: only an open request takes a server answer. */
+const OPEN_MEMORY_STATUSES: readonly MemoryProposalStatus[] = ['pending', 'saving', 'discarding']
+
+/** Applies the server's answer to one proposal, but only while it is still open, so a late or repeated answer cannot
+ *  turn a "saved" or "discarded" proposal into something else. */
+export function applyMemoryResult(
+  proposals: MemoryProposalEntry[], requestId: string, status: MemoryProposalStatus,
+): MemoryProposalEntry[] {
+  return proposals.map(proposal =>
+    proposal.request_id === requestId && OPEN_MEMORY_STATUSES.includes(proposal.status) ? { ...proposal, status } : proposal,
+  )
+}
+
 export const NO_RETRY_CODES = ['not_configured', 'bad_start']
 
 type Options = {
@@ -540,9 +553,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           ].slice(-3))
           break
         case 'memory_result':
-          setMemoryProposals(current => current.map(proposal =>
-            proposal.request_id === message.request_id ? { ...proposal, status: message.status } : proposal,
-          ))
+          setMemoryProposals(current => applyMemoryResult(current, message.request_id, message.status))
           break
         case 'action':
           {

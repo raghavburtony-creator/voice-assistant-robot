@@ -228,11 +228,11 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         sink.close(live.session_id)
 
 
-def test_confirming_a_proposal_that_a_newer_one_pruned_is_answered_expired_not_silence():
+def test_confirming_a_proposal_that_expired_and_was_dropped_is_answered_expired_not_silence():
     """The panel hides the buttons when Save is pressed and then waits for an answer; silence left it stuck forever."""
     state: dict = {}
     first = stage_memory_proposal(state, "Prefers short answers", "semantic", now=1000)
-    stage_memory_proposal(state, "Likes the dark theme", "semantic", now=1130)  # prunes the first (older than the TTL)
+    stage_memory_proposal(state, "Likes the dark theme", "semantic", now=1130)  # staging drops the first: it is past the TTL
     assert consume_memory_proposal(state, first["request_id"], True, now=1135) == ("expired", None)
     assert state.get("memory_pending") and first["request_id"] not in state["memory_pending"]
 

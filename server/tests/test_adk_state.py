@@ -93,3 +93,30 @@ def test_clearing_a_key_works_on_a_dict_and_on_a_state_that_cannot_delete():
     assert wrapped.get("k") is None
     clear_state_key(wrapped, "never-set")  # a missing key is not an error
     assert POLICY_ENGINE is not None
+
+
+def test_a_memory_proposal_is_staged_on_a_real_state_and_confirmed_once_from_the_bridges_dict(session):
+    """The tool stages through the State; the bridge consumes from the session's own dict. Both must see the same record."""
+    from app.voice.memory_consent import consume_memory_proposal
+
+    session.state["memory_enabled"] = True
+    ctx = state_context(session)
+    envelope = tools.REGISTRY._gateway(tools.propose_memory, tools.REGISTRY["propose_memory"].metadata)(
+        "Prefers short answers", "semantic", ctx,
+    )
+    assert envelope["status"] == "success", envelope
+    [queued] = sink.drain(session.session_id)
+    request_id = queued["memory_proposal"]["request_id"]
+    assert request_id not in repr(envelope)  # the model never sees the id
+    status, proposal = consume_memory_proposal(session.state, request_id, True)
+    assert (status, proposal["content"]) == ("accepted", "Prefers short answers")
+    assert consume_memory_proposal(session.state, request_id, True) == (None, None)
+
+
+def test_memory_stays_denied_on_a_real_state_without_the_hosts_opt_in(session):
+    ctx = state_context(session)
+    envelope = tools.REGISTRY._gateway(tools.propose_memory, tools.REGISTRY["propose_memory"].metadata)(
+        "Prefers short answers", "semantic", ctx,
+    )
+    assert envelope["status"] == "error" and envelope["error"]["code"] == "permission_denied"
+    assert sink.drain(session.session_id) == []
