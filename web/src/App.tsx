@@ -15,6 +15,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>(pageFromHash)
   const [message, setMessage] = useState('')
   const [dark, setDark] = useState(false)
+  const [desktopActionOutcome, setDesktopActionOutcome] = useState<Record<string, unknown> | null>(null)
   const guide = useMemo(createOttoGuide, [])
   const events = useMemo(createOttoEvents, [])
   // A task Otto can walk you through, and see you do: he notices each step himself (no "next" button). The voice can
@@ -67,9 +68,13 @@ export default function App() {
         data: { action: action.desktop_action },
       })
       void executeDesktopAction(action.desktop_action).then(result => {
+        setDesktopActionOutcome({ request_id: action.request_id, action: result.action, ok: result.ok, status: result.status, verification: result.verification })
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
-      }).catch(() => desktopTask.fail(`Otto could not ${description}.`))
+      }).catch(() => {
+        setDesktopActionOutcome({ request_id: action.request_id, action: action.desktop_action, ok: false, status: 'failed', verification: 'unavailable' })
+        desktopTask.fail(`Otto could not ${description}.`)
+      })
       return
     }
     // Otto shows it, walks you through it, or puts the card in his panel, himself.
@@ -83,6 +88,8 @@ export default function App() {
 
   // What Otto can read with get_screen_context. The third argument names an event in app_config.py EVENTS: Otto reacts to it once.
   useAssistantContext('demo', { theme: dark ? 'dark' : 'light', message: message || null }, message ? 'message_shown' : undefined)
+  // Report only bounded native result metadata; the server matches it to the exact pending authorization.
+  useAssistantContext('desktop_action_result', desktopActionOutcome)
 
   // The tour: keep its handle, show where the visitor is in it, and let them step, go back or stop.
   const [tour, setTour] = useState<{ handle: GuideTaskHandle; index: number; total: number } | null>(null)
