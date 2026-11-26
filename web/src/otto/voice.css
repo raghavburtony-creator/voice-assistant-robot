@@ -94,8 +94,10 @@
 .voice-assistant__line--user { align-self: flex-end; background: var(--otto-accent); color: var(--otto-on-accent); }
 .voice-assistant__line--assistant { align-self: flex-start; background: var(--otto-surface-2); }
 .voice-assistant__line--card { align-self: stretch; max-inline-size: none; padding: 0; }
-.voice-assistant__card { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem 0.8rem; border-radius: 14px;
+.voice-assistant__card, .voice-assistant__memory { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem 0.8rem; border-radius: 14px;
   border: 1px solid var(--otto-line); background: var(--otto-surface); }
+.voice-assistant__memory-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.voice-assistant__memory-status { margin: 0; color: var(--otto-muted); font-size: 0.9rem; }
 .voice-assistant__card-title { margin: 0; font-size: 0.95rem; }
 .voice-assistant__card-body { margin: 0; }
 .voice-assistant__card-code { display: flex; align-items: flex-start; gap: 0.25rem; }

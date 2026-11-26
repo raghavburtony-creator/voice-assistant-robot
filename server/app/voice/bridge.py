@@ -29,6 +29,7 @@ from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.tasks import TERMINAL as TASK_TERMINAL, TaskEngine, TaskEvent, background_task_status
 from app.voice.memory_service import SQLiteMemoryService
+from app.voice.memory_consent import consume_memory_proposal, pending_memory_proposal
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
 from app.voice.policy import POLICY_ENGINE
 
@@ -200,6 +201,7 @@ class Bridge:
             self.pending_continuity = self.continuity_store.load(live.continuity.scope, live.continuity.identity)
         # The host identity is server-only. Memory is read only when the trusted proxy opted in;
         # the returned JSON is data, not instructions, and contains no sensitive records.
+        self.live.state["memory_enabled"] = live.continuity is not None
         self.live.state["memory_context"] = (
             memory_service.get_context(live.continuity.scope, live.continuity.identity)
             if live.continuity is not None else "[]"
@@ -328,6 +330,55 @@ class Bridge:
         if identity is not None:
             self.continuity_store.disable(identity.scope, identity.identity)
 
+    async def resolve_memory_consent(self, event: object) -> dict[str, str] | None:
+        """Persist one proposal only after the visitor confirms its matching request id."""
+        if not isinstance(event, dict):
+            return None
+        request_id = event.get("request_id")
+        status, proposal = consume_memory_proposal(
+            self.live.state,
+            request_id,
+            event.get("accepted"),
+        )
+        if status is None:
+            return None
+        if status == "accepted":
+            identity = self.live.continuity
+            if (
+                identity is None
+                or self.live.state.get("memory_enabled") is not True
+            ):
+                status = "unavailable"
+            elif proposal is None:
+                status = "expired"
+            else:
+                try:
+                    await asyncio.to_thread(
+                        memory_service.remember,
+                        identity.scope,
+                        identity.identity,
+                        proposal["content"],
+                        kind=proposal["kind"],
+                        provenance="visitor approved in voice panel",
+                        sensitivity="sensitive" if proposal.get("sensitive") is True else "normal",
+                        redacted_categories=proposal.get("redacted_categories", ()),
+                        explicit=True,
+                    )
+                    status = "saved"
+                    try:
+                        self.live.state["memory_context"] = await asyncio.to_thread(
+                            memory_service.get_context,
+                            identity.scope,
+                            identity.identity,
+                        )
+                    except Exception as exc:
+                        # A successful durable write must not be reported as failed if a context refresh fails.
+                        logger.warning("Visitor-confirmed memory context refresh failed: %s", type(exc).__name__)
+                except Exception as exc:
+                    logger.warning("Visitor-confirmed memory write failed: %s", type(exc).__name__)
+                    status = "failed"
+        return {"type": "memory_result", "request_id": request_id, "status": status}
+
     async def send_frame(self, data: Any) -> None:
         """D-21's limits, again on this side: a share is on, the data is a JPEG within the cap, and not too soon."""
         now = asyncio.get_running_loop().time()
@@ -394,6 +445,10 @@ class Bridge:
                 await self.live.audio_end()
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
+            elif kind == "memory_consent":
+                result = await self.resolve_memory_consent(event)
+                if result is not None:
+                    self.out.control(result)
             elif kind == "desktop_result":
                 if POLICY_ENGINE.record_host_result(self.live.state, event):
                     await self._tell_model_desktop_outcome(event)
@@ -478,6 +533,13 @@ class Bridge:
         async for event in self.live.events():
             # A tool runs between its call and response events, so drain after every event, before this event's audio.
             for action in sink.drain(self.live.session_id):
+                if isinstance(action, dict) and "memory_proposal" in action:
+                    proposal = action.get("memory_proposal")
+                    if isinstance(proposal, dict):
+                        confirmed = pending_memory_proposal(self.live.state, proposal.get("request_id"))
+                        if confirmed == proposal:
+                            self.out.control({"type": "memory_proposal", **confirmed})
+                    continue
                 environmental = action.get("environmental") if isinstance(action, dict) else None
                 if isinstance(environmental, dict):
                     generation = environmental.get("generation")

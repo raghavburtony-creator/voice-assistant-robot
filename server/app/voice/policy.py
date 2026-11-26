@@ -60,11 +60,16 @@ class PermissionPolicy:
             return "deny", "A live voice session is required."
 
         state = getattr(context, "state", None)
-        if not isinstance(state, dict):
+        if not all(callable(getattr(state, name, None)) for name in ("get", "__getitem__", "__setitem__", "__contains__")):
             return "deny", "Session permission state is unavailable."
 
         if permission == "voice_session":
             return "allow", "The tool is scoped to the active voice session."
+
+        if permission == "memory_opt_in":
+            if state.get("memory_enabled") is True:
+                return "allow", "The trusted host identity has enabled identity-scoped memory for this session."
+            return "deny", "Persistent memory is not enabled for this session."
 
         if permission == "active_capture":
             if state.get("capture_source") in {"camera", "screen"}:

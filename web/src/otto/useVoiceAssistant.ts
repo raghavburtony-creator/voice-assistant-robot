@@ -19,7 +19,11 @@ import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
 import { toEnvironmentalAttention } from './awareness/environmental'
 import type { OttoEvent } from './awareness/events'
-import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard, type ReportDesktopActionResult } from './messages'
+import {
+  parseServerMessage, toAssistantAction,
+  type AssistantAction, type AssistantCard, type MemoryProposal, type MemoryProposalStatus,
+  type ReportDesktopActionResult,
+} from './messages'
 import { isRuntimeId } from './runtimeId'
 
 export type { AssistantAction } from './messages'
@@ -29,6 +33,7 @@ export type TranscriptEntry = { id: number; role: 'user' | 'assistant'; text: st
 
 /** One thing Otto did, in plain words, and the action that takes it back (null when nothing can). */
 export type ActionRecord = { id: number; label: string; inverse: AssistantAction | null }
+export type MemoryProposalEntry = MemoryProposal & { status: MemoryProposalStatus }
 
 const TASK_MOVE_LABELS: Record<GuideTaskMove, string> = { stop: 'Stopped the task', back: 'Went back a step', next: 'Moved on a step' }
 
@@ -159,6 +164,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const [errorCode, setErrorCode] = useState('')
   const [endedMessage, setEndedMessage] = useState('')
   const [actions, setActions] = useState<ActionRecord[]>([])
+  const [memoryProposals, setMemoryProposals] = useState<MemoryProposalEntry[]>([])
   const [micMuted, setMicMuted] = useState(false)
   const [micSilent, setMicSilent] = useState(false)
   const [micNote, setMicNote] = useState('')
@@ -356,6 +362,11 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
       ws.close()
     }
     openEntry.current = null
+    setMemoryProposals(current => current.map(proposal =>
+      ['pending', 'saving', 'discarding'].includes(proposal.status)
+        ? { ...proposal, status: 'expired' }
+        : proposal,
+    ))
   }, [])
 
   const fail = useCallback((message: string, code = '') => {
@@ -522,6 +533,17 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
             if (event) environmentalRef.current?.(event)
           }
           break
+        case 'memory_proposal':
+          setMemoryProposals(current => [
+            ...current.filter(proposal => proposal.request_id !== message.request_id),
+            { ...message, status: 'pending' as const },
+          ].slice(-3))
+          break
+        case 'memory_result':
+          setMemoryProposals(current => current.map(proposal =>
+            proposal.request_id === message.request_id ? { ...proposal, status: message.status } : proposal,
+          ))
+          break
         case 'action':
           {
             const action = toAssistantAction(message, id => findGuideTarget(id) !== null, id => findGuideTask(id) !== null,
@@ -682,6 +704,19 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     return true
   }, [addTranscript])
 
+  /** The visitor's explicit Save / Not now choice for one session-scoped memory proposal. */
+  const resolveMemoryProposal = useCallback((requestId: string, accepted: boolean) => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN) return false
+    setMemoryProposals(current => current.map(proposal =>
+      proposal.request_id === requestId && proposal.status === 'pending'
+        ? { ...proposal, status: accepted ? 'saving' : 'discarding' }
+        : proposal,
+    ))
+    ws.send(JSON.stringify({ type: 'memory_consent', request_id: requestId, accepted }))
+    return true
+  }, [])
+
   /** Tells the server a share started (camera or screen) or stopped (null). Only while a conversation is open (D-21). */
   const sendCapture = useCallback((source: CaptureSource | null) => {
     const ws = socket.current
@@ -722,8 +757,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
 
   return {
     mouth, speech, interrupt, interruptions,
-    status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
+    status, transcript, error, errorCode, endedMessage, actions, memoryProposals, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, resolveMemoryProposal, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }

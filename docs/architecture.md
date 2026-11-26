@@ -21,7 +21,7 @@ Each part of the kit has one job:
 | Voice input and output | `bridge.py` (input pump), `events.py` (typed model events), `output.py` (one writer, interruption drops queued speech) | Listening is separate from speaking: input never waits on speech, speech never blocks the model | D-05 |
 | Tool registry, policy gate and gateway | `tool_registry.py`, `policy.py`, `tools.py`, `sink.py` | The registry validates and normalizes tool calls; the policy gate applies per-call risk/permission checks and a bounded session audit; checked functions and browser/native approval remain authoritative | D-02, D-03, D-14, D-16, D-18, D-22, D-25 |
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
-| Memory | `memory_service.py`, `bridge.py` | Explicit, identity-scoped SQLite records; only trusted host identities opt in, sensitive records are excluded from model context, and retrieved memory is untrusted data | D-17, D-22, D-26 |
+| Memory | `memory_service.py`, `memory_consent.py`, `bridge.py` | The model may propose a bounded entry after an explicit visitor request; only the visitor's one-use panel confirmation reaches the identity-scoped store. Sensitive records are excluded from model context | D-17, D-22, D-26 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |
 | Avatar events | `awareness/avatar.ts`, `avatar.py`, `bridge.py` (`avatar`) | A backend tells Otto's character how things are going (working, asking permission, success...). Presentation only: it becomes ordinary awareness events, never a second bus, and carries no authority | D-19, D-22 |
 | Guidance | `guidance/` | The host says what to show, Otto decides how. Guided tasks follow observed progress | D-14, D-16 |
@@ -61,6 +61,12 @@ Authority is a chain, not one component (D-22). Each link can only narrow what t
 6. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets, and hold back what doesn't deserve it (D-14, D-16).
 
 **The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed.
+
+### Visitor-confirmed memory writes (MEM-01)
+
+The model has no persistent-memory write tool. After the visitor explicitly asks Otto to remember one fact or preference, `propose_memory` may stage a redacted, session-local proposal. It is not stored and is shown as plain text in the panel. The visitor must press Save; Not now discards it. The browser sends only the proposal id and the choice. The Bridge consumes a matching request id once, checks its two-minute expiry and the still-enabled trusted host identity, then calls `MemoryService.remember` with fixed visitor-confirmation provenance. The memory store redacts again and audits the write. A redacted entry remains sensitive and is not placed in model context by default.
+
+Pending proposals are capped at three per session and disappear with the session. A stale, malformed, replayed or cross-session id cannot write memory. The model cannot produce the browser confirmation message, set the memory opt-in flag or call the resolver directly. This is a visitor-confirmation step within the existing WebSocket and Bridge path, not a second event bus, action router or orchestrator (D-19, D-22, D-26).
 
 ### Environmental observation proposals (D-30)
 
