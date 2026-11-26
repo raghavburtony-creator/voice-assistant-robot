@@ -137,7 +137,7 @@ class AuditLog:
             records = list(records) if isinstance(records, list) else []
             records.append(asdict(record))
             state[AUDIT_STATE_KEY] = records[-MAX_AUDIT_RECORDS:]
-            if decision.decision == "confirmation_required" and decision.scope and decision.scope.startswith("action:"):
+            if execution_status == "awaiting_confirmation" and decision.decision == "confirmation_required" and decision.scope and decision.scope.startswith("action:"):
                 pending = state.get(PENDING_STATE_KEY)
                 pending = dict(pending) if isinstance(pending, dict) else {}
                 pending[decision.request_id] = {"tool": record.tool, "action": decision.scope.removeprefix("action:"), "created_at": record.created_at}
