@@ -161,3 +161,26 @@ def test_voice_modules_form_no_import_cycle():
 def test_the_policy_engine_has_no_voice_dependencies():
     # The gate must stay a leaf: if it imported a tool or the bridge it could be made to call the thing it is checking.
     assert _voice_deps(_modules()["policy"]) == set()
+
+
+def test_the_task_engine_is_a_leaf_that_cannot_block_the_voice_loop_or_start_its_own_channel():
+    # TASK-01 (#49). It may use the runtime id/title checks and nothing else in the voice package, so it cannot reach the
+    # tools, the policy engine or the bridge. Blocking calls would stall the loop the live session runs on, and a thread or
+    # process would be work the engine could not cancel; its only way out is the `emit` callable the bridge hands it.
+    tree = _modules()["tasks"]
+    assert _voice_deps(tree) <= {"runtime"}
+    blocking = {"time.sleep", "subprocess", "threading", "multiprocessing", "concurrent", "socket", "requests", "httpx", "fastapi", "starlette"}
+    assert not [i for i in _imports(tree) if i.split(".")[0] in {b.split(".")[0] for b in blocking}]
+    called = {
+        f"{n.func.value.id}.{n.func.attr}" for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name)
+    }
+    assert not {"time.sleep", "asyncio.Queue", "queue.Queue"} & called, "no blocking sleep and no queue of its own (D-19: one event path)"
+
+
+def test_only_the_bridge_builds_the_task_engine_so_there_is_one_per_session_and_one_way_out():
+    builders = [
+        name for name, tree in _modules().items() if name != "tasks"
+        for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "TaskEngine"
+    ]
+    assert builders == ["bridge"]
