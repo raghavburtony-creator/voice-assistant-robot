@@ -141,7 +141,7 @@ class AuditLog:
                 pending = state.get(PENDING_STATE_KEY)
                 pending = dict(pending) if isinstance(pending, dict) else {}
                 pending[decision.request_id] = {"tool": record.tool, "action": decision.scope.removeprefix("action:"), "created_at": record.created_at}
-                state[PENDING_STATE_KEY] = pending
+                state[PENDING_STATE_KEY] = dict(list(pending.items())[-MAX_AUDIT_RECORDS:])
         return record
 
 
@@ -226,12 +226,18 @@ class PolicyEngine:
         if (certificate.get("request_id") != request_id or certificate.get("action") != action
             or decision not in {"approved", "denied"} or method != "native_os_dialog"
             or type(issued_at) is not int or issued_at <= 0
-            or not isinstance(certificate_id, str) or not 1 <= len(certificate_id) <= 100):
+            or not isinstance(certificate_id, str) or certificate_id != f"{request_id}-{issued_at}"):
             return False
         status, ok, verification = result.get("status"), result.get("ok"), result.get("verification")
         if status not in {"completed", "started", "failed", "denied"} or type(ok) is not bool:
             return False
         if verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}:
+            return False
+        if verification == "verified" and (not ok or status != "completed"):
+            return False
+        if verification == "process_spawned" and (not ok or status != "started"):
+            return False
+        if verification == "not_verified" and ok:
             return False
         if (decision == "denied" and (status != "denied" or ok is not False)) or (decision == "approved" and status == "denied"):
             return False
