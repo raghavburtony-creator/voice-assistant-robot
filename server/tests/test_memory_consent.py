@@ -219,10 +219,10 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
             "type": "memory_consent", "request_id": pending_after, "accepted": True,
         }))
         assert withdrawn == {
-            "type": "memory_result", "request_id": pending_after, "status": "unavailable",
+            "type": "memory_result", "request_id": pending_after, "status": "saved",
         }
-        assert len(writes) == 1
-        assert bridge.live.state["memory_enabled"] is False
-        assert bridge.live.state["memory_context"] == "[]"
+        assert len(writes) == 2
+        # Clear saved task withdraws task continuity only; the host's memory opt-in is separate.
+        assert bridge.live.state["memory_enabled"] is True
     finally:
         sink.close(live.session_id)
