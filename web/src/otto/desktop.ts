@@ -58,6 +58,18 @@ function host(): TauriHost | null {
   return typeof window === 'undefined' ? null : window.__TAURI__ ?? null
 }
 
+// Desktop awareness is an explicit, session-only permission. It deliberately lives in
+// memory rather than storage so a reload/restart cannot silently re-enable desktop access.
+let desktopPermissionEnabled = false
+
+export function isDesktopPermissionEnabled(): boolean {
+  return desktopPermissionEnabled
+}
+
+export function setDesktopPermissionEnabled(enabled: boolean): void {
+  desktopPermissionEnabled = enabled
+}
+
 export function isDesktopRuntime(): boolean {
   return host() !== null
 }
@@ -142,6 +154,12 @@ export function verifyDesktopMovement(action: DesktopAction, context: DesktopCon
 export async function executeDesktopAction(action: DesktopAction): Promise<DesktopActionResult> {
   if (!(DESKTOP_ACTIONS as readonly string[]).includes(action)) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Unsupported desktop action.' }
+  }
+  if (!desktopPermissionEnabled) {
+    return {
+      action, ok: false, status: 'denied', verification: 'unavailable',
+      message: 'Desktop access is disabled. Enable Desktop awareness in the voice panel before using desktop actions.',
+    }
   }
   const runtime = host()
   if (!runtime) {
