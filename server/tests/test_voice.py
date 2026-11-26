@@ -1153,3 +1153,14 @@ def test_process_spawn_consent_receipt_remains_pending_verification():
     }
     assert POLICY_ENGINE.record_host_result(state, report) is True
     assert state["tool_policy_audit"][-1]["verification_status"] == "pending"
+
+
+
+def test_move_desktop_scope_is_bound_to_its_mapped_action():
+    from app.voice.policy import POLICY_ENGINE
+
+    ctx = _context()
+    ctx.state["screens"] = {"desktop_context": {"enabled": True}}
+    decision = POLICY_ENGINE.evaluate(tools.REGISTRY["move_desktop"].metadata, ctx, {"destination": "desktop-right"})
+    assert decision.decision == "confirmation_required"
+    assert decision.scope == "action:move_right"

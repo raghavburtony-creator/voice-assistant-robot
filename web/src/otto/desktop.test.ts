@@ -146,6 +146,16 @@ describe('desktop action bridge', () => {
     delete window.__TAURI__
   })
 
+  it('rejects a missing or malformed server request id before invoking the host', async () => {
+    const invoke = vi.fn()
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+    await expect(executeDesktopAction('launch_calculator', 'not-a-request-id')).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'unavailable',
+    })
+    expect(invoke).not.toHaveBeenCalled()
+    delete window.__TAURI__
+  })
+
   it('does not execute desktop actions in browser mode', async () => {
     delete window.__TAURI__
     await expect(executeDesktopAction('launch_calculator', 'e'.repeat(32))).resolves.toMatchObject({

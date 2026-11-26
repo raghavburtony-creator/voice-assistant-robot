@@ -452,6 +452,21 @@ mod tests {
     use super::{desktop_action_label, resolve_destination, DesktopAction};
 
     #[test]
+    fn native_consent_receipt_binds_the_request_action_and_decision() {
+        let receipt = consent_certificate(
+            "0123456789abcdef0123456789abcdef".into(),
+            DesktopAction::LaunchCalculator,
+            "approved",
+        );
+        assert_eq!(receipt.request_id, "0123456789abcdef0123456789abcdef");
+        assert!(receipt.certificate_id.starts_with(&receipt.request_id));
+        assert!(matches!(receipt.action, DesktopAction::LaunchCalculator));
+        assert_eq!(receipt.decision, "approved");
+        assert_eq!(receipt.method, "native_os_dialog");
+        assert!(receipt.issued_at_unix_ms > 0);
+    }
+
+    #[test]
     fn every_native_action_has_a_specific_confirmation_label() {
         let actions = [
             DesktopAction::MinimizeOtto,

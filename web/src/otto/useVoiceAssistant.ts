@@ -724,6 +724,6 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     mouth, speech, interrupt, interruptions,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, reportDesktopResult, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }
