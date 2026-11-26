@@ -27,6 +27,7 @@ from app.voice.context import clear_page_context
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
+from app.voice.memory_service import SQLiteMemoryService
 from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ FRAME_GAP_SECONDS = 1.0
 JPEG_MAGIC = b"\\xff\\xd8\\xff"
 
 continuity_store: ContinuityStore = SQLiteContinuityStore(settings.continuity_store_path)
+memory_service = SQLiteMemoryService(settings.memory_store_path)
 
 
 def context_bytes(data: object) -> int:
@@ -195,6 +197,12 @@ class Bridge:
             # A host-supplied enabled identity is the explicit opt-in that re-enables a prior withdrawal.
             self.continuity_store.enable(live.continuity.scope, live.continuity.identity)
             self.pending_continuity = self.continuity_store.load(live.continuity.scope, live.continuity.identity)
+        # The host identity is server-only. Memory is read only when the trusted proxy opted in;
+        # the returned JSON is data, not instructions, and contains no sensitive records.
+        self.live.state["memory_context"] = (
+            memory_service.get_context(live.continuity.scope, live.continuity.identity)
+            if live.continuity is not None else "[]"
+        )
         self.last_announce = 0.0
         # What the visitor is sharing (D-21), when the last frame went to the model, and how many did: a count, never the data.
         self.capture: str | None = None

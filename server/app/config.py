@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # The browser cannot set these WebSocket handshake headers itself.
     continuity_trust_proxy: bool = False
     continuity_store_path: str = str(SERVER_DIR / "data" / "continuity.sqlite3")
+    # Explicitly opted-in, host-identity-scoped memory; no browser-supplied identity is trusted.
+    memory_store_path: str = str(SERVER_DIR / "data" / "memory.sqlite3")
 
     @field_validator("cors_origins")
     @classmethod
