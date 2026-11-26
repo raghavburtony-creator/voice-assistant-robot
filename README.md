@@ -143,7 +143,7 @@ A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
 ## Memory
 
-The server includes an explicit, identity-scoped memory store (`server/app/voice/memory_service.py`). It is enabled for a session only when a trusted deployment proxy supplies the existing opt-in continuity identity. The raw identity is hashed and never placed in ADK state. Memory writes require an explicit caller authorization and carry provenance and timestamps; sensitive records are excluded from recall and model context by default. Retrieved memory is bounded JSON treated as untrusted data. The service can remember, recall, update, forget, resurface and format context, but it cannot trigger tools or user-facing actions.
+The server includes an explicit, identity-scoped memory store (`server/app/voice/memory_service.py`). It is enabled for a session only when a trusted deployment proxy supplies the existing opt-in continuity identity. The raw identity is hashed and never placed in ADK state. Memory writes require an explicit caller authorization and carry provenance and timestamps; sensitive records are excluded from recall and model context by default. Working records are deleted from SQLite on service startup and before memory operations once they are older than 24 hours, rather than merely being hidden from recall. Retrieved memory is bounded JSON treated as untrusted data. The service can remember, recall, update, forget, resurface and format context, but it cannot trigger tools or user-facing actions.
 
 ## Privacy
 

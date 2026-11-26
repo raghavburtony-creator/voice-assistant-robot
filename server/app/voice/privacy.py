@@ -59,7 +59,7 @@ _POLICIES = (
     DataClassPolicy(
         "memory_record", True, "normal",
         "Kept until the host forgets it, at most 500 records per identity (oldest replaced). "
-        "Working memory is left out of recall after 24 hours (WORKING_RETENTION_SECONDS). "
+        "Working memory is deleted from SQLite on startup and before memory operations once older than 24 hours (WORKING_RETENTION_SECONDS). "
         "Text is redacted before it is written; a record that needed redaction is marked sensitive.", REDACTION_APPLIED,
     ),
     DataClassPolicy(
