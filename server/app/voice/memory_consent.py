@@ -41,7 +41,7 @@ def _prune(state: object, now: float) -> dict[str, dict[str, Any]]:
         if (
             _valid_request_id(request_id)
             and type(created) in (int, float)
-            and now - created <= MEMORY_PROPOSAL_TTL_SECONDS
+            and 0 <= now - created <= MEMORY_PROPOSAL_TTL_SECONDS
         ):
             clean[request_id] = item
     _write_pending(state, clean)
@@ -99,15 +99,23 @@ def consume_memory_proposal(state: object, request_id: object, accepted: object,
     """Consume one matching proposal once. Model/tool input cannot call this operation."""
     if not _supports_state(state) or not _valid_request_id(request_id) or type(accepted) is not bool:
         return None, None
-    pending = _prune(state, time.time() if now is None else now)
+    timestamp = time.time() if now is None else now
+    original_pending = _pending(state)
+    original_item = original_pending.get(request_id)
+    if not isinstance(original_item, dict):
+        _prune(state, timestamp)
+        return None, None
+    created = original_item.get("created_at")
+    age = timestamp - created if type(created) in (int, float) else None
+    if age is None or age < 0 or age > MEMORY_PROPOSAL_TTL_SECONDS:
+        _prune(state, timestamp)
+        return "expired", None
+
+    pending = _prune(state, timestamp)
     item = pending.pop(request_id, None)
     _write_pending(state, pending)
     if not isinstance(item, dict):
         return None, None
-    timestamp = time.time() if now is None else now
-    created = item.get("created_at")
-    if type(created) not in (int, float) or timestamp - created > MEMORY_PROPOSAL_TTL_SECONDS:
-        return "expired", None
     if not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
         return "expired", None
     if not accepted:

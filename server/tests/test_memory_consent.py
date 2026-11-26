@@ -12,6 +12,7 @@ from app.voice.memory_consent import (
     MEMORY_PROPOSAL_TTL_SECONDS,
     PENDING_MEMORY_KEY,
     consume_memory_proposal,
+    discard_memory_proposal,
     pending_memory_proposal,
     stage_memory_proposal,
 )
@@ -101,7 +102,10 @@ def test_browser_confirmation_consumes_a_matching_proposal_once():
     assert pending_memory_proposal(state, proposal["request_id"], now=101) == proposal
     status, saved = consume_memory_proposal(state, proposal["request_id"], True, now=102)
     assert status == "accepted"
-    assert saved == {"content": "Prefers concise answers", "kind": "semantic", "sensitive": False}
+    assert saved == {
+        "content": "Prefers concise answers", "kind": "semantic", "sensitive": False,
+        "redacted_categories": (),
+    }
     assert pending_memory_proposal(state, proposal["request_id"], now=102) is None
     assert consume_memory_proposal(state, proposal["request_id"], True, now=103) == (None, None)
 
