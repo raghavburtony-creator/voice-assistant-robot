@@ -1194,6 +1194,33 @@ def test_bridge_accepts_only_a_pending_native_receipt_for_session_audit():
 
 
 
+def test_model_hears_only_a_validated_desktop_outcome():
+    from app.voice.policy import POLICY_ENGINE, PolicyDecision
+
+    live = FakeLive()
+    decision = PolicyDecision("d" * 32, "confirmation_required", "high", "desktop_action_approval",
+        "approval required", "action:launch_calculator", "pending")
+    POLICY_ENGINE.audit(SimpleNamespace(state=live.state), tools.REGISTRY["desktop_action"].metadata, decision, "awaiting_confirmation")
+    declined = {
+        "type": "desktop_result", "request_id": "d" * 32, "action": "launch_calculator",
+        "consent_certificate": {
+            "certificate_id": "d" * 32 + "-9", "request_id": "d" * 32, "action": "launch_calculator",
+            "decision": "denied", "method": "native_os_dialog", "issued_at_unix_ms": 9,
+        },
+        "result": {"ok": False, "status": "denied", "verification": "not_verified"},
+    }
+    forged = dict(declined, request_id="c" * 32)  # no pending request: must stay silent
+    asyncio.run(Bridge(ScriptedSocket(forged), live).browser_to_model())
+    assert live.sent_text == []
+    asyncio.run(Bridge(ScriptedSocket(declined), live).browser_to_model())
+    [told] = live.sent_text
+    assert "Action: launch_calculator. Execution: denied. Verification: not_verified." in told
+    assert "not permission" in told and "not completed" in told
+    asyncio.run(Bridge(ScriptedSocket(declined), live).browser_to_model())  # replay: audited once, told once
+    assert len(live.sent_text) == 1
+    live.close()
+
+
 def test_native_receipt_rejects_wrong_json_types_without_raising():
     from app.voice.policy import POLICY_ENGINE, PolicyDecision
 

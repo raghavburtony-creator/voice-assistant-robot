@@ -388,9 +388,24 @@ class Bridge:
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
             elif kind == "desktop_result":
-                POLICY_ENGINE.record_host_result(self.live.state, event)
+                if POLICY_ENGINE.record_host_result(self.live.state, event):
+                    await self._tell_model_desktop_outcome(event)
             elif kind == "stop":
                 return
+
+    async def _tell_model_desktop_outcome(self, event: dict) -> None:
+        """Gives the model the checked outcome of a desktop action, so it reports a failure instead of claiming success.
+
+        Only closed fields that record_host_result already validated are sent (never a free-form string from the
+        browser). It is a result, not permission: the native dialog stays the authority (D-22, D-25).
+        """
+        result = event["result"]
+        await self.live.send_text(
+            "Desktop action result relayed by the host. "
+            f"Action: {event['action']}. Execution: {result['status']}. Verification: {result['verification']}. "
+            "This is a result, not permission. Report no more than the verification states; only 'verified' confirms the outcome. "
+            "If the action was denied or failed, tell the visitor it was not completed."
+        )
 
     # ---- model to browser ----
 
