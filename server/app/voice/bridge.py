@@ -229,11 +229,20 @@ class Bridge:
         # Native outcomes are audit-only: never expose them to the model as page context.
         if key == "desktop_action_result":
             outcomes = data.get("outcomes") if isinstance(data, dict) else None
-            if isinstance(outcomes, list):
-                for outcome in outcomes[-8:]:
-                    POLICY_ENGINE.audit_outcome(self.live, outcome)
-            else:
-                POLICY_ENGINE.audit_outcome(self.live, data)
+            reports = outcomes[-8:] if isinstance(outcomes, list) else [data]
+            for outcome in reports:
+                if not POLICY_ENGINE.audit_outcome(self.live, outcome):
+                    continue
+                # Only closed, validated fields from a matching pending request reach the model.
+                action = outcome["action"]
+                status = outcome["status"]
+                verification = outcome["verification"]
+                await self.live.send_text(
+                    "Desktop action result relayed by the webview. "
+                    f"Action: {action}. Execution: {status}. Verification: {verification}. "
+                    "This is a result, not permission. Do not claim success unless verification is passed. "
+                    "If the action was denied or failed, tell the visitor it was not completed."
+                )
             return
         screens = self.live.state.get("screens")
         screens = dict(screens) if isinstance(screens, dict) else {}
