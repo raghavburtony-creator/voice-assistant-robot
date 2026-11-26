@@ -1037,6 +1037,15 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert declined.state["tool_policy_audit"][0]["consent_status"] == "denied"
     assert declined.state["tool_policy_audit"][0]["execution_status"] == "denied"
     assert declined.state["tool_policy_audit"][0]["verification_status"] == "not_run"
+    move_ctx = _context()
+    move_ctx.state["screens"] = {"desktop_context": {"enabled": True}}
+    move_result = tools.REGISTRY._gateway(tools.move_desktop, tools.REGISTRY["move_desktop"].metadata)("home", move_ctx)
+    [move_action] = sink.drain("tool-test")
+    assert move_action["desktop_action"] == "move_home"
+    assert move_action["request_id"] == move_result["policy"]["request_id"]
+    assert move_result["policy"]["scope"] == "destination:home"
+    assert POLICY_ENGINE.audit_outcome(move_ctx, {"request_id": move_action["request_id"], "action": "move_home", "ok": True, "status": "completed", "verification": "verified"})
+    assert move_ctx.state["tool_policy_audit"][-1]["verification_status"] == "passed"
     sink.close("tool-test")
 
 
