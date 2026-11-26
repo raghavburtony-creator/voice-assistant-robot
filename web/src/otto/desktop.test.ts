@@ -113,7 +113,7 @@ describe('desktop action bridge', () => {
       ok: true, status: 'completed', verification: 'verified',
     })
     expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_context')
-    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_action', { action: 'move_left' })
+    expect(invoke).toHaveBeenNthCalledWith(2, 'desktop_action', { action: 'move_left', requestId: 'd'.repeat(32) })
     expect(invoke).toHaveBeenNthCalledWith(3, 'desktop_context')
     delete window.__TAURI__
   })
