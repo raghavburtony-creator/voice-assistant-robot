@@ -1103,6 +1103,7 @@ def test_native_decline_is_recorded_as_cancellation_not_success():
     record = state["tool_policy_audit"][-1]
     assert record["consent_status"] == "denied"
     assert record["execution_status"] == "cancelled"
+    assert record["verification_status"] == "not_run"
     assert record["result_ok"] is False
 
 
@@ -1164,3 +1165,27 @@ def test_move_desktop_scope_is_bound_to_its_mapped_action():
     decision = POLICY_ENGINE.evaluate(tools.REGISTRY["move_desktop"].metadata, ctx, {"destination": "desktop-right"})
     assert decision.decision == "confirmation_required"
     assert decision.scope == "action:move_right"
+
+
+
+def test_bridge_accepts_only_a_pending_native_receipt_for_session_audit():
+    from app.voice.policy import POLICY_ENGINE, PolicyDecision
+
+    live = FakeLive()
+    decision = PolicyDecision("e" * 32, "confirmation_required", "high", "desktop_action_approval",
+        "approval required", "action:launch_calculator", "pending")
+    POLICY_ENGINE.audit(SimpleNamespace(state=live.state), tools.REGISTRY["desktop_action"].metadata, decision, "awaiting_confirmation")
+    report = {
+        "type": "desktop_result", "request_id": "e" * 32, "action": "launch_calculator",
+        "consent_certificate": {
+            "certificate_id": "e" * 32 + "-123", "request_id": "e" * 32,
+            "action": "launch_calculator", "decision": "approved",
+            "method": "native_os_dialog", "issued_at_unix_ms": 123,
+        },
+        "result": {"ok": True, "status": "started", "verification": "process_spawned"},
+    }
+    bridge = Bridge(ScriptedSocket(report), live)
+    asyncio.run(bridge.browser_to_model())
+    assert live.state["tool_policy_audit"][-1]["consent_status"] == "approved"
+    assert live.state["tool_policy_audit"][-1]["verification_status"] == "pending"
+    live.close()

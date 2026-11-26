@@ -256,7 +256,8 @@ class PolicyEngine:
                     "consent_method": method, "consented_at_unix_ms": issued_at,
                     "execution_status": "cancelled" if decision == "denied" else status,
                     "result_ok": ok,
-                    "verification_status": ("passed" if verification == "verified" else
+                    "verification_status": ("not_run" if decision == "denied" else
+                        "passed" if verification == "verified" else
                         "pending" if verification in {"process_spawned", "native_api_completed"} else
                         "failed" if verification == "not_verified" else "not_run"),
                     "result_provenance": "native_host_reported",
