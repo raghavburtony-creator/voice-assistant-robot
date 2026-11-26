@@ -12,6 +12,12 @@ Where Otto is today, where he is going, and how new capabilities attach to what 
       ◄── onAction(action) ◄── toAssistantAction ◄── {"type":"action"} ◄── sink ◄── tools.py (checked)
 ```
 
+### Orchestration ownership (ARCH-01)
+
+`server/app/voice/orchestrator.py` defines the canonical `Orchestrator` interface. The `AdkOrchestrator` implementation builds the one ADK agent that owns model-driven intent handling, planning, tool selection and response generation. `bridge.py` owns transport and live-session lifecycle and delegates agent construction to that interface; feature tools return results or queue typed events and do not create agents, runners or their own conversation routers.
+
+This is a decision-making boundary, not an authorization shortcut. The orchestrator receives the available tools, but each tool still validates its arguments on the server, the browser validates incoming actions again, and desktop actions still require visitor approval and native validation. The authority chain in D-22 remains intact.
+
 Each part of the kit has one job:
 
 | Part | Where | Job | Decisions |
