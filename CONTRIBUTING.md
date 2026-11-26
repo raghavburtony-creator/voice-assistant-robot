@@ -11,7 +11,7 @@ How a piece of work moves from an issue to a merged pull request. The code rules
 5. **Test.** New behaviour gets a test (`server/tests/` or a `*.test.ts`). Run every check in AGENTS.md, "Build, Test & Lint Commands", and say in the PR which ones you couldn't run.
 6. **Update docs** in the same PR: the README section for any behaviour change, the routing row for a new area, and `docs/decisions.md` for a new or changed decision (with its index row). `/otto-docs-sync` helps here.
 7. **Open the PR** against `main`. Say `Closes #n` and list each *Done when* item with how it was checked. Mention any decision it changes in the title.
-8. **Review and merge.** `/otto-pr-review <n>` checks a PR against AGENTS.md, "Review guidelines", and `/watch-pr` follows the Codex review. For a PR an agent opened for the owner, the agent runs `otto-code-reviewer` and squash-merges it into `main` itself when the gate in AGENTS.md, "Review and merge", holds. Anyone else's PR, and any PR that adds or changes a decision or answers a `Q-xx`, is merged by a person. Agents do not submit GitHub approvals.
+8. **Review and merge.** `/otto-pr-review <n>` checks a PR against AGENTS.md, "Review guidelines", and `/watch-pr` follows the Codex review. For a PR an agent opened for the owner, the agent runs `otto-code-reviewer` and squash-merges it into `main` itself when the gate in AGENTS.md, "Review and merge", holds. Anyone else's PR, and any PR that adds or changes a decision, answers a `Q-xx` or edits that gate, is merged by a person. Agents do not submit GitHub approvals.
 
 An epic closes when its sub-issues are closed and its *Done when* holds. A question closes when a PR adds the answering `D-xx` or marks it `dropped`.
 

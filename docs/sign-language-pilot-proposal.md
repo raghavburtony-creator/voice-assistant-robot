@@ -75,11 +75,11 @@ Acceptance thresholds are set by the partners before the test set exists. This p
 
 Slice [#115](https://github.com/raghavburtony-creator/voice-assistant-robot/pull/115) ships the adapter boundary: consent notice, persistent Stop, bounded buffer, gate-validated updates and confirm, correct or discard. Once the pilot is agreed, a recognizer plugs in behind it.
 
-A host that captures camera frames is a separate slice, and so is the recognizer itself. The kit currently opens no camera.
+A host that captures camera frames is a separate slice, and so is the recognizer itself. The sign adapter slice opens no camera and reads no video. The existing visitor-started Share camera (D-21) sends sparse still frames for visual context, and D-29 says it is not the sign recognizer.
 
 ## 7. Approach families, not a selection
 
-Which family fits depends on the language, the data and the device budget, so none is selected here. Evidence on each should be gathered only after sections 3 and 4 are settled.
+Which family fits depends on the language, the data and the device budget, so none is selected here. The descriptions below are general and unverified: they are not drawn from a benchmark or a citation. Evidence on each should be gathered only after sections 3 and 4 are settled.
 
 - **Local, landmark-based classification** of hand, face and body keypoints over a short window. It keeps raw video on the device and suits a small closed set. It depends on keypoint quality across skin tones, lighting and signers, which the evaluation must test.
 - **Local video classifiers** trained on short clips. They need more data and compute.

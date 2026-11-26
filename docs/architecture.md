@@ -81,7 +81,7 @@ Issue #6 called this chain "Otto's orchestrator". Q-04 asked whether it should b
 | Multimodal, sign language, environment (E3 to E5) | the visitor starts the input; frames are data | the visitor (D-21); any action they lead to still goes through links 1 to 5 | No |
 | Spatial / AR (E6) | no new proposer | Otto, through the same robot state | No. D-28 defers renderer selection until a target and requirements are specified
 
-Engineering agents (`.claude/agents/`) have no runtime authority and no architectural authority. They work inside the decisions in [decisions.md](decisions.md), and a person reviews their pull requests.
+Engineering agents (`.claude/agents/`) have no runtime authority and no architectural authority. They work inside the decisions in [decisions.md](decisions.md), and a person reviews their pull requests, except that the owner has authorised an agent to review and squash-merge a PR it opened for them under the gate in [AGENTS.md](../AGENTS.md#review-and-merge); decisions, answers to a `Q-xx` and edits to that gate stay with a person.
 
 ## Sign-language input boundary (D-29)
 

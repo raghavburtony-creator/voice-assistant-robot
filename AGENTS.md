@@ -21,14 +21,14 @@ The owner has authorised this: when a PR the agent opened is done, the agent run
 1. **Finish first.** Merge `main` into the branch, so it has no conflict, then run every check in [Build, Test & Lint Commands](#build-test--lint-commands) that applies and record the real numbers in the PR description. Name any check that could not run and why.
 2. **Review.** Run `otto-code-reviewer` on the full diff against `main` (plus `otto-design-reviewer` for UI, robot or sound changes, and `/otto-docs-sync` when docs must follow). Fix confirmed findings and rerun the checks.
 3. **Merge only if all of these hold:**
-   - the reviewer's verdict is MERGE, with no blocking finding left open;
+   - `otto-code-reviewer` reports no blocking issues (or the PR reviewer's equivalent verdict), with no blocking finding left open;
    - the local checks pass on the exact head being merged;
    - the PR has no merge conflict;
-   - CI is green on that head. If CI is red, merge only when the failure is shown not to come from the PR: it is red on `main` too, or the job never got a runner. Say so on the PR. A red check the diff could cause blocks the merge;
-   - the PR does not add or change a decision in `docs/decisions.md`, and does not answer a `Q-xx`. Those are the owner's (D-19);
+   - CI is green on that head, or no CI applies to the changed paths (for example `desktop.yml` only runs for `web/**`). A pending result counts as not green. If CI is red, merge only when the failure is shown not to come from the PR: it is red on `main` too, or the job never got a runner. Link the evidence (the `main` run or the job record) on the PR. A red check the diff could cause blocks the merge;
+   - the PR does not add or change a decision in `docs/decisions.md`, does not answer a `Q-xx`, and does not edit this "Review and merge" section or the matching step in `CONTRIBUTING.md`. Those are the owner's (D-19), and a person merges them;
    - the issue does not carry `status: needs-decision`.
 4. **Merge** with a squash, pinned to the head SHA that was tested (`expectedHeadSha`), and unsubscribe from the PR. Do not skip, disable or weaken a test to pass the gate.
-5. **Otherwise stop** and report what blocks the merge. Never merge on a "FIX FIRST" verdict, and never force-push or rewrite history on a branch to get past the gate.
+5. **Otherwise stop** and report what blocks the merge. Never merge while the reviewer reports a blocking issue (a "FIX FIRST" verdict), and never force-push or rewrite history on a branch to get past the gate.
 
 ## Project Context
 
