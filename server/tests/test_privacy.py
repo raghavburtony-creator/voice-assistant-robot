@@ -140,6 +140,7 @@ ADVERSARIAL = [
     "token=" * 30000, "a://" * 30000, "a." * 100000 + "@b", "a" * 200000 + "@", "a@b" + "-b" * 100000,
     "a+" * 100000, "1 " * 100000, "1-" * 100000, "+1 " * 60000, "555 " * 60000, "password: " * 30000,
     "bearer " * 30000, "token" + " " * 200000 + "=", "api_key=" + "a" * 200000, "?key=" * 30000, "eyJ" + "a" * 200000,
+    "%" * 100000, "a%" * 50000,  # the email local part allows '%', so its lookbehind must too (it was quadratic)
 ]
 
 

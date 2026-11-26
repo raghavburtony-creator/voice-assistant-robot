@@ -121,7 +121,7 @@ def _is_plain_password_word(value: str) -> bool:
     return len(words) == 2 and words[0] in _PASSWORD_MODIFIERS and words[1].isalpha()
 
 
-_EMAIL = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_EMAIL = re.compile(r"(?<![\w.%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 _CARD = re.compile(r"(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])")
 # NANP style (555) 123-4567 / 555-123-4567 / 555 123 4567, or an international number that starts with "+".
 # Dots are not separators on purpose: 192.168.100.200 and 1.2.3.4567 are not phone numbers.
