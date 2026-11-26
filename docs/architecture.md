@@ -21,6 +21,7 @@ Each part of the kit has one job:
 | Voice input and output | `bridge.py` (input pump), `events.py` (typed model events), `output.py` (one writer, interruption drops queued speech) | Listening is separate from speaking: input never waits on speech, speech never blocks the model | D-05 |
 | Tool registry, policy gate and gateway | `tool_registry.py`, `policy.py`, `tools.py`, `sink.py` | The registry validates and normalizes tool calls; the policy gate applies per-call risk/permission checks and a bounded session audit; checked functions and browser/native approval remain authoritative | D-02, D-03, D-14, D-16, D-18, D-22, D-25 |
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
+| Memory | `memory_service.py`, `bridge.py` | Explicit, identity-scoped SQLite records; only trusted host identities opt in, sensitive records are excluded from model context, and retrieved memory is untrusted data | D-17, D-22, D-26 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |
 | Avatar events | `awareness/avatar.ts`, `avatar.py`, `bridge.py` (`avatar`) | A backend tells Otto's character how things are going (working, asking permission, success...). Presentation only: it becomes ordinary awareness events, never a second bus, and carries no authority | D-19, D-22 |
 | Guidance | `guidance/` | The host says what to show, Otto decides how. Guided tasks follow observed progress | D-14, D-16 |
