@@ -15,6 +15,8 @@ from typing import Any, Callable, get_type_hints
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
 
+from app.voice.policy import POLICY_ENGINE
+
 
 @dataclass(frozen=True)
 class ToolMetadata:
@@ -117,8 +119,22 @@ class ToolRegistry:
             "properties": {
                 "status": {"type": "string", "enum": ["success", "error"]},
                 "data": {"type": "object"},
+                "policy": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string"},
+                        "decision": {"type": "string", "enum": ["allow", "confirmation_required", "deny"]},
+                        "risk_level": {"type": "string", "enum": ["low", "medium", "high", "invalid"]},
+                        "required_permission": {"type": "string"},
+                        "reason": {"type": "string"},
+                        "scope": {"type": ["string", "null"]},
+                        "verification_status": {"type": "string", "enum": ["pending", "not_required"]},
+                    },
+                    "required": ["request_id", "decision", "risk_level", "required_permission", "reason", "scope", "verification_status"],
+                    "additionalProperties": False,
+                },
             },
-            "required": ["status", "data"],
+            "required": ["status", "data", "policy"],
             "additionalProperties": False,
         }
 
@@ -135,9 +151,12 @@ class ToolRegistry:
         return tuple(item.metadata for item in self._tools.values())
 
     @staticmethod
-    def _gateway(function: Callable[..., Any]) -> Callable[..., dict[str, Any]]:
+    def _gateway(function: Callable[..., Any], metadata: ToolMetadata | None = None) -> Callable[..., dict[str, Any]]:
         signature = inspect.signature(function)
         hints = get_type_hints(function)
+        metadata = metadata or next((item for item in TOOL_METADATA if item.name == function.__name__), None)
+        if metadata is None:
+            raise ValueError(f"No policy metadata registered for {function.__name__}")
         validators = {
             name: TypeAdapter(hints.get(name, parameter.annotation))
             for name, parameter in signature.parameters.items()
@@ -153,15 +172,50 @@ class ToolRegistry:
                     if name in bound.arguments:
                         bound.arguments[name] = validator.validate_python(bound.arguments[name])
             except (TypeError, ValidationError):
-                # Never echo model-supplied values into an error message or log.
-                return {"status": "error", "data": {"code": "invalid_arguments", "message": "Tool arguments did not match the declared schema."}}
+                decision = POLICY_ENGINE.invalid_arguments(metadata)
+                context = kwargs.get("tool_context")
+                POLICY_ENGINE.audit(context, metadata, decision, "denied")
+                return {
+                    "status": "error",
+                    "data": {"code": "invalid_arguments", "message": "Tool arguments did not match the declared schema."},
+                    "policy": decision.as_dict(),
+                }
 
-            result = function(*bound.args, **bound.kwargs)
+            context = bound.arguments.get("tool_context")
+            decision = POLICY_ENGINE.evaluate(metadata, context, bound.arguments)
+            if decision.decision == "deny":
+                POLICY_ENGINE.audit(context, metadata, decision, "denied")
+                return {
+                    "status": "error",
+                    "data": {"code": "permission_denied", "message": "The tool request was not permitted by session policy."},
+                    "policy": decision.as_dict(),
+                }
+
+            try:
+                result = function(*bound.args, **bound.kwargs)
+            except Exception:
+                POLICY_ENGINE.audit(context, metadata, decision, "failed")
+                return {
+                    "status": "error",
+                    "data": {"code": "tool_failed", "message": "The tool could not complete the request."},
+                    "policy": decision.as_dict(),
+                }
+
             failed = (
                 isinstance(result, dict)
                 and (result.get("ok") is False or result.get("accepted") is False or "error" in result)
             )
-            return {"status": "error" if failed else "success", "data": result}
+            awaiting_approval = isinstance(result, dict) and result.get("status") == "awaiting_user_approval"
+            execution_status = (
+                "awaiting_confirmation" if awaiting_approval or decision.decision == "confirmation_required"
+                else "failed" if failed else "returned"
+            )
+            POLICY_ENGINE.audit(context, metadata, decision, execution_status)
+            return {
+                "status": "error" if failed else "success",
+                "data": result,
+                "policy": decision.as_dict(),
+            }
 
         # ADK derives the function declaration from the callable signature.
         call.__signature__ = signature  # type: ignore[attr-defined]
@@ -169,4 +223,4 @@ class ToolRegistry:
 
     def adk_tools(self) -> tuple[FunctionTool, ...]:
         """Build the ADK adapters from this registry; no parallel tool list exists."""
-        return tuple(FunctionTool(self._gateway(item.function)) for item in self._tools.values())
+        return tuple(FunctionTool(self._gateway(item.function, item.metadata)) for item in self._tools.values())
