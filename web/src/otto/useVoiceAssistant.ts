@@ -185,6 +185,13 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const openEntry = useRef<{ role: TranscriptEntry['role']; id: number } | null>(null)
   const nextId = useRef(0)
   const actionRef = useRef(onAction)
+  const reportDesktopResult = useCallback<ReportDesktopActionResult>(report => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN) return false
+    ws.send(JSON.stringify({ type: 'desktop_result', ...report }))
+    return true
+  }, [])
+
   const diagnosticRef = useRef(onDiagnostic)
   const avatarRef = useRef(onAvatar)
   const environmentalRef = useRef(onEnvironmental)
@@ -541,7 +548,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           break
       }
     }
-  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet])
+  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet, reportDesktopResult])
 
   /**
    * Starts a conversation, from a click. With the audio code loaded (the usual case) everything happens inside the click.
@@ -617,8 +624,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     const latest = records.current[records.current.length - 1]
     if (!latest?.inverse) return
     record(`Undid: ${latest.label}`, null)
-    actionRef.current(latest.inverse)
-  }, [record])
+    actionRef.current(latest.inverse, reportDesktopResult)
+  }, [record, reportDesktopResult])
 
   /** The open mic's Mute microphone. Unmuting starts its 60 seconds again. */
   const toggleMute = useCallback(() => {
@@ -676,13 +683,6 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   }, [addTranscript])
 
   /** Tells the server a share started (camera or screen) or stopped (null). Only while a conversation is open (D-21). */
-  const reportDesktopResult = useCallback<ReportDesktopActionResult>(report => {
-    const ws = socket.current
-    if (ws?.readyState !== WebSocket.OPEN) return false
-    ws.send(JSON.stringify({ type: 'desktop_result', ...report }))
-    return true
-  }, [])
-
   const sendCapture = useCallback((source: CaptureSource | null) => {
     const ws = socket.current
     if (ws?.readyState !== WebSocket.OPEN) return false
