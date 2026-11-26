@@ -17,7 +17,7 @@ from typing import Any, Callable, get_type_hints
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
 
-from app.voice.policy import POLICY_ENGINE
+from app.voice.policy import POLICY_ENGINE, clear_state_key, supports_state
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,7 @@ _FIRST_PARTY_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("show_card", "browser", "Show bounded plain text in the voice panel.", "low", "voice_session", 5, False, False, ("voice_panel_card",)),
     ToolMetadata("get_background_tasks", "tasks", "Read the status of the server's background tasks.", "low", "voice_session", 5, False, False),
     ToolMetadata("notice_environmental_observation", "camera", "Propose a bounded attention event from a fresh, actively shared camera frame.", "medium", "active_camera_share", 5, False, True, ("awareness_event_proposal",)),
+    ToolMetadata("propose_memory", "memory", "Ask the visitor to confirm saving one fact they explicitly asked Otto to remember.", "medium", "memory_opt_in", 5, False, False, ("memory_proposal",)),
 )
 
 # Every tool above is first-party, and its error strings are written for the model to read.
@@ -270,8 +271,8 @@ class ToolRegistry:
                 )
 
             state = getattr(context, "state", None)
-            previous_policy = state.get("_active_policy_decision") if isinstance(state, dict) else None
-            if isinstance(state, dict):
+            previous_policy = state.get("_active_policy_decision") if supports_state(state) else None
+            if supports_state(state):
                 state["_active_policy_decision"] = decision.as_dict()
             try:
                 raw_result = function(*bound.args, **bound.kwargs)
@@ -285,9 +286,9 @@ class ToolRegistry:
                     policy=decision.as_dict(),
                 )
             finally:
-                if isinstance(state, dict):
+                if supports_state(state):
                     if previous_policy is None:
-                        state.pop("_active_policy_decision", None)
+                        clear_state_key(state, "_active_policy_decision")
                     else:
                         state["_active_policy_decision"] = previous_policy
 

@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { ASSISTANT_NAME } from '../otto.config'
 import { isDesktopRuntime, setDesktopPermissionEnabled } from './desktop'
 import type { AnswerLength } from './consent'
-import type { AssistantCard } from './messages'
+import type { AssistantCard, MemoryProposalStatus } from './messages'
+import type { MemoryProposalEntry } from './useVoiceAssistant'
 import ScreenShare, { canShare } from './ScreenShare'
 import SignInput from './sign/SignInput'
 import { Button, Icon, IconButton, Notice } from './ui'
@@ -44,12 +45,49 @@ export function VoiceCard({ card, onAsk }: { card: AssistantCard; onAsk: (text: 
   </article>
 }
 
+function memoryProposalStatusText(status: MemoryProposalStatus): string {
+  switch (status) {
+    case 'saving': return 'Saving this memory…'
+    case 'discarding': return 'Not saving this memory…'
+    case 'saved': return 'Saved to this app profile.'
+    case 'discarded': return 'Not saved.'
+    case 'expired': return 'This request expired. Ask Otto again to create a new one.'
+    case 'unavailable': return 'Memory is no longer enabled for this session.'
+    case 'failed': return 'The memory could not be saved.'
+    default: return ''
+  }
+}
+
+function VoiceMemoryProposal({ proposal, onResolve }: {
+  proposal: MemoryProposalEntry
+  onResolve: (requestId: string, accepted: boolean) => boolean
+}) {
+  const pending = proposal.status === 'pending'
+  return <article className="voice-assistant__memory" aria-label="Memory request">
+    <h3 className="voice-assistant__card-title">Save this to memory?</h3>
+    <p className="voice-assistant__card-body">{proposal.content}</p>
+    <p className="voice-assistant__why">
+      {proposal.redacted
+        ? 'Private-looking details have been replaced. This entry will be marked sensitive and left out of memory recall by default.'
+        : "This detail will be saved to this app's memory profile only after you press Save."}
+      {' '}The request expires after 2 minutes.
+    </p>
+    {pending
+      ? <div className="voice-assistant__consent-actions">
+          <Button variant="tonal" onClick={() => onResolve(proposal.request_id, true)}>Save</Button>
+          <Button variant="text" onClick={() => onResolve(proposal.request_id, false)}>Not now</Button>
+        </div>
+      : <p className="voice-assistant__memory-status" role="status">{memoryProposalStatusText(proposal.status)}</p>}
+  </article>
+}
+
 const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
 
 export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void }) {
   const {
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking, clearContinuity,
+    memoryProposals, resolveMemoryProposal,
   } = assistant
   const [draft, setDraft] = useState('')
   const [wakeOn, setWakeOn] = useWakeSetting()
@@ -228,6 +266,14 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
         </li>)}
     </ol>
 
+    {memoryProposals.length > 0 && <section className="voice-assistant__memory-list" aria-label="Memory requests">
+      {memoryProposals.map(proposal => <VoiceMemoryProposal
+        key={proposal.request_id}
+        proposal={proposal}
+        onResolve={resolveMemoryProposal}
+      />)}
+    </section>}
+
     {/* Says what the guide just did, once, without moving focus. */}
     <p className="ui-visually-hidden" aria-live="polite">{latestAction?.label}</p>
     {actions.length > 0 && <ul className="voice-assistant__did" aria-label={`${ASSISTANT_NAME} did`}>
@@ -299,7 +345,7 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
     )}
 
     <p className="voice-assistant__note">
-      While this is open, your voice and what you type are sent to Google's Gemini cloud AI to answer you. This app saves none of it.
+      While this is open, your voice and what you type are sent to Google's Gemini cloud AI to answer you. The conversation itself is not stored. If this app enables memory, a specific detail is saved only after you press Save on a memory request.
     </p>
   </section>
   </>

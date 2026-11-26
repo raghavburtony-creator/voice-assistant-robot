@@ -70,6 +70,34 @@ describe("environmental proposal messages", () => {
   })
 })
 
+describe('visitor-confirmed memory messages', () => {
+  it('accepts a bounded proposal with a closed id and memory kind', () => {
+    const requestId = 'a'.repeat(32)
+    expect(parseServerMessage(JSON.stringify({
+      type: 'memory_proposal', request_id: requestId, content: 'Prefers concise answers',
+      kind: 'semantic', redacted: false,
+    }))).toMatchObject({ type: 'memory_proposal', request_id: requestId, content: 'Prefers concise answers' })
+  })
+
+  it('sanitizes proposal text and rejects malformed ids, kinds and empty content', () => {
+    const base = { type: 'memory_proposal', request_id: 'b'.repeat(32), content: '  Keep\u0000 this\nshort  ', kind: 'episodic', redacted: false }
+    expect(parseServerMessage(JSON.stringify(base))).toMatchObject({ content: 'Keep this short' })
+    for (const message of [
+      { ...base, request_id: 'not-an-id' },
+      { ...base, content: '   ' },
+      { ...base, kind: 'working' },
+      { ...base, redacted: 'false' },
+    ]) expect(parseServerMessage(JSON.stringify(message))).toBeNull()
+  })
+
+  it('accepts only known memory confirmation results', () => {
+    const requestId = 'c'.repeat(32)
+    expect(parseServerMessage(JSON.stringify({ type: 'memory_result', request_id: requestId, status: 'saved' })))
+      .toMatchObject({ type: 'memory_result', status: 'saved' })
+    expect(parseServerMessage(JSON.stringify({ type: 'memory_result', request_id: requestId, status: 'created' }))).toBeNull()
+  })
+})
+
 describe('avatar messages', () => {
   it('pass the schema; the event inside is checked by parseAvatarEvent, not trusted here', () => {
     expect(parseServerMessage('{"type":"avatar","event":{"kind":"working","id":"r1"}}')).toMatchObject({ type: 'avatar', event: { kind: 'working', id: 'r1' } })

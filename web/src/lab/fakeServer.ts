@@ -92,6 +92,10 @@ export class FakeVoiceServer {
   private log: ServerLog
   private contexts = new Map<string, unknown>()
   private continuitySeenRunning = false
+  private memoryRequestCounter = 0
+  private pendingMemory: { request_id: string; content: string; kind: 'episodic' | 'semantic' } | null = null
+  private resolvedMemory: string[] = []
+  private readonly savedMemories: string[] = []
   private continuitySaved: { task: string; step: string; savedAt: number } | null = (() => {
     try { return JSON.parse(localStorage.getItem('otto-lab:continuity-task') || 'null') } catch { return null }
   })()
@@ -113,7 +117,30 @@ export class FakeVoiceServer {
     if (socket !== this.socket) return
     if (data instanceof ArrayBuffer) { this.micFrames++; return }
     if (typeof data !== 'string') return
-    const message = JSON.parse(data) as { type: string; text?: string; key?: string; data?: unknown; source?: unknown; generation?: unknown; proposal?: unknown }
+    const message = JSON.parse(data) as {
+      type: string; text?: string; key?: string; data?: unknown; source?: unknown; generation?: unknown;
+      proposal?: unknown; request_id?: unknown; accepted?: unknown;
+    }
+    if (message.type === 'memory_consent') {
+      const pending = this.pendingMemory
+      if (pending && message.request_id === pending.request_id && typeof message.accepted === 'boolean') {
+        const status = message.accepted ? 'saved' : 'discarded'
+        if (message.accepted) this.savedMemories.push(pending.content)
+        this.pendingMemory = null
+        this.resolvedMemory.push(pending.request_id)
+        this.send({ type: 'memory_result', request_id: pending.request_id, status })
+        this.log(`memory: ${status}`)
+      } else if (
+        typeof message.request_id === 'string' && /^[0-9a-f]{32}$/.test(message.request_id)
+        && typeof message.accepted === 'boolean' && !this.resolvedMemory.includes(message.request_id)
+      ) {
+        // Like the server: a well-formed id that is not open (expired, or never staged) is answered, so the panel never
+        // waits; a repeat of one already answered stays silent.
+        this.send({ type: 'memory_result', request_id: message.request_id, status: 'expired' })
+        this.log('memory: expired')
+      }
+      return
+    }
     if (message.type === 'continuity_clear') { this.continuitySaved = null; try { localStorage.removeItem('otto-lab:continuity-task') } catch { /* ignored */ }; return }
     if (message.type === 'frame') { if (this.capture) this.imageFrames++; return }
     if (message.type === 'capture' && (message.source === 'camera' || message.source === 'screen' || message.source === null)) {
@@ -162,7 +189,17 @@ export class FakeVoiceServer {
       }
       const text = (message.text ?? '').trim()
       const ask = /^(show me|where is) /i.exec(text)
-      if (/\bcard\b|how do i install/i.test(text)) {
+      const remember = /^(?:please\s+)?remember(?:\s+that)?\s+(.{1,600})$/i.exec(text)
+      if (remember) {
+        const request_id = (++this.memoryRequestCounter).toString(16).padStart(32, '0')
+        const pending = { request_id, content: remember[1].trim(), kind: 'semantic' as const }
+        this.pendingMemory = pending
+        this.later(() => {
+          if (this.pendingMemory?.request_id !== request_id) return
+          this.send({ type: 'memory_proposal', ...pending, redacted: false })
+          this.reply('I can save that to this app profile. Please review the memory request in the panel.')
+        }, 400)
+      } else if (/\bcard\b|how do i install/i.test(text)) {
         this.later(() => {
           this.send({ type: 'action', action: 'card', card: {
             title: 'Install the kit', body: 'Run these two commands in the web folder, then open the lab.',
