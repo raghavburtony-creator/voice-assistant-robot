@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import pytest
+import sqlite3
+from contextlib import closing
 from types import SimpleNamespace
+
+import pytest
 
 from app.voice import bridge as voice_bridge
 from app.voice.continuity import ContinuityContext
 from app.voice.app_config import system_instruction
 from app.voice.memory_service import (
     MAX_CONTEXT_CHARS,
+    WORKING_RETENTION_SECONDS,
     SQLiteMemoryService,
 )
 
@@ -93,6 +97,65 @@ def test_working_context_expires_but_semantic_memory_remains(memory):
     )
     found = memory.recall("demo", "opaque-a", now=100 + 24 * 60 * 60 + 1)
     assert [item.kind for item in found] == ["semantic"]
+
+
+def test_expired_working_memory_is_deleted_from_sqlite_after_the_retention_boundary(memory):
+    working = memory.remember(
+        "demo", "opaque-a", "Temporary in-progress work", kind="working",
+        provenance="session context", explicit=True, now=100,
+    )
+    semantic = memory.remember(
+        "demo", "opaque-a", "Prefers concise answers", kind="semantic",
+        provenance="explicit request", explicit=True, now=100,
+    )
+
+    # The existing recall contract includes the exact 24-hour boundary.
+    at_boundary = memory.recall("demo", "opaque-a", now=100 + WORKING_RETENTION_SECONDS)
+    assert {item.id for item in at_boundary} == {working.id, semantic.id}
+
+    after_boundary = memory.recall(
+        "demo", "opaque-a", now=100 + WORKING_RETENTION_SECONDS + 1,
+    )
+    assert [item.id for item in after_boundary] == [semantic.id]
+
+    with closing(sqlite3.connect(memory.path)) as db:
+        stored = db.execute(
+            "SELECT id, kind FROM memories ORDER BY updated_at DESC"
+        ).fetchall()
+    assert stored == [(semantic.id, "semantic")]
+
+
+def test_expired_working_memory_cannot_be_refreshed_by_update(memory):
+    working = memory.remember(
+        "demo", "opaque-a", "Temporary in-progress work", kind="working",
+        provenance="session context", explicit=True, now=100,
+    )
+
+    updated = memory.update(
+        "demo", "opaque-a", working.id, content="Stale work revived",
+        explicit=True, now=100 + WORKING_RETENTION_SECONDS + 1,
+    )
+
+    assert updated is None
+    with closing(sqlite3.connect(memory.path)) as db:
+        assert db.execute("SELECT 1 FROM memories WHERE id = ?", (working.id,)).fetchone() is None
+
+
+def test_service_startup_purges_working_memory_that_has_already_expired(memory):
+    working = memory.remember(
+        "demo", "opaque-a", "Old temporary context", kind="working",
+        provenance="session context", explicit=True, now=100,
+    )
+    semantic = memory.remember(
+        "demo", "opaque-a", "Durable preference", kind="semantic",
+        provenance="explicit request", explicit=True, now=100,
+    )
+
+    reopened = SQLiteMemoryService(memory.path)
+
+    assert [item.id for item in reopened.recall("demo", "opaque-a", now=100)] == [semantic.id]
+    with closing(sqlite3.connect(memory.path)) as db:
+        assert db.execute("SELECT 1 FROM memories WHERE id = ?", (working.id,)).fetchone() is None
 
 
 def test_context_is_bounded_and_serialized_as_data(memory):

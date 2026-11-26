@@ -41,6 +41,7 @@ def test_only_the_two_stores_may_persist():
 def test_retention_text_states_the_existing_rules():
     assert str(WORKING_RETENTION_SECONDS // 3600) + " hours" in DATA_CLASSES["memory_record"].retention
     assert f"{RETENTION_SECONDS // 86400} days" in DATA_CLASSES["continuity_record"].retention
+    assert "deleted from SQLite" in DATA_CLASSES["memory_record"].retention
     assert DATA_CLASSES["memory_record"].redaction == REDACTION_APPLIED
 
 

@@ -94,6 +94,15 @@ def _record(row: tuple) -> MemoryRecord:
 class SQLiteMemoryService:
     """SQLite-backed memory store; each operation uses a short-lived connection."""
 
+    @staticmethod
+    def _purge_expired_working(db: sqlite3.Connection, timestamp: int) -> int:
+        """Delete working records whose last update is beyond the 24-hour retention window."""
+        cursor = db.execute(
+            "DELETE FROM memories WHERE kind = 'working' AND updated_at < ?",
+            (timestamp - WORKING_RETENTION_SECONDS,),
+        )
+        return cursor.rowcount
+
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
         if self.path != ":memory:":
@@ -127,6 +136,8 @@ class SQLiteMemoryService:
                     if "redacted" not in {row[1] for row in db.execute("PRAGMA table_info(memory_audit)")}:
                         raise
             db.execute("CREATE INDEX IF NOT EXISTS memory_audit_identity_created ON memory_audit(identity_key, created_at DESC)")
+            # Working context is short-lived even when no later recall happens in this process.
+            self._purge_expired_working(db, int(time.time()))
 
     def _connect(self):
         return sqlite3.connect(self.path, timeout=5)
@@ -191,6 +202,7 @@ class SQLiteMemoryService:
         record_id = str(uuid.uuid4())
         related_json = json.dumps(list(dict.fromkeys(related_ids)), separators=(",", ":"))
         with self._connection() as db:
+            self._purge_expired_working(db, timestamp)
             count = db.execute("SELECT COUNT(*) FROM memories WHERE identity_key = ?", (key,)).fetchone()[0]
             if count >= MAX_RECORDS_PER_IDENTITY:
                 oldest = db.execute(
@@ -232,6 +244,7 @@ class SQLiteMemoryService:
         clauses.append("(kind != 'working' OR updated_at >= ?)")
         params.append(timestamp - WORKING_RETENTION_SECONDS)
         with self._connection() as db:
+            self._purge_expired_working(db, timestamp)
             rows = db.execute(
                 "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE " + " AND ".join(clauses) + " ORDER BY updated_at DESC LIMIT 500",
@@ -267,6 +280,7 @@ class SQLiteMemoryService:
             raise ValueError("Invalid memory id")
         timestamp = int(time.time()) if now is None else now
         with self._connection() as db:
+            self._purge_expired_working(db, timestamp)
             row = db.execute(
                 "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE id = ? AND identity_key = ?", (record_id, key)
@@ -313,6 +327,7 @@ class SQLiteMemoryService:
         clean_provenance, _ = _clean_redacted(provenance, MAX_PROVENANCE_CHARS)
         timestamp = int(time.time()) if now is None else now
         with self._connection() as db:
+            self._purge_expired_working(db, timestamp)
             cursor = db.execute("DELETE FROM memories WHERE id = ? AND identity_key = ?", (record_id, key))
             if cursor.rowcount == 1:
                 self._audit(db, key, record_id, "forget", clean_provenance, timestamp)
@@ -326,6 +341,7 @@ class SQLiteMemoryService:
         key = _identity_key(scope, identity)
         timestamp = int(time.time()) if now is None else now
         with self._connection() as db:
+            self._purge_expired_working(db, timestamp)
             count = db.execute("DELETE FROM memories WHERE identity_key = ?", (key,)).rowcount
             self._audit(db, key, "*", "forget_all", f"count={count}", timestamp)
         return count
@@ -336,6 +352,7 @@ class SQLiteMemoryService:
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Invalid audit limit")
         with self._connection() as db:
+            self._purge_expired_working(db, int(time.time()))
             rows = db.execute(
                 "SELECT record_id, action, provenance, created_at, redacted FROM memory_audit "
                 "WHERE identity_key = ? ORDER BY created_at DESC LIMIT ?", (key, limit)
