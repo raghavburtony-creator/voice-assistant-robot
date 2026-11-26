@@ -63,6 +63,8 @@ Explicit non-goals for any initial pilot unless separately validated:
 4. Co-design the pilot task, consent/governance plan and signer-independent evaluation.
 5. Only then record a decision in `docs/decisions.md` and define the live recognition implementation slice.
 
+A concrete, language-agnostic pilot for the community to react to is in [sign-language-pilot-proposal.md](sign-language-pilot-proposal.md).
+
 ## Current disposition
 
 Q-09 is **not answered** by this desk research. The issue's completion criteria requiring community confirmation, dataset-rights assessment and an agreed validation plan remain unmet. Model/provider selection and live recognition integration remain blocked. This is an evidence-based deferral, not a rejection of MSL or a decision to use another language.
