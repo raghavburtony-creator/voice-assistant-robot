@@ -79,3 +79,33 @@ test('the model hears what the app is busy with, only while a conversation is op
   await expect(newest).toContainText('"running":[]')
 })
 
+
+
+test('a memory proposal is saved only after the visitor presses Save', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  const input = panel.getByRole('textbox', { name: 'Type a question instead' })
+  await expect(input).toBeEnabled()
+
+  await input.fill('Remember that I prefer concise answers')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  const request = panel.getByRole('article', { name: 'Memory request' })
+  await expect(request).toContainText('I prefer concise answers')
+  await request.getByRole('button', { name: 'Save' }).click()
+  await expect(request).toContainText('Saved to this app profile.')
+
+  await input.fill('Remember that I like green tea')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  const second = panel.getByRole('article', { name: 'Memory request' }).filter({ hasText: 'I like green tea' })
+  await expect(second).toBeVisible()
+  await second.getByRole('button', { name: 'Not now' }).click()
+  await expect(second).toContainText('Not saved.')
+
+  const server = page.getByRole('region', { name: 'Simulated server' })
+  await expect(server).toContainText('memory: saved')
+  await expect(server).toContainText('memory: discarded')
+})

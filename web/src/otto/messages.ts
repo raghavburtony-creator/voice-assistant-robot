@@ -15,11 +15,27 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('action'), action: z.string(), page: z.unknown().optional(), name: z.unknown().optional(), target: z.unknown().optional(), task: z.unknown().optional(), step: z.unknown().optional(), move: z.unknown().optional(), card: z.unknown().optional(), destination: z.unknown().optional(), desktop_action: z.unknown().optional(), request_id: z.unknown().optional() }),
   z.object({ type: z.literal('avatar'), event: z.unknown() }),
   z.object({ type: z.literal('environmental'), generation: z.number().int().positive(), proposal: z.unknown() }),
+  z.object({
+    type: z.literal('memory_proposal'),
+    request_id: z.string().regex(/^[0-9a-f]{32}$/),
+    content: z.string().max(600)
+      .transform(value => value.replace(/[\\u0000-\\u001F\\u007F]/g, ' ').replace(/\\s+/g, ' ').trim())
+      .pipe(z.string().min(1)),
+    kind: z.enum(['episodic', 'semantic']),
+    redacted: z.boolean(),
+  }),
+  z.object({
+    type: z.literal('memory_result'),
+    request_id: z.string().regex(/^[0-9a-f]{32}$/),
+    status: z.enum(['saved', 'discarded', 'expired', 'unavailable', 'failed']),
+  }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('ended'), reason: z.string() }),
 ])
 
 export type ServerMessage = z.infer<typeof messageSchema>
+export type MemoryProposal = Extract<ServerMessage, { type: 'memory_proposal' }>
+export type MemoryProposalStatus = 'pending' | 'saving' | 'discarding' | 'saved' | 'discarded' | 'expired' | 'unavailable' | 'failed'
 
 /** The message in a text frame, or null for invalid JSON, an unknown type or a shape that does not fit. */
 export function parseServerMessage(text: string): ServerMessage | null {
