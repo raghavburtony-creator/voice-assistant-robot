@@ -10,6 +10,7 @@
     server -> client  text   {"type":"ready","limitSeconds":600} | {"type":"transcript","role":"user"|"assistant","text":...}
                              {"type":"action","action":"navigate","page":...} | {"type":"action","action":"command","name":...}
                              {"type":"action","action":"guide","target":...} | {"type":"action","action":"task","task":...}
+                             {"type":"action","action":"desktop_action","desktop_action":<DesktopAction>,"request_id":<32 lowercase hex chars>}  (server-issued policy request id; browser validates both fields)
                              {"type":"action","action":"task_move","move":"stop"|"back"|"next"}
                              {"type":"action","action":"card","card":{"title":...,"body":...,"code"?:...,"follow_ups"?:[...]}}
                              {"type":"interrupted"} | {"type":"turn_complete"}
