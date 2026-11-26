@@ -19,7 +19,7 @@ const messageSchema = z.discriminatedUnion('type', [
     type: z.literal('memory_proposal'),
     request_id: z.string().regex(/^[0-9a-f]{32}$/),
     content: z.string().max(600)
-      .transform(value => value.replace(/[\\u0000-\\u001F\\u007F]/g, ' ').replace(/\\s+/g, ' ').trim())
+      .transform(value => value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim())
       .pipe(z.string().min(1)),
     kind: z.enum(['episodic', 'semantic']),
     redacted: z.boolean(),

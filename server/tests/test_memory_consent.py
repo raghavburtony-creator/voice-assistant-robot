@@ -117,9 +117,16 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         state={"screens": {}},
     )
     from app.voice.sink import sink
+    class ContinuityStub:
+        def enable(self, scope, identity):
+            pass
+
+        def load(self, scope, identity):
+            return None
+
     sink.open(live.session_id)
     try:
-        bridge = Bridge(object(), live)
+        bridge = Bridge(object(), live, store=ContinuityStub())
         proposal = stage_memory_proposal(bridge.live.state, "Prefers concise answers", "semantic")
         assert proposal is not None
         assert writes == []

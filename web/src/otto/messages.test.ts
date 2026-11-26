@@ -80,7 +80,7 @@ describe('visitor-confirmed memory messages', () => {
   })
 
   it('sanitizes proposal text and rejects malformed ids, kinds and empty content', () => {
-    const base = { type: 'memory_proposal', request_id: 'b'.repeat(32), content: '  Keep\\u0000 this\\nshort  ', kind: 'episodic', redacted: false }
+    const base = { type: 'memory_proposal', request_id: 'b'.repeat(32), content: '  Keep\u0000 this\nshort  ', kind: 'episodic', redacted: false }
     expect(parseServerMessage(JSON.stringify(base))).toMatchObject({ content: 'Keep this short' })
     for (const message of [
       { ...base, request_id: 'not-an-id' },

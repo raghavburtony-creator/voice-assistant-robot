@@ -69,7 +69,7 @@ function VoiceMemoryProposal({ proposal, onResolve }: {
     <p className="voice-assistant__why">
       {proposal.redacted
         ? 'Private-looking details have been replaced. This entry will be marked sensitive and left out of memory recall by default.'
-        : 'This detail will be saved to the app profile linked to this session only after you press Save.'}
+        : 'This detail will be saved to this app's memory profile only after you press Save.'}
       {' '}The request expires after 2 minutes.
     </p>
     {pending
