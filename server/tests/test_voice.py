@@ -1012,10 +1012,21 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert result["policy"]["decision"] == "confirmation_required"
     assert result["policy"]["scope"] == "action:launch_calculator"
     assert result["policy"]["verification_status"] == "pending"
-    assert sink.drain("tool-test") == [{"action": "desktop_action", "desktop_action": "launch_calculator"}]
+    [queued] = sink.drain("tool-test")
+    assert queued["action"] == "desktop_action" and queued["desktop_action"] == "launch_calculator"
+    assert queued["request_id"] == result["policy"]["request_id"]
     audit = ctx.state["tool_policy_audit"][-1]
     assert audit["decision"] == "confirmation_required"
     assert audit["execution_status"] == "awaiting_confirmation"
+    from app.voice.policy import POLICY_ENGINE
+    assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_text_editor", "ok": True, "status": "started", "verification": "process_spawned"})
+    assert POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": "started", "verification": "process_spawned"})
+    assert audit["execution_status"] == "started"
+    assert audit["consent_status"] == "approved"
+    assert audit["verification_status"] == "pending"
+    assert audit["verification_result"] == "process_spawned"
+    assert audit["outcome_source"] == "webview_reported"
+    assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": "started", "verification": "process_spawned"})
     sink.close("tool-test")
 
 
