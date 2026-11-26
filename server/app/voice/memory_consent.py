@@ -37,7 +37,7 @@ def _prune(state: dict[str, Any], now: float) -> dict[str, dict[str, Any]]:
 
 def stage_memory_proposal(state: object, content: object, kind: object, *, now: float | None = None) -> dict[str, Any] | None:
     """Create a bounded pending proposal and return only its browser-safe fields."""
-    if not isinstance(state, dict) or kind not in _MEMORY_KINDS or not isinstance(content, str):
+    if not isinstance(state, dict) or not isinstance(kind, str) or kind not in _MEMORY_KINDS or not isinstance(content, str):
         return None
     cleaned = "".join(" " if ord(char) < 0x20 and char not in "\n\t" else char for char in content).strip()
     if not cleaned or len(cleaned) > MEMORY_PROPOSAL_MAX_CHARS:
@@ -62,7 +62,7 @@ def pending_memory_proposal(state: object, request_id: object, *, now: float | N
     if not isinstance(state, dict) or not _valid_request_id(request_id):
         return None
     item = _prune(state, time.time() if now is None else now).get(request_id)
-    if not isinstance(item, dict) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
+    if not isinstance(item, dict) or not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
         return None
     return {
         "request_id": request_id, "content": item["content"], "kind": item["kind"],
@@ -86,7 +86,7 @@ def consume_memory_proposal(state: object, request_id: object, accepted: object,
     created = item.get("created_at")
     if type(created) not in (int, float) or timestamp - created > MEMORY_PROPOSAL_TTL_SECONDS:
         return "expired", None
-    if item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
+    if not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
         return "expired", None
     if not accepted:
         return "discarded", None

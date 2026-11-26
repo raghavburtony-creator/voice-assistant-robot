@@ -15,6 +15,7 @@ from app.voice.memory_consent import (
 )
 from app.voice.policy import PermissionPolicy
 from app.voice.tool_registry import TOOL_METADATA
+from app.voice import tools
 
 
 def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
@@ -26,12 +27,13 @@ def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
     assert proposal["content"] == "Contact me at [email] about the project"
     assert proposal["redacted"] is True
     assert "visitor@example.com" not in str(state)
-    assert state[PENDING_MEMORY_KEY][proposal["request_id"]]["sensitive"] is True
+    assert state[PENDING_MEMORY_KEY][request_id]["sensitive"] is True
 
 
 def test_rejects_invalid_kind_empty_text_and_overlong_text():
     state = {}
     assert stage_memory_proposal(state, "A preference", "working", now=100) is None
+    assert stage_memory_proposal(state, "A preference", [], now=100) is None
     assert stage_memory_proposal(state, "  ", "semantic", now=100) is None
     assert stage_memory_proposal(state, "x" * 601, "semantic", now=100) is None
     assert state[PENDING_MEMORY_KEY] == {}
@@ -56,19 +58,19 @@ def test_browser_confirmation_consumes_a_matching_proposal_once():
     state = {}
     proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
     assert proposal is not None
-    assert pending_memory_proposal(state, proposal["request_id"], now=101) == proposal
-    status, saved = consume_memory_proposal(state, proposal["request_id"], True, now=102)
+    assert pending_memory_proposal(state, request_id, now=101) == proposal
+    status, saved = consume_memory_proposal(state, request_id, True, now=102)
     assert status == "accepted"
     assert saved == {"content": "Prefers concise answers", "kind": "semantic", "sensitive": False}
-    assert pending_memory_proposal(state, proposal["request_id"], now=102) is None
-    assert consume_memory_proposal(state, proposal["request_id"], True, now=103) == (None, None)
+    assert pending_memory_proposal(state, request_id, now=102) is None
+    assert consume_memory_proposal(state, request_id, True, now=103) == (None, None)
 
 
 def test_not_now_discards_and_expired_confirmation_is_rejected():
     state = {}
     proposal = stage_memory_proposal(state, "Temporary note", "episodic", now=100)
     assert proposal is not None
-    assert consume_memory_proposal(state, proposal["request_id"], False, now=101) == ("discarded", None)
+    assert consume_memory_proposal(state, request_id, False, now=101) == ("discarded", None)
     expired = stage_memory_proposal(state, "Old note", "semantic", now=200)
     assert expired is not None
     assert consume_memory_proposal(
@@ -81,8 +83,8 @@ def test_invalid_or_untrusted_confirmation_is_ignored():
     proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
     assert proposal is not None
     assert consume_memory_proposal(state, "not-an-id", True, now=101) == (None, None)
-    assert consume_memory_proposal(state, proposal["request_id"], "true", now=101) == (None, None)
-    assert proposal["request_id"] in state[PENDING_MEMORY_KEY]
+    assert consume_memory_proposal(state, request_id, "true", now=101) == (None, None)
+    assert request_id in state[PENDING_MEMORY_KEY]
 
 
 def test_memory_policy_is_denied_without_the_trusted_host_opt_in():
@@ -127,13 +129,20 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
     sink.open(live.session_id)
     try:
         bridge = Bridge(object(), live, store=ContinuityStub())
-        proposal = stage_memory_proposal(bridge.live.state, "Prefers concise answers", "semantic")
+        tool_context = SimpleNamespace(
+            state=bridge.live.state,
+            session=SimpleNamespace(id=live.session_id),
+        )
+        staged = tools.propose_memory("Prefers concise answers", "semantic", tool_context)
+        assert staged["ok"] is True and staged["awaiting_confirmation"] is True
+        request_id = next(iter(bridge.live.state[PENDING_MEMORY_KEY]))
+        proposal = pending_memory_proposal(bridge.live.state, request_id)
         assert proposal is not None
         assert writes == []
         saved = bridge.resolve_memory_consent({
-            "type": "memory_consent", "request_id": proposal["request_id"], "accepted": True,
+            "type": "memory_consent", "request_id": request_id, "accepted": True,
         })
-        assert saved == {"type": "memory_result", "request_id": proposal["request_id"], "status": "saved"}
+        assert saved == {"type": "memory_result", "request_id": request_id, "status": "saved"}
         assert writes == [(
             "app", "opaque-host-id", "Prefers concise answers",
             {
@@ -142,7 +151,7 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
             },
         )]
         assert bridge.resolve_memory_consent({
-            "type": "memory_consent", "request_id": proposal["request_id"], "accepted": True,
+            "type": "memory_consent", "request_id": request_id, "accepted": True,
         }) is None
     finally:
         sink.close(live.session_id)
