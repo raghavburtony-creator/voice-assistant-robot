@@ -208,72 +208,90 @@ class PolicyEngine:
         return self.audit_log.record(context, metadata=metadata, decision=decision, execution_status=execution_status)
 
     def record_host_result(self, state: Any, report: Any) -> bool:
-        """Complete one exact pending request from a native-host-reported receipt.
+        """Complete one pending request from a host receipt or a preflight cancellation.
 
-        The OS dialog remains the execution authority. This browser-transported report
-        is audit provenance, not cryptographic attestation or execution authority.
+        The OS dialog remains the execution authority. Browser-transported reports
+        are audit provenance, not cryptographic attestation or execution authority.
         """
         if not isinstance(state, dict) or not isinstance(report, dict):
             return False
         if set(report) not in (
             {"request_id", "action", "consent_certificate", "result"},
             {"type", "request_id", "action", "consent_certificate", "result"},
-        ):
-            return False
-        if report.get("type", "desktop_result") != "desktop_result":
+        ) or report.get("type", "desktop_result") != "desktop_result":
             return False
         request_id, action = report.get("request_id"), report.get("action")
         certificate, result = report.get("consent_certificate"), report.get("result")
-        if not isinstance(certificate, dict) or set(certificate) != {
-            "certificate_id", "request_id", "action", "decision", "method", "issued_at_unix_ms",
-        }:
-            return False
-        if not isinstance(result, dict) or set(result) != {"ok", "status", "verification"}:
-            return False
         if not isinstance(request_id, str) or len(request_id) != 32 or any(ch not in "0123456789abcdef" for ch in request_id):
             return False
-        if not isinstance(action, str) or not isinstance(certificate, dict) or not isinstance(result, dict):
-            return False
-        decision, issued_at = certificate.get("decision"), certificate.get("issued_at_unix_ms")
-        method, certificate_id = certificate.get("method"), certificate.get("certificate_id")
-        if (not isinstance(decision, str) or decision not in {"approved", "denied"}
-            or certificate.get("request_id") != request_id or certificate.get("action") != action
-            or method != "native_os_dialog" or type(issued_at) is not int or issued_at <= 0
-            or not isinstance(certificate_id, str) or certificate_id != f"{request_id}-{issued_at}"):
+        if not isinstance(action, str) or not isinstance(result, dict) or set(result) != {"ok", "status", "verification"}:
             return False
         status, ok, verification = result.get("status"), result.get("ok"), result.get("verification")
         if not isinstance(status, str) or status not in {"completed", "started", "failed", "denied"} or type(ok) is not bool:
             return False
         if not isinstance(verification, str) or verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}:
             return False
-        if verification == "verified" and (not ok or status != "completed"):
-            return False
-        if verification == "process_spawned" and (not ok or status != "started"):
-            return False
-        if verification == "not_verified" and ok:
-            return False
-        if (decision == "denied" and (status != "denied" or ok is not False)) or (decision == "approved" and status == "denied"):
-            return False
+
         pending = state.get(PENDING_STATE_KEY)
         pending = dict(pending) if isinstance(pending, dict) else {}
         expected = pending.get(request_id)
         if not isinstance(expected, dict) or expected.get("tool") not in {"desktop_action", "move_desktop"} or expected.get("action") != action:
             return False
+
+        if certificate is None:
+            # The browser may revoke desktop awareness or lack a native host before
+            # the OS dialog is opened. This can only cancel, never approve, a request.
+            if status not in {"failed", "denied"} or ok is not False or verification != "unavailable":
+                return False
+            consent_status = "not_presented"
+            certificate_id = method = issued_at = None
+            execution_status = "cancelled_before_execution"
+            verification_status = "not_run"
+            provenance = "browser_preflight_reported"
+        else:
+            if not isinstance(certificate, dict) or set(certificate) != {
+                "certificate_id", "request_id", "action", "decision", "method", "issued_at_unix_ms",
+            }:
+                return False
+            decision, issued_at = certificate.get("decision"), certificate.get("issued_at_unix_ms")
+            method, certificate_id = certificate.get("method"), certificate.get("certificate_id")
+            if (not isinstance(decision, str) or decision not in {"approved", "denied"}
+                or certificate.get("request_id") != request_id or certificate.get("action") != action
+                or method != "native_os_dialog" or type(issued_at) is not int or issued_at <= 0
+                or not isinstance(certificate_id, str) or certificate_id != f"{request_id}-{issued_at}"):
+                return False
+            if verification == "verified" and (not ok or status != "completed"):
+                return False
+            if verification == "process_spawned" and (not ok or status != "started"):
+                return False
+            if verification == "not_verified" and ok:
+                return False
+            if (decision == "denied" and (status != "denied" or ok is not False)) or (decision == "approved" and status == "denied"):
+                return False
+            consent_status = decision
+            execution_status = "cancelled" if decision == "denied" else status
+            verification_status = (
+                "not_run" if decision == "denied" else
+                "passed" if verification == "verified" else
+                "pending" if verification in {"process_spawned", "native_api_completed"} else
+                "failed" if verification == "not_verified" else "not_run"
+            )
+            provenance = "native_host_reported"
+
         records = state.get(AUDIT_STATE_KEY)
         records = list(records) if isinstance(records, list) else []
         matched = False
         for record in records:
             if isinstance(record, dict) and record.get("request_id") == request_id:
                 record.update({
-                    "consent_status": decision, "consent_certificate_id": certificate_id,
-                    "consent_method": method, "consented_at_unix_ms": issued_at,
-                    "execution_status": "cancelled" if decision == "denied" else status,
+                    "consent_status": consent_status,
+                    "consent_certificate_id": certificate_id,
+                    "consent_method": method,
+                    "consented_at_unix_ms": issued_at,
+                    "execution_status": execution_status,
                     "result_ok": ok,
-                    "verification_status": ("not_run" if decision == "denied" else
-                        "passed" if verification == "verified" else
-                        "pending" if verification in {"process_spawned", "native_api_completed"} else
-                        "failed" if verification == "not_verified" else "not_run"),
-                    "result_provenance": "native_host_reported",
+                    "verification_status": verification_status,
+                    "result_provenance": provenance,
                 })
                 matched = True
                 break
@@ -283,6 +301,7 @@ class PolicyEngine:
         state[PENDING_STATE_KEY] = pending
         state[AUDIT_STATE_KEY] = records[-MAX_AUDIT_RECORDS:]
         return True
+
 
 
 POLICY_ENGINE = PolicyEngine()

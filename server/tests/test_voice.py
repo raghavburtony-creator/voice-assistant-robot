@@ -1211,3 +1211,25 @@ def test_native_receipt_rejects_wrong_json_types_without_raising():
     malformed["consent_certificate"]["decision"] = "approved"
     assert POLICY_ENGINE.record_host_result(state, malformed) is False
     assert "f" * 32 in state["tool_policy_pending"]
+
+
+
+def test_desktop_awareness_revocation_before_native_dialog_cancels_pending_request():
+    from app.voice.policy import POLICY_ENGINE, PolicyDecision
+
+    state = {}
+    decision = PolicyDecision("9" * 32, "confirmation_required", "high", "desktop_action_approval",
+        "approval required", "action:launch_calculator", "pending")
+    POLICY_ENGINE.audit(SimpleNamespace(state=state), tools.REGISTRY["desktop_action"].metadata, decision, "awaiting_confirmation")
+    report = {
+        "type": "desktop_result", "request_id": "9" * 32, "action": "launch_calculator",
+        "consent_certificate": None,
+        "result": {"ok": False, "status": "denied", "verification": "unavailable"},
+    }
+    assert POLICY_ENGINE.record_host_result(state, report) is True
+    record = state["tool_policy_audit"][-1]
+    assert record["consent_status"] == "not_presented"
+    assert record["execution_status"] == "cancelled_before_execution"
+    assert record["verification_status"] == "not_run"
+    assert record["result_provenance"] == "browser_preflight_reported"
+    assert state["tool_policy_pending"] == {}
