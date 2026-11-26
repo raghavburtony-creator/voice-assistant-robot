@@ -185,7 +185,7 @@ class AuditLog:
             else "unknown"
         )
         record["verification_result"] = verification
-        record["verification_status"] = {
+        record["verification_status"] = "not_run" if status == "denied" else {
             "verified": "passed",
             "not_verified": "failed",
             "unavailable": "not_run",
