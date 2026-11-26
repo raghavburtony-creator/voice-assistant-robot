@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.voice.tool_registry import ToolMetadata, ToolRegistry
+
+
+def context():
+    return SimpleNamespace(session=SimpleNamespace(id="test-session"), state={})
 
 
 def metadata(*, verification_required: bool = False, side_effects: tuple[str, ...] = ()) -> ToolMetadata:
@@ -18,7 +24,7 @@ def metadata(*, verification_required: bool = False, side_effects: tuple[str, ..
 
 
 def test_gateway_returns_complete_success_envelope_with_provenance_and_side_effects():
-    def sample(value: int) -> dict:
+    def sample(value: int, tool_context: object) -> dict:
         return {
             "value": value,
             "evidence": [{"kind": "page_state", "id": "home"}],
@@ -26,7 +32,7 @@ def test_gateway_returns_complete_success_envelope_with_provenance_and_side_effe
         }
 
     call = ToolRegistry._gateway(sample, metadata(side_effects=("browser_navigation",)))
-    result = call(value=7)
+    result = call(value=7, tool_context=context())
 
     assert result["status"] == "success"
     assert result["data"]["value"] == 7
@@ -42,14 +48,14 @@ def test_gateway_returns_complete_success_envelope_with_provenance_and_side_effe
 
 
 def test_gateway_distinguishes_execution_success_from_verification_failure():
-    def sample() -> dict:
+    def sample(tool_context: object) -> dict:
         return {
             "ok": True,
             "verification": {"status": "failed", "details": "The expected state was not observed."},
         }
 
     call = ToolRegistry._gateway(sample, metadata(verification_required=True))
-    result = call()
+    result = call(tool_context=context())
 
     assert result["status"] == "success"
     assert result["error"] is None
@@ -61,11 +67,11 @@ def test_gateway_distinguishes_execution_success_from_verification_failure():
 
 
 def test_gateway_marks_verification_pending_when_a_required_check_has_not_run():
-    def sample() -> dict:
+    def sample(tool_context: object) -> dict:
         return {"ok": True, "requested": "launch_calculator"}
 
     call = ToolRegistry._gateway(sample, metadata(verification_required=True))
-    result = call()
+    result = call(tool_context=context())
 
     assert result["status"] == "success"
     assert result["verification"]["required"] is True
@@ -73,11 +79,11 @@ def test_gateway_marks_verification_pending_when_a_required_check_has_not_run():
 
 
 def test_gateway_reports_validation_failure_without_echoing_invalid_input():
-    def sample(value: int) -> dict:
+    def sample(value: int, tool_context: object) -> dict:
         return {"value": value}
 
     call = ToolRegistry._gateway(sample, metadata())
-    result = call(value="do-not-echo-this")
+    result = call(value="do-not-echo-this", tool_context=context())
 
     assert result["status"] == "error"
     assert result["error"]["code"] == "invalid_arguments"
@@ -86,11 +92,11 @@ def test_gateway_reports_validation_failure_without_echoing_invalid_input():
 
 
 def test_gateway_separates_tool_execution_failure_from_verification_failure():
-    def sample() -> dict:
+    def sample(tool_context: object) -> dict:
         return {"ok": False, "error": "internal detail"}
 
     call = ToolRegistry._gateway(sample, metadata(verification_required=True))
-    result = call()
+    result = call(tool_context=context())
 
     assert result["status"] == "error"
     assert result["error"]["code"] == "tool_execution_failed"
@@ -99,11 +105,11 @@ def test_gateway_separates_tool_execution_failure_from_verification_failure():
 
 
 def test_gateway_converts_unhandled_tool_exception_to_safe_error_envelope(caplog):
-    def sample() -> dict:
+    def sample(tool_context: object) -> dict:
         raise RuntimeError("sensitive internal detail")
 
     call = ToolRegistry._gateway(sample, metadata())
-    result = call()
+    result = call(tool_context=context())
 
     assert result["status"] == "error"
     assert result["error"]["code"] == "tool_execution_error"
@@ -116,7 +122,7 @@ def test_registry_output_schema_requires_evidence_provenance_verification_and_si
     schema = ToolRegistry._output_schema()
 
     assert schema["required"] == [
-        "status", "data", "evidence", "provenance", "verification",
+        "status", "data", "policy", "evidence", "provenance", "verification",
         "error", "timestamps", "side_effects",
     ]
     assert schema["properties"]["verification"]["properties"]["status"]["enum"] == [
