@@ -46,6 +46,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Browser tests (Playwright) | | "Run it" (checks) | `web/e2e/`, `web/playwright.config.ts` |
 | Record or change a decision, or add an open question | the one concerned | | [decisions.md](decisions.md) ("Rules for entries", "Index"), `server/tests/test_docs.py` |
 | Plan a new capability, or check how one fits | D-19, D-22, D-23, and the Q-xx it touches | | [architecture.md](architecture.md), [roadmap.md](roadmap.md) |
+| Architecture contracts, service boundaries, or source/licence attribution | D-13, D-19, D-22, and the decisions named by the capability | | [architecture.md](architecture.md), [source-attribution.md](source-attribution.md), [decisions.md](decisions.md), [roadmap.md](roadmap.md), the relevant issue(s) |
 | File or triage an issue: templates, labels, milestones, the issue-to-PR workflow | D-19 | | [CONTRIBUTING.md](../CONTRIBUTING.md), `.github/ISSUE_TEMPLATE/`, `.github/labels.json`, `.github/milestones.json`, `.github/workflows/sync-labels.yml`, `server/tests/test_docs.py` |
 
 ## Editing rules
