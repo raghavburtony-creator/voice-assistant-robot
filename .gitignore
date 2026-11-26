@@ -25,3 +25,11 @@ web/src-tauri/gen/
 
 # Runtime data (the continuity store)
 server/data/
+
+# Personal BSL research data and model assets (never commit signer data or weights)
+ml/bsl/local-data/
+ml/bsl/artifacts/
+ml/bsl/assets/*.task
+ml/bsl/assets/*.tflite
+ml/bsl/assets/*.onnx
+ml/bsl/assets/*.pt

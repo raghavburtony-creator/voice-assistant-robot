@@ -99,6 +99,14 @@ CONTRIBUTING.md  issue-to-PR workflow, label and milestone meanings
 - **Pinned where it matters.** `google-genai` and `google-adk` are pinned exactly in `server/requirements.txt`; keep them pinned and check an API against that version before using it. Never write "latest".
 - Don't invent config keys, message types, tools or library APIs that aren't in the code or the docs. Mark an unavoidable guess `// ASSUMPTION:` (or `# ASSUMPTION:`) and report it.
 
+### Local ML and dataset privacy
+
+- Every webcam collection requires explicit, per-session consent before the camera opens. Process frames locally and in memory; do not write raw video or frame images by default.
+- Keep dataset clips, landmark arrays, signer/session manifests, checkpoints and exported models out of Git. Add local-data, model-asset and artifact paths to .gitignore before introducing them.
+- Each training sample must carry a source, rights basis, attribution and consent status. A third-party dataset licence does not by itself prove that each original video may be used; verify both dataset terms and original clip rights. Do not scrape or automatically download unverified sources.
+- Never use a random clip-level train/test split for sign data. Use signer-held-out splits when multiple signers are present; for a single-signer personal prototype, split by capture session and label the result as personal/session-held-out evaluation.
+- A personal prototype is not a community-validated recognizer. Do not connect it to the production SignRecognizer, publish signer data, or claim language-wide performance while Q-09 remains open.
+
 ## Build, Test & Lint Commands
 
 Requirements: Node.js 22+, Python 3.11+. A Gemini key is needed only for real voice sessions.
