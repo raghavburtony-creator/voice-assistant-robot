@@ -8,6 +8,7 @@ Tool functions remain the enforcement points for runtime authority (D-22).
 from __future__ import annotations
 
 import inspect
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import wraps
@@ -15,6 +16,11 @@ from typing import Any, Callable, get_type_hints
 
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
+
+from app.voice.policy import POLICY_ENGINE
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -117,6 +123,20 @@ class ToolRegistry:
             "properties": {
                 "status": {"type": "string", "enum": ["success", "error"]},
                 "data": {"type": "object"},
+                "policy": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string"},
+                        "decision": {"type": "string", "enum": ["allow", "confirmation_required", "deny"]},
+                        "risk_level": {"type": "string", "enum": ["low", "medium", "high", "invalid"]},
+                        "required_permission": {"type": "string"},
+                        "reason": {"type": "string"},
+                        "scope": {"type": ["string", "null"]},
+                        "verification_status": {"type": "string", "enum": ["pending", "not_required"]},
+                    },
+                    "required": ["request_id", "decision", "risk_level", "required_permission", "reason", "scope", "verification_status"],
+                    "additionalProperties": False,
+                },
                 "evidence": {"type": "array", "items": {"type": "object"}},
                 "provenance": {"type": "object"},
                 "verification": {
@@ -142,7 +162,7 @@ class ToolRegistry:
                 "side_effects": {"type": "array", "items": {"type": "string"}},
             },
             "required": [
-                "status", "data", "evidence", "provenance", "verification",
+                "status", "data", "policy", "evidence", "provenance", "verification",
                 "error", "timestamps", "side_effects",
             ],
             "additionalProperties": False,
@@ -176,11 +196,13 @@ class ToolRegistry:
         provenance: dict[str, Any] | None = None,
         verification: dict[str, Any] | None = None,
         error: dict[str, str] | None = None,
+        policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         completed_at = cls._timestamp()
         return {
             "status": status,
             "data": data or {},
+            "policy": policy or {},
             "evidence": evidence or [],
             "provenance": provenance or {"tool": metadata.name, "source": "registered_tool"},
             "verification": verification or {
@@ -208,28 +230,48 @@ class ToolRegistry:
         @wraps(function)
         def call(*args: Any, **kwargs: Any) -> dict[str, Any]:
             started_at = cls._timestamp()
+            context = None
             try:
                 bound = signature.bind(*args, **kwargs)
                 bound.apply_defaults()
+                context = bound.arguments.get("tool_context")
                 for name, validator in validators.items():
                     if name in bound.arguments:
                         bound.arguments[name] = validator.validate_python(bound.arguments[name])
             except (TypeError, ValidationError):
-                # Never echo model-supplied values into an error message or log.
+                if context is None:
+                    try:
+                        context = signature.bind_partial(*args, **kwargs).arguments.get("tool_context")
+                    except TypeError:
+                        context = kwargs.get("tool_context")
+                decision = POLICY_ENGINE.invalid_arguments(metadata)
+                POLICY_ENGINE.audit(context, metadata, decision, "denied")
                 return cls._envelope(
-                    metadata=metadata, status="error", data={},
-                    started_at=started_at,
+                    metadata=metadata, status="error", data={}, started_at=started_at,
                     error={"code": "invalid_arguments", "message": "Tool arguments did not match the declared schema."},
+                    policy=decision.as_dict(),
+                )
+
+            context = bound.arguments.get("tool_context")
+            decision = POLICY_ENGINE.evaluate(metadata, context, bound.arguments)
+            if decision.decision == "deny":
+                POLICY_ENGINE.audit(context, metadata, decision, "denied")
+                return cls._envelope(
+                    metadata=metadata, status="error", data={}, started_at=started_at,
+                    error={"code": "permission_denied", "message": "The tool request was not permitted by session policy."},
+                    policy=decision.as_dict(),
                 )
 
             try:
                 raw_result = function(*bound.args, **bound.kwargs)
-            except Exception:
-                # Keep implementation details and potentially sensitive arguments out of model-visible errors.
+            except Exception as exc:
+                # Log only the tool name and exception class; never exception text or arguments.
+                logger.error("Registered tool %s raised %s", metadata.name, type(exc).__name__)
+                POLICY_ENGINE.audit(context, metadata, decision, "failed")
                 return cls._envelope(
-                    metadata=metadata, status="error", data={},
-                    started_at=started_at,
+                    metadata=metadata, status="error", data={}, started_at=started_at,
                     error={"code": "tool_execution_error", "message": "The tool could not complete its operation."},
+                    policy=decision.as_dict(),
                 )
 
             result = raw_result if isinstance(raw_result, dict) else {"value": raw_result}
@@ -251,6 +293,12 @@ class ToolRegistry:
 
             evidence = result.get("evidence") if isinstance(result.get("evidence"), list) else []
             provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else None
+            execution_status = (
+                "failed" if failed else
+                "awaiting_confirmation" if decision.decision == "confirmation_required" else
+                "returned"
+            )
+            POLICY_ENGINE.audit(context, metadata, decision, execution_status)
             return cls._envelope(
                 metadata=metadata,
                 status="error" if failed else "success",
@@ -263,6 +311,7 @@ class ToolRegistry:
                     {"code": "tool_execution_failed", "message": "The tool reported that its operation was not completed."}
                     if failed else None
                 ),
+                policy=decision.as_dict(),
             )
 
         # ADK derives the function declaration from the callable signature.
