@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
+from types import SimpleNamespace
 
 import pytest
-from types import SimpleNamespace
 
 from app.voice import bridge as voice_bridge
 from app.voice.continuity import ContinuityContext
@@ -117,11 +118,9 @@ def test_expired_working_memory_is_deleted_from_sqlite_after_the_retention_bound
     )
     assert [item.id for item in after_boundary] == [semantic.id]
 
-    with sqlite3.connect(memory.path) as db:
+    with closing(sqlite3.connect(memory.path)) as db:
         stored = db.execute(
-            "SELECT id, kind FROM memories WHERE identity_key = "
-            "(SELECT identity_key FROM memories WHERE id = ?)",
-            (semantic.id,),
+            "SELECT id, kind FROM memories ORDER BY updated_at DESC"
         ).fetchall()
     assert stored == [(semantic.id, "semantic")]
 
@@ -138,7 +137,7 @@ def test_expired_working_memory_cannot_be_refreshed_by_update(memory):
     )
 
     assert updated is None
-    with sqlite3.connect(memory.path) as db:
+    with closing(sqlite3.connect(memory.path)) as db:
         assert db.execute("SELECT 1 FROM memories WHERE id = ?", (working.id,)).fetchone() is None
 
 
@@ -155,7 +154,7 @@ def test_service_startup_purges_working_memory_that_has_already_expired(memory):
     reopened = SQLiteMemoryService(memory.path)
 
     assert [item.id for item in reopened.recall("demo", "opaque-a", now=100)] == [semantic.id]
-    with sqlite3.connect(memory.path) as db:
+    with closing(sqlite3.connect(memory.path)) as db:
         assert db.execute("SELECT 1 FROM memories WHERE id = ?", (working.id,)).fetchone() is None
 
 

@@ -246,7 +246,7 @@ class SQLiteMemoryService:
         with self._connection() as db:
             self._purge_expired_working(db, timestamp)
             rows = db.execute(
-                "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids " 
+                "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE " + " AND ".join(clauses) + " ORDER BY updated_at DESC LIMIT 500",
                 params,
             ).fetchall()
@@ -282,7 +282,7 @@ class SQLiteMemoryService:
         with self._connection() as db:
             self._purge_expired_working(db, timestamp)
             row = db.execute(
-                "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids " 
+                "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE id = ? AND identity_key = ?", (record_id, key)
             ).fetchone()
             if row is None:
@@ -354,7 +354,7 @@ class SQLiteMemoryService:
         with self._connection() as db:
             self._purge_expired_working(db, int(time.time()))
             rows = db.execute(
-                "SELECT record_id, action, provenance, created_at, redacted FROM memory_audit " 
+                "SELECT record_id, action, provenance, created_at, redacted FROM memory_audit "
                 "WHERE identity_key = ? ORDER BY created_at DESC LIMIT ?", (key, limit)
             ).fetchall()
         return [
