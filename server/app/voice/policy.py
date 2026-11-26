@@ -60,7 +60,7 @@ class PermissionPolicy:
             return "deny", "A live voice session is required."
 
         state = getattr(context, "state", None)
-        if not isinstance(state, dict):
+        if not all(callable(getattr(state, name, None)) for name in ("get", "__getitem__", "__setitem__", "__contains__")):
             return "deny", "Session permission state is unavailable."
 
         if permission == "voice_session":

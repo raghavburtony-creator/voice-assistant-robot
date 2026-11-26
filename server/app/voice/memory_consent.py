@@ -18,26 +18,39 @@ def _valid_request_id(value: object) -> bool:
     return isinstance(value, str) and len(value) == 32 and all(char in "0123456789abcdef" for char in value)
 
 
-def _pending(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    value = state.get(PENDING_MEMORY_KEY)
-    if not isinstance(value, dict):
-        value = {}
-        state[PENDING_MEMORY_KEY] = value
-    return value
+def _supports_state(state: object) -> bool:
+    """Accept a plain dict or ADK's dict-like State object."""
+    return all(callable(getattr(state, name, None)) for name in ("get", "__getitem__", "__setitem__", "__contains__"))
 
 
-def _prune(state: dict[str, Any], now: float) -> dict[str, dict[str, Any]]:
+def _pending(state: object) -> dict[str, dict[str, Any]]:
+    value = state.get(PENDING_MEMORY_KEY)  # type: ignore[attr-defined]
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _write_pending(state: object, pending: dict[str, dict[str, Any]]) -> None:
+    # Assign a new nested mapping so ADK State records the update as a state delta.
+    state[PENDING_MEMORY_KEY] = pending  # type: ignore[index]
+
+
+def _prune(state: object, now: float) -> dict[str, dict[str, Any]]:
     pending = _pending(state)
-    for request_id, item in list(pending.items()):
+    clean: dict[str, dict[str, Any]] = {}
+    for request_id, item in pending.items():
         created = item.get("created_at") if isinstance(item, dict) else None
-        if type(created) not in (int, float) or now - created > MEMORY_PROPOSAL_TTL_SECONDS:
-            pending.pop(request_id, None)
-    return pending
+        if (
+            _valid_request_id(request_id)
+            and type(created) in (int, float)
+            and now - created <= MEMORY_PROPOSAL_TTL_SECONDS
+        ):
+            clean[request_id] = item
+    _write_pending(state, clean)
+    return clean
 
 
 def stage_memory_proposal(state: object, content: object, kind: object, *, now: float | None = None) -> dict[str, Any] | None:
     """Create a bounded pending proposal and return only its browser-safe fields."""
-    if not isinstance(state, dict) or not isinstance(kind, str) or kind not in _MEMORY_KINDS or not isinstance(content, str):
+    if not _supports_state(state) or not isinstance(kind, str) or kind not in _MEMORY_KINDS or not isinstance(content, str):
         return None
     cleaned = "".join(" " if ord(char) < 0x20 and char not in "\n\t" else char for char in content).strip()
     if not cleaned or len(cleaned) > MEMORY_PROPOSAL_MAX_CHARS:
@@ -54,15 +67,18 @@ def stage_memory_proposal(state: object, content: object, kind: object, *, now: 
     pending[request_id] = {
         "content": cleaned, "kind": kind, "sensitive": bool(categories), "created_at": timestamp,
     }
+    _write_pending(state, pending)
     return {"request_id": request_id, "content": cleaned, "kind": kind, "redacted": bool(categories)}
 
 
 def pending_memory_proposal(state: object, request_id: object, *, now: float | None = None) -> dict[str, Any] | None:
     """Return a pending proposal only while its exact one-use request remains valid."""
-    if not isinstance(state, dict) or not _valid_request_id(request_id):
+    if not _supports_state(state) or not _valid_request_id(request_id):
         return None
     item = _prune(state, time.time() if now is None else now).get(request_id)
     if not isinstance(item, dict) or not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
+        pending.pop(request_id, None)
+        _write_pending(state, pending)
         return None
     return {
         "request_id": request_id, "content": item["content"], "kind": item["kind"],
@@ -71,15 +87,19 @@ def pending_memory_proposal(state: object, request_id: object, *, now: float | N
 
 
 def discard_memory_proposal(state: object, request_id: object) -> None:
-    if isinstance(state, dict) and _valid_request_id(request_id):
-        _pending(state).pop(request_id, None)
+    if _supports_state(state) and _valid_request_id(request_id):
+        pending = _prune(state, time.time())
+        pending.pop(request_id, None)
+        _write_pending(state, pending)
 
 
 def consume_memory_proposal(state: object, request_id: object, accepted: object, *, now: float | None = None) -> tuple[str | None, dict[str, Any] | None]:
     """Consume one matching proposal once. Model/tool input cannot call this operation."""
-    if not isinstance(state, dict) or not _valid_request_id(request_id) or type(accepted) is not bool:
+    if not _supports_state(state) or not _valid_request_id(request_id) or type(accepted) is not bool:
         return None, None
-    item = _pending(state).pop(request_id, None)
+    pending = _prune(state, time.time() if now is None else now)
+    item = pending.pop(request_id, None)
+    _write_pending(state, pending)
     if not isinstance(item, dict):
         return None, None
     timestamp = time.time() if now is None else now

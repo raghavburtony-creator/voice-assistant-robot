@@ -18,6 +18,47 @@ from app.voice.tool_registry import TOOL_METADATA
 from app.voice import tools
 
 
+class ADKStateLike:
+    """The pinned ADK State exposes dict accessors but is not a dict subclass."""
+
+    def __init__(self):
+        self.values = {}
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+    def __getitem__(self, key):
+        return self.values[key]
+
+    def __setitem__(self, key, value):
+        self.values[key] = value
+
+    def __contains__(self, key):
+        return key in self.values
+
+
+def test_adk_state_object_can_stage_pending_proposals_and_consume_them_once():
+    state = ADKStateLike()
+    assert not isinstance(state, dict)
+    proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
+    assert proposal is not None
+    assert pending_memory_proposal(state, proposal["request_id"], now=101) == proposal
+
+    status, consumed = consume_memory_proposal(state, proposal["request_id"], True, now=102)
+
+    assert status == "accepted"
+    assert consumed == {"content": "Prefers concise answers", "kind": "semantic", "sensitive": False}
+    assert pending_memory_proposal(state, proposal["request_id"], now=103) is None
+
+
+def test_adk_state_object_can_reject_and_discard_a_proposal():
+    state = ADKStateLike()
+    proposal = stage_memory_proposal(state, "Temporary note", "episodic", now=100)
+    assert proposal is not None
+    discard_memory_proposal(state, proposal["request_id"])
+    assert pending_memory_proposal(state, proposal["request_id"], now=101) is None
+
+
 def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
     state = {}
     proposal = stage_memory_proposal(
@@ -87,10 +128,11 @@ def test_invalid_or_untrusted_confirmation_is_ignored():
     assert proposal["request_id"] in state[PENDING_MEMORY_KEY]
 
 
-def test_memory_policy_is_denied_without_the_trusted_host_opt_in():
-    context = SimpleNamespace(session=SimpleNamespace(id="session"), state={})
+def test_memory_policy_accepts_adk_state_like_objects_and_denies_missing_opt_in():
+    state = ADKStateLike()
+    context = SimpleNamespace(session=SimpleNamespace(id="session"), state=state)
     assert PermissionPolicy().evaluate("memory_opt_in", context)[0] == "deny"
-    context.state["memory_enabled"] = True
+    state["memory_enabled"] = True
     assert PermissionPolicy().evaluate("memory_opt_in", context)[0] == "allow"
 
 
