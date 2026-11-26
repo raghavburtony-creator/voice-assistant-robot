@@ -1,6 +1,7 @@
 """Architecture contract for Otto's single model-driven orchestrator."""
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from app.voice.orchestrator import AdkOrchestrator, Orchestrator
@@ -48,9 +49,33 @@ def test_feature_tools_do_not_construct_or_route_the_orchestrator():
 
 
 def test_only_the_orchestrator_module_constructs_the_adk_agent():
-    constructors = [
-        path.name
-        for path in VOICE_DIR.glob("*.py")
-        if "LlmAgent(" in path.read_text(encoding="utf-8")
-    ]
-    assert constructors == ["orchestrator.py"]
+    # The implementation deliberately aliases LlmAgent to a factory before
+    # invoking it, so scan imports and call sites rather than matching the
+    # literal text "LlmAgent(".
+    importing_modules = []
+    for path in VOICE_DIR.glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "google.adk.agents":
+                if any(alias.name == "LlmAgent" for alias in node.names):
+                    importing_modules.append(path.name)
+    assert importing_modules == ["orchestrator.py"]
+
+    orchestrator = ast.parse(
+        (VOICE_DIR / "orchestrator.py").read_text(encoding="utf-8")
+    )
+    aliases_factory = any(
+        isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "LlmAgent"
+        and any(isinstance(target, ast.Name) and target.id == "factory" for target in node.targets)
+        for node in ast.walk(orchestrator)
+    )
+    invokes_factory = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "factory"
+        for node in ast.walk(orchestrator)
+    )
+    assert aliases_factory
+    assert invokes_factory
