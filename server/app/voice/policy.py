@@ -154,7 +154,15 @@ class PolicyEngine:
         self.audit_log = AuditLog()
 
     @staticmethod
-    def _scope(arguments: dict[str, Any]) -> str | None:
+    def _scope(metadata: Any, arguments: dict[str, Any]) -> str | None:
+        # Record the exact closed desktop action, including the compatibility wrapper.
+        if getattr(metadata, "name", None) == "move_desktop":
+            mapping = {
+                "home": "move_home", "desktop-left": "move_left", "desktop-right": "move_right",
+                "top": "move_top", "bottom": "move_bottom",
+            }
+            destination = arguments.get("destination")
+            return f"action:{mapping[destination]}" if destination in mapping else None
         # Only action identifiers are recorded; never persist arbitrary arguments.
         for key in ("action", "destination", "command", "move"):
             value = arguments.get(key)
@@ -181,7 +189,7 @@ class PolicyEngine:
             risk_level=risk,
             required_permission=permission,
             reason=reason,
-            scope=self._scope(arguments),
+            scope=self._scope(metadata, arguments),
             verification_status=verification,
         )
 
@@ -230,7 +238,7 @@ class PolicyEngine:
         pending = state.get(PENDING_STATE_KEY)
         pending = dict(pending) if isinstance(pending, dict) else {}
         expected = pending.get(request_id)
-        if not isinstance(expected, dict) or expected.get("tool") != "desktop_action" or expected.get("action") != action:
+        if not isinstance(expected, dict) or expected.get("tool") not in {"desktop_action", "move_desktop"} or expected.get("action") != action:
             return False
         records = state.get(AUDIT_STATE_KEY)
         records = list(records) if isinstance(records, list) else []
