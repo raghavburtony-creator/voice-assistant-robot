@@ -215,8 +215,21 @@ class PolicyEngine:
         """
         if not isinstance(state, dict) or not isinstance(report, dict):
             return False
+        if set(report) not in (
+            {"request_id", "action", "consent_certificate", "result"},
+            {"type", "request_id", "action", "consent_certificate", "result"},
+        ):
+            return False
+        if report.get("type", "desktop_result") != "desktop_result":
+            return False
         request_id, action = report.get("request_id"), report.get("action")
         certificate, result = report.get("consent_certificate"), report.get("result")
+        if not isinstance(certificate, dict) or set(certificate) != {
+            "certificate_id", "request_id", "action", "decision", "method", "issued_at_unix_ms",
+        }:
+            return False
+        if not isinstance(result, dict) or set(result) != {"ok", "status", "verification"}:
+            return False
         if not isinstance(request_id, str) or len(request_id) != 32 or any(ch not in "0123456789abcdef" for ch in request_id):
             return False
         if not isinstance(action, str) or not isinstance(certificate, dict) or not isinstance(result, dict):

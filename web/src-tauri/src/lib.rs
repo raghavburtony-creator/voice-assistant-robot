@@ -167,11 +167,13 @@ async fn desktop_action(app: AppHandle, action: DesktopAction, request_id: Strin
         return result;
     }
 
+    // Timestamp the receipt at the moment the visitor approves, before execution.
+    let approved_certificate = consent_certificate(request_id.clone(), action, "approved");
     let mut result = match action {
         DesktopAction::MinimizeOtto => {
             if let Err(error) = window.minimize() {
                 let mut result = action_result(action, false, "failed", "unavailable", format!("Otto could not be minimized: {error}"));
-                result.consent_certificate = Some(consent_certificate(request_id.clone(), action, "approved"));
+                result.consent_certificate = Some(approved_certificate.clone());
                 return result;
             }
             match window.is_minimized() {
@@ -213,7 +215,7 @@ async fn desktop_action(app: AppHandle, action: DesktopAction, request_id: Strin
             }
         }
     };
-    result.consent_certificate = Some(consent_certificate(request_id, action, "approved"));
+    result.consent_certificate = Some(approved_certificate);
     result
 }
 
