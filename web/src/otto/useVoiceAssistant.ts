@@ -536,7 +536,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
         case 'memory_proposal':
           setMemoryProposals(current => [
             ...current.filter(proposal => proposal.request_id !== message.request_id),
-            { ...message, status: 'pending' },
+            { ...message, status: 'pending' as const },
           ].slice(-3))
           break
         case 'memory_result':
