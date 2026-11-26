@@ -194,8 +194,9 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
   }
 }
 
-/** Read metadata from the native host. Call only while the visitor's desktop-awareness switch is on. */
+/** Read metadata from the native host only while the session's desktop permission is enabled. */
 export async function getDesktopContext(): Promise<DesktopContext | null> {
+  if (!desktopPermissionEnabled) return null
   const runtime = host()
   if (!runtime) return null
   return runtime.core.invoke<DesktopContext>('desktop_context')
