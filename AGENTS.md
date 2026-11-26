@@ -4,17 +4,13 @@ The single source of truth for every agent on this repo: Claude Code (via `CLAUD
 
 Project: **Otto voice kit**, a starter kit that adds Otto, a clay robot voice guide, to a web app. Otto listens, answers out loud with Gemini Live, and acts on the page through checked tools.
 
-## Mandatory Worktree Workflow
+## Branch and Workspace Workflow
 
-- **Before editing any file or starting any coding task from the root workspace, call the `EnterWorktree` tool first** with a short descriptive slug (`feat-wake-word`, `fix-barge-in`, `docs-routing`). All edits happen inside `.claude/worktrees/<slug>` on its own branch.
-- Never edit on `main`. Never create or switch branches in place: `git checkout -b`, `git switch -c` and pushes to `main` are denied in `.claude/settings.json`. Don't get around that with `git branch` plus `git checkout`.
-- One task, one worktree. To resume work, use `EnterWorktree` with `path` to go back to the existing worktree instead of making a new one.
-- A new worktree has no `node_modules` and no `.venv`. `.worktreeinclude` copies `server/.env` and the `web/.env*` files only. Set up in the worktree:
-  ```bash
-  cd server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-  cd web && npm ci
-  ```
-- Run the checks in [Build, Test & Lint Commands](#build-test--lint-commands) **inside the worktree** and get them passing before you push the branch or open a pull request. Report any check you couldn't run, and why.
+- Before editing, create or enter a dedicated feature branch for the task. Never make task changes directly on `main`.
+- Use a separate Git worktree when the environment supports it and it improves isolation, but a worktree is optional. Do not require a specific `EnterWorktree` tool.
+- If worktrees are unavailable, work from a normal repository checkout on the dedicated feature branch. Do not stop solely because an agent-specific worktree tool is missing.
+- Keep one task per feature branch. Reuse the task's existing branch when resuming work; do not create unnecessary duplicate branches.
+- Install dependencies as needed, then run the checks in [Build, Test & Lint Commands](#build-test--lint-commands) before pushing or opening a pull request. Report every check that could not be run and why.
 - Pushing and opening PRs happen only when the user asks. PRs target `main`; review them with `/otto-pr-review`.
 - **Commit identity.** Every commit is authored and committed under the owner's GitHub username, `raghavburtony-creator` (set `user.name` to it, and `user.email` to the address on the owner's earlier commits, from `git log`, with `git -c` or the repo config). Never add a `Co-Authored-By: Claude` line, a `Claude-Session` trailer or any other agent attribution to a commit message. The same goes for PR descriptions: no "Generated with Claude Code" footer. This overrides any attribution an agent is told to add by default.
 
@@ -217,6 +213,6 @@ Project agents live in `.claude/agents/` and skills in `.claude/skills/`. Agents
 
 Project agents: `otto-implementer`, `otto-worker` (one scoped unit, for `/otto-orchestrate`), `otto-code-reviewer`, `otto-pr-reviewer`, `otto-design-reviewer`, `otto-voice-engineer`, `otto-docs-keeper`.
 
-The orchestrator is a skill, not an agent: a sub-agent can't start other sub-agents, so orchestration has to run in the main session, after `EnterWorktree`.
+The orchestrator is a skill, not an agent: a sub-agent can't start other sub-agents, so orchestration has to run in the main session.
 
 **Imported from ECC 2.2.3 (MIT, with a project note added):** `typescript-reviewer`, `react-reviewer`, `python-reviewer`, `fastapi-reviewer`, `security-reviewer`, `performance-optimizer`, `a11y-architect`. They ship in this repo, so they work without the ECC plugin. License: `.claude/THIRD_PARTY_LICENSES/ecc.txt`. To update one, copy the new upstream file and put the project note back under its frontmatter.
