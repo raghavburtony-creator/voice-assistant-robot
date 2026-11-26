@@ -9,7 +9,7 @@ description = "Offline BSL sign collection and temporal-recognition training too
 requires-python = ">=3.11,<3.13"
 dependencies = [
   "numpy>=1.26,<2",
-  "torch>=2.3,<3",
+  "torch>=2.5,<3",  # torch.onnx.export(dynamo=...) needs 2.5
 ]
 
 [project.optional-dependencies]

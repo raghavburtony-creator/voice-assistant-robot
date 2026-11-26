@@ -32,8 +32,9 @@ Use a new session ID for each separate capture session. A personal one-signer ev
 
 ```bash
 otto-sign-train --manifest data/manifest.csv --data-root data --output runs/bsl-personal
-pytest -q
 ```
+
+The tests run separately (`pip install -e ".[test,export]"`, then `pytest -q`).
 
 The pipeline:
 

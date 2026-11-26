@@ -101,17 +101,38 @@ def _evaluate(model: TemporalSignModel, x: Tensor, y: Tensor, batch_size: int, d
     return {
         "samples": count,
         "top1_accuracy": (correct / count) if count else 0.0,
-        "top3_accuracy": (top_three / count) if count else 0.0,
+        # With three or fewer classes every sample is "in the top three", so the number would always read 1.0.
+        "top3_accuracy": None if model.num_classes <= 3 else ((top_three / count) if count else 0.0),
         "per_class_index": class_metrics,
     }
 
 
-def _export_onnx(model: TemporalSignModel, output_path: Path, device: torch.device) -> None:
+def _format_top3(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.4f}"
+
+
+def _require_onnx() -> None:
+    """Fails before a long training run, not after it, when the optional export extra is missing."""
     try:
         import onnx  # noqa: F401
     except ImportError as exc:
-        raise RuntimeError("ONNX export requires the optional export extra") from exc
+        raise RuntimeError("ONNX export requires the optional export extra: pip install -e '.[export]'") from exc
 
+
+def evaluation_warning(evaluation_scope: str) -> str:
+    """What the metrics file says about how far its numbers can be trusted, for the split that was actually used."""
+    if evaluation_scope == "personal-session-held-out":
+        return "Session-held-out results from one signer do not measure generalization to other signers."
+    if evaluation_scope == "multi-signer-session-held-out":
+        return (
+            "Whole capture sessions are held out, but the same signers appear in training and test, "
+            "so these results are not signer-independent."
+        )
+    return "Signer-held-out results still require external signer and real-world validation before release."
+
+
+def _export_onnx(model: TemporalSignModel, output_path: Path, device: torch.device) -> None:
+    _require_onnx()
     model.eval()
     dummy = torch.zeros(1, model.max_frames, model.input_dim, dtype=torch.float32, device=device)
     torch.onnx.export(
@@ -131,6 +152,7 @@ def _export_onnx(model: TemporalSignModel, output_path: Path, device: torch.devi
 
 
 def train(args: argparse.Namespace) -> dict:
+    _require_onnx()
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -199,7 +221,7 @@ def train(args: argparse.Namespace) -> dict:
         score = validation_metrics["top1_accuracy"]
         print(
             f"epoch {epoch:03d}/{args.epochs} "
-            f"validation_top1={score:.4f} validation_top3={validation_metrics['top3_accuracy']:.4f}"
+            f"validation_top1={score:.4f} validation_top3={_format_top3(validation_metrics['top3_accuracy'])}"
         )
         if score > best_validation:
             best_validation = score
@@ -257,11 +279,7 @@ def train(args: argparse.Namespace) -> dict:
         "best_epoch": best_epoch,
         "best_validation_top1": best_validation,
         "test": test_metrics,
-        "warning": (
-            "Session-held-out results from one signer do not measure generalization to other signers."
-            if plan.evaluation_scope == "personal-session-held-out"
-            else "Signer-held-out results still require external signer and real-world validation before release."
-        ),
+        "warning": evaluation_warning(plan.evaluation_scope),
     }
     (output_dir / "model.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")

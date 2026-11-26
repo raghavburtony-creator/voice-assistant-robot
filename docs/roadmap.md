@@ -57,7 +57,7 @@ Q-03 is answered by D-26. The implementation starts with a narrow cross-session 
 
 ## E4 Sign-language support: first slices
 
-D-29 establishes that sign recognition cannot reuse the D-21 1 FPS still-frame feed as a continuous sign recognizer. Recognition must be a bounded, visitor-started temporal adapter whose results enter the existing conversation as text; the visitor can correct or discard uncertain results. The owner selected BSL, isolated signs first, and a personal prototype before broader signer support. SIG-03 builds an offline training foundation from consented examples; it does not close Q-09 or authorize a general release.
+D-29 establishes that sign recognition cannot reuse the D-21 1 FPS still-frame feed as a continuous sign recognizer. Recognition must be a bounded, visitor-started temporal adapter whose results enter the existing conversation as text; the visitor can correct or discard uncertain results. SIG-03 (#123) scopes its first prototype to British Sign Language isolated signs, recorded by the owner. That is a prototype scope, not an answer to Q-09: the language, pilot task and community validation stay open there, and no general release is authorized. It builds an offline training foundation from consented examples.
 
 | Slice | Outcome | Blocked by | Decisions |
 |---|---|---|---|
