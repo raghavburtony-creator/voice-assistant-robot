@@ -182,12 +182,14 @@ export async function executeDesktopAction(action: DesktopAction, requestId: str
   if (!runtime) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
   }
+  let consentCertificate: DesktopConsentCertificate | null = null
   try {
     const isMovement = action === 'move_home' || action === 'move_left' || action === 'move_right' || action === 'move_top' || action === 'move_bottom'
     // Observe the current desktop before asking the native gateway to act. If the host
     // cannot provide a baseline, fail closed rather than executing an unverifiable move.
     if (isMovement) await runtime.core.invoke<DesktopContext>('desktop_context')
     const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action, requestId })
+    consentCertificate = result.consentCertificate ?? null
     if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
 
     // Native API completion is not proof that the window reached its requested position.
@@ -207,6 +209,7 @@ export async function executeDesktopAction(action: DesktopAction, requestId: str
     return {
       action, ok: false, status: 'failed', verification: 'unavailable',
       message: error instanceof Error ? error.message : 'The desktop host could not execute the action.',
+      consentCertificate,
     }
   }
 }

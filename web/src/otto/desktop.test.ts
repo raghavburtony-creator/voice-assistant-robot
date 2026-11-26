@@ -148,7 +148,7 @@ describe('desktop action bridge', () => {
 
   it('does not execute desktop actions in browser mode', async () => {
     delete window.__TAURI__
-    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+    await expect(executeDesktopAction('launch_calculator', 'e'.repeat(32))).resolves.toMatchObject({
       ok: false, status: 'failed', verification: 'unavailable',
     })
   })
