@@ -12,6 +12,7 @@ from uuid import uuid4
 
 
 AUDIT_STATE_KEY = "tool_policy_audit"
+PENDING_STATE_KEY = "tool_policy_pending"
 MAX_AUDIT_RECORDS = 50
 KNOWN_RISKS = frozenset({"low", "medium", "high"})
 
@@ -136,6 +137,11 @@ class AuditLog:
             records = list(records) if isinstance(records, list) else []
             records.append(asdict(record))
             state[AUDIT_STATE_KEY] = records[-MAX_AUDIT_RECORDS:]
+            if decision.decision == "confirmation_required" and decision.scope and decision.scope.startswith("action:"):
+                pending = state.get(PENDING_STATE_KEY)
+                pending = dict(pending) if isinstance(pending, dict) else {}
+                pending[decision.request_id] = {"tool": record.tool, "action": decision.scope.removeprefix("action:"), "created_at": record.created_at}
+                state[PENDING_STATE_KEY] = pending
         return record
 
 
@@ -191,9 +197,64 @@ class PolicyEngine:
         )
 
     def audit(self, context: Any, metadata: Any, decision: PolicyDecision, execution_status: str) -> AuthorizationRecord:
-        return self.audit_log.record(
-            context, metadata=metadata, decision=decision, execution_status=execution_status
-        )
+        return self.audit_log.record(context, metadata=metadata, decision=decision, execution_status=execution_status)
+
+    def record_host_result(self, state: Any, report: Any) -> bool:
+        """Complete one exact pending request from a native-host-reported receipt.
+
+        The OS dialog remains the execution authority. This browser-transported report
+        is audit provenance, not cryptographic attestation or execution authority.
+        """
+        if not isinstance(state, dict) or not isinstance(report, dict):
+            return False
+        request_id, action = report.get("request_id"), report.get("action")
+        certificate, result = report.get("consent_certificate"), report.get("result")
+        if not isinstance(request_id, str) or len(request_id) != 32 or any(ch not in "0123456789abcdef" for ch in request_id):
+            return False
+        if not isinstance(action, str) or not isinstance(certificate, dict) or not isinstance(result, dict):
+            return False
+        decision, issued_at = certificate.get("decision"), certificate.get("issued_at_unix_ms")
+        method, certificate_id = certificate.get("method"), certificate.get("certificate_id")
+        if (certificate.get("request_id") != request_id or certificate.get("action") != action
+            or decision not in {"approved", "denied"} or method != "native_os_dialog"
+            or type(issued_at) is not int or issued_at <= 0
+            or not isinstance(certificate_id, str) or not 1 <= len(certificate_id) <= 100):
+            return False
+        status, ok, verification = result.get("status"), result.get("ok"), result.get("verification")
+        if status not in {"completed", "started", "failed", "denied"} or type(ok) is not bool:
+            return False
+        if verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}:
+            return False
+        if (decision == "denied" and (status != "denied" or ok is not False)) or (decision == "approved" and status == "denied"):
+            return False
+        pending = state.get(PENDING_STATE_KEY)
+        pending = dict(pending) if isinstance(pending, dict) else {}
+        expected = pending.get(request_id)
+        if not isinstance(expected, dict) or expected.get("action") != action:
+            return False
+        records = state.get(AUDIT_STATE_KEY)
+        records = list(records) if isinstance(records, list) else []
+        matched = False
+        for record in records:
+            if isinstance(record, dict) and record.get("request_id") == request_id:
+                record.update({
+                    "consent_status": decision, "consent_certificate_id": certificate_id,
+                    "consent_method": method, "consented_at_unix_ms": issued_at,
+                    "execution_status": "cancelled" if decision == "denied" else status,
+                    "result_ok": ok,
+                    "verification_status": ("passed" if verification == "verified" else
+                        "pending" if verification in {"process_spawned", "native_api_completed"} else
+                        "failed" if verification == "not_verified" else "not_run"),
+                    "result_provenance": "native_host_reported",
+                })
+                matched = True
+                break
+        if not matched:
+            return False
+        pending.pop(request_id, None)
+        state[PENDING_STATE_KEY] = pending
+        state[AUDIT_STATE_KEY] = records[-MAX_AUDIT_RECORDS:]
+        return True
 
 
 POLICY_ENGINE = PolicyEngine()

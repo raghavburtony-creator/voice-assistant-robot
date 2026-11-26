@@ -54,6 +54,11 @@ def _reported(tool_context: ToolContext, key: str, field: str) -> dict[str, dict
 
 
 def _send(tool_context: ToolContext, action: dict) -> None:
+    policy = tool_context.state.get("_active_policy_decision")
+    if action.get("action") == "desktop_action" and isinstance(policy, dict):
+        request_id = policy.get("request_id")
+        if isinstance(request_id, str):
+            action = {**action, "request_id": request_id}
     sink.put(tool_context.session.id, action)
 
 
