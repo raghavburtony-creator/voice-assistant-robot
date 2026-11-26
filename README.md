@@ -145,6 +145,28 @@ A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
 The server includes an explicit, identity-scoped memory store (`server/app/voice/memory_service.py`). It is enabled for a session only when a trusted deployment proxy supplies the existing opt-in continuity identity. The raw identity is hashed and never placed in ADK state. Memory writes require an explicit caller authorization and carry provenance and timestamps; sensitive records are excluded from recall and model context by default. Retrieved memory is bounded JSON treated as untrusted data. The service can remember, recall, update, forget, resurface and format context, but it cannot trigger tools or user-facing actions.
 
+## Privacy
+
+What the server may keep is one table, `DATA_CLASSES` in `server/app/voice/privacy.py` (the same table is in [docs/architecture.md](docs/architecture.md#privacy-and-lifecycle-invariants)). In plain words: only two things are ever persisted, a memory record and the continuity record (task id, step id and time). Voice transcripts, screenshots, camera frames, files, tool arguments and tool results are not. `persist_allowed(name)` is false for those, and false for any name it does not know.
+
+**Redaction.** Memory content and provenance pass through `redact_text` before they are written, on `remember` and `update`. It replaces email addresses (`[email]`), phone numbers in the `(555) 123-4567` or `+44 ...` shapes (`[phone]`), payment-card numbers that pass the Luhn check (`[card]`), and API keys, bearer tokens, `?api_key=` values, passwords inside URLs and "password is ..." phrasing (`[secret]`). A record that needed redaction is stored as `sensitive`, which recall and model context leave out by default, and `update` never lowers that. The audit table keeps the category names for a write (`audit_events` shows them as `redacted`), never the values. The same function also runs over the error text the voice route logs, after the Gemini key is removed.
+
+**Not caught.** Cards or phones with unusual separators (zero-width characters, newlines, dots, double spaces); emails that are URL-encoded, base64 or spelled out ("jo at example.com"); non-ASCII local parts; short or all-letter tokens; PINs, SSNs, IBANs, IP addresses and dates of birth; PEM blocks; `Authorization: Basic` values. Classes the table marks "not stored" are never written, so redaction does not apply to them.
+
+**What this does not do.** Pattern redaction is best-effort, not a guarantee. It does not find names, addresses, health details or any other free-form personal fact, and an unusual number format can slip through or an unrelated number can be hit. Do not rely on it to make a record safe to share. The rule that raw camera frames, screenshots and files are never persisted is a policy plus a test (`test_privacy.py` checks that no server module but the two stores can write to disk, and that a frame passes the gateway with every write blocked). It is not a technical impossibility: new code that writes a file would be a change to that policy.
+
+**Forgetting a visitor.** `forget_identity` (`server/app/voice/forget.py`) is a plain function for the host's own server code. No tool, message or route reaches it, so the model cannot call it. Call it when your visitor asks to be forgotten:
+
+```python
+from app.voice.bridge import continuity_store, memory_service
+from app.voice.forget import forget_identity
+
+counts = forget_identity(memory_service, continuity_store, scope, identity, explicit=True)
+# {"memory_records": 3, "continuity_records": 1}
+```
+
+It deletes every memory record for that scope and identity, writes one audit row with the action and the count, deletes the continuity record and disables continuity for that identity, as a withdrawal does (D-26). Continuity comes back only when the host next opens a session with that identity enabled. Other identities and other scopes are untouched. Earlier `memory_audit` rows survive it: they hold only the hashed identity key, a redacted provenance string and category names, never the values. `forget_identity` is synchronous (SQLite); from async code call it with `await asyncio.to_thread(forget_identity, ...)`. The two stores are separate databases, so the call is not atomic: if one part fails, the other is still done and `ForgetIncomplete` names what is not. Call it again; repeating is safe.
+
 ## How it works
 
 ```
