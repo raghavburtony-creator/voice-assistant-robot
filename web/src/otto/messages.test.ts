@@ -96,12 +96,13 @@ describe('card actions', () => {
 
 describe('desktop action gateway messages', () => {
   it('accepts only the closed desktop action allow-list', () => {
-    const message = parseServerMessage('{"type":"action","action":"desktop_action","desktop_action":"launch_calculator"}')
-    expect(message).toMatchObject({ type: 'action', action: 'desktop_action', desktop_action: 'launch_calculator' })
+    const requestId = '0123456789abcdef0123456789abcdef'
+    const message = parseServerMessage(JSON.stringify({ type: 'action', action: 'desktop_action', desktop_action: 'launch_calculator', request_id: requestId }))
+    expect(message).toMatchObject({ type: 'action', action: 'desktop_action', desktop_action: 'launch_calculator', request_id: requestId })
     for (const desktop_action of [
       'minimize_otto', 'restore_otto', 'move_home', 'move_left', 'move_right',
       'move_top', 'move_bottom', 'launch_calculator', 'launch_text_editor',
-    ]) expect(toAssistantAction({ action: 'desktop_action', desktop_action })).toEqual({ action: 'desktop_action', desktop_action })
+    ]) expect(toAssistantAction({ action: 'desktop_action', desktop_action, request_id: requestId })).toEqual({ action: 'desktop_action', desktop_action, request_id: requestId })
     for (const desktop_action of ['run_shell', 'launch_terminal', 'launch_anything', 'move_0,0', '', 3, null])
       expect(toAssistantAction({ action: 'desktop_action', desktop_action })).toBeNull()
   })
