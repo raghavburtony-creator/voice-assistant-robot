@@ -1054,6 +1054,7 @@ def test_desktop_action_result_is_audit_only_and_never_model_context():
     }}))
     assert "desktop_action_result" not in live.state.get("screens", {})
     assert live.state["tool_policy_audit"][0]["execution_status"] == "started"
+    assert any("Execution: started" in message and "Do not claim success" in message for message in live.sent_text)
     sink.close(live.session_id)
 
 
