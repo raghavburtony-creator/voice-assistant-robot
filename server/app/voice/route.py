@@ -106,11 +106,14 @@ async def _run(ws: WebSocket, language: str, page: str, page_title: str, detail:
         live.continuity = continuity  # type: ignore[attr-defined]
         bridge = Bridge(ws, live)
         await ws.send_json({"type": "ready", "limitSeconds": settings.max_session_seconds})
-        return await _wait({
-            asyncio.create_task(bridge.browser_to_model(), name="browser"),
-            asyncio.create_task(bridge.model_to_browser(), name="model"),
-            asyncio.create_task(bridge.output_pump(), name="output"),
-        })
+        try:
+            return await _wait({
+                asyncio.create_task(bridge.browser_to_model(), name="browser"),
+                asyncio.create_task(bridge.model_to_browser(), name="model"),
+                asyncio.create_task(bridge.output_pump(), name="output"),
+            })
+        finally:
+            await bridge.tasks.close()  # no task outlives its session
 
 
 @router.websocket("/live")

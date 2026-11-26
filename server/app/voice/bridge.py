@@ -27,6 +27,7 @@ from app.voice.context import clear_page_context
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
+from app.voice.tasks import TaskEngine
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
 from app.voice.policy import POLICY_ENGINE
@@ -218,6 +219,9 @@ class Bridge:
         # the model's events. `translator` names what each ADK event means (events.py).
         self.out = OutputChannel(ws)
         self.translator = EventTranslator()
+        # Long work runs beside the voice loop (tasks.py) and tells Otto how it is going through `avatar`, the existing path.
+        # The route closes it when the session ends. Nothing submits to it yet: the model has no tool for it (D-02, D-19).
+        self.tasks = TaskEngine(emit=self.avatar)
 
     # ---- browser to model ----
 
