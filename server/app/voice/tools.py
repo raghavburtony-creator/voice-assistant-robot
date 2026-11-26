@@ -14,6 +14,7 @@ from typing import Literal, get_args
 from google.adk.tools import ToolContext
 
 from app.voice.tool_registry import ToolRegistry
+from app.voice.policy import current_request_id
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
@@ -234,7 +235,8 @@ def desktop_action(action: DesktopAction, tool_context: ToolContext) -> dict:
     """
     if action not in get_args(DesktopAction):
         return {"ok": False, "error": "Unsupported desktop action."}
-    _send(tool_context, {"action": "desktop_action", "desktop_action": action})
+    request_id = current_request_id()
+    _send(tool_context, {"action": "desktop_action", "desktop_action": action, **({"request_id": request_id} if request_id else {})})
     return {
         "ok": True,
         "requested": action,
