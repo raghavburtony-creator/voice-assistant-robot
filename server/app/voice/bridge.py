@@ -27,7 +27,7 @@ from app.voice.context import clear_page_context
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
-from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
+from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,6 @@ ANNOUNCE_GAP_SECONDS = 4.0
 CAPTURE_SOURCES = ("camera", "screen")
 MAX_FRAME_BYTES = 256 * 1024
 FRAME_GAP_SECONDS = 1.0
-JPEG_MAGIC = b"\\xff\\xd8\\xff"
 
 continuity_store: ContinuityStore = SQLiteContinuityStore(settings.continuity_store_path)
 
