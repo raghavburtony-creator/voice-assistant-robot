@@ -66,6 +66,11 @@ class PermissionPolicy:
         if permission == "voice_session":
             return "allow", "The tool is scoped to the active voice session."
 
+        if permission == "memory_opt_in":
+            if state.get("memory_enabled") is True:
+                return "allow", "The trusted host identity has enabled identity-scoped memory for this session."
+            return "deny", "Persistent memory is not enabled for this session."
+
         if permission == "active_capture":
             if state.get("capture_source") in {"camera", "screen"}:
                 return "allow", "The visitor is actively sharing a capture source."

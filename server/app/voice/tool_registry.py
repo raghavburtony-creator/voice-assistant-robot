@@ -61,6 +61,7 @@ _FIRST_PARTY_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("desktop_action", "computer", "Request an allow-listed, user-approved desktop action.", "high", "desktop_action_approval", 15, False, True, ("desktop_action_request",)),
     ToolMetadata("show_card", "browser", "Show bounded plain text in the voice panel.", "low", "voice_session", 5, False, False, ("voice_panel_card",)),
     ToolMetadata("notice_environmental_observation", "camera", "Propose a bounded attention event from a fresh, actively shared camera frame.", "medium", "active_camera_share", 5, False, True, ("awareness_event_proposal",)),
+    ToolMetadata("propose_memory", "memory", "Ask the visitor to confirm saving one fact they explicitly asked Otto to remember.", "medium", "memory_opt_in", 5, False, False, ("memory_proposal",)),
 )
 
 # Every tool above is first-party, and its error strings are written for the model to read.

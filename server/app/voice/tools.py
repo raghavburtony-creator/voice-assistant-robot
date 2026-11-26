@@ -19,6 +19,7 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.context import clear_page_context
 from app.voice.sink import sink
+from app.voice.memory_consent import discard_memory_proposal, stage_memory_proposal
 from app.voice.environmental import (
     EnvironmentalConfidence,
     EnvironmentalTopic,
@@ -38,6 +39,7 @@ DesktopAction = Literal[
     "move_home", "move_left", "move_right", "move_top", "move_bottom",
     "launch_calculator", "launch_text_editor",
 ]
+MemoryWriteKind = Literal["episodic", "semantic"]
 #: RUNTIME_ID is imported from runtime.py: one server rule for tools and page/current-view messages. A test checks it equals
 #: RUNTIME_ID in web/src/otto/runtimeId.ts.
 DESTINATIONS_CONTEXT_KEY = "destinations"
@@ -323,6 +325,24 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     return {"ok": True, "shown": "in the voice panel"}
 
 
+def propose_memory(content: str, kind: MemoryWriteKind, tool_context: ToolContext) -> dict:
+    """Stage a memory proposal only after the visitor explicitly asks Otto to remember it.
+
+    This never writes to persistent storage. The visitor must press Save in the
+    panel before the Bridge can call MemoryService.
+    """
+    if tool_context.state.get("memory_enabled") is not True:
+        return {"ok": False, "error": "Persistent memory is not enabled for this session."}
+    proposal = stage_memory_proposal(tool_context.state, content, kind)
+    if proposal is None:
+        return {"ok": False, "error": "The memory request is empty, too long, unsupported, or there are already pending requests."}
+    if not sink.put(tool_context.session.id, {"memory_proposal": proposal}):
+        discard_memory_proposal(tool_context.state, proposal["request_id"])
+        return {"ok": False, "error": "The memory request could not be shown to the visitor."}
+    return {"ok": True, "proposed": True, "awaiting_confirmation": True,
+            "note": "The visitor must review and press Save. Nothing has been stored yet."}
+
+
 def notice_environmental_observation(
     topic: EnvironmentalTopic,
     message: str,
@@ -369,6 +389,7 @@ TOOL_FUNCTIONS = (
     desktop_action,
     show_card,
     notice_environmental_observation,
+    propose_memory,
 )
 REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
 TOOLS = REGISTRY.adk_tools()
