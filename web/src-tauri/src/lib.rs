@@ -449,7 +449,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{desktop_action_label, resolve_destination, DesktopAction};
+    use super::{consent_certificate, desktop_action_label, resolve_destination, DesktopAction};
 
     #[test]
     fn native_consent_receipt_binds_the_request_action_and_decision() {
