@@ -42,11 +42,15 @@ def _attribute(point: Any, name: str, default: float = 0.0) -> float:
     return number if np.isfinite(number) else default
 
 
-def _landmark(point: Any, width: int, height: int) -> tuple[np.ndarray, float]:
+def _landmark(point: Any, width: int, height: int, *, detected_group: bool = False) -> tuple[np.ndarray, float]:
     # MediaPipe NormalizedLandmark x/y use separate normalized image axes.
     # Convert to pixels before normalization so aspect ratio does not distort
     # geometry. z is width-relative and is scaled by the same pixel width.
-    confidence = _attribute(point, "visibility", _attribute(point, "presence", 1.0))
+    # Face/hand tasks often omit visibility/presence; existence of their group
+    # is the detection signal, so do not misread absent optional fields as zero.
+    confidence = 1.0 if detected_group else _attribute(
+        point, "visibility", _attribute(point, "presence", 1.0)
+    )
     confidence = float(np.clip(confidence, 0.0, 1.0))
     xyz = np.asarray(
         [
@@ -61,10 +65,10 @@ def _landmark(point: Any, width: int, height: int) -> tuple[np.ndarray, float]:
     return xyz, confidence
 
 
-def _at(points: Sequence[Any] | None, index: int, width: int, height: int):
+def _at(points: Sequence[Any] | None, index: int, width: int, height: int, *, detected_group: bool = False):
     if points is None or index >= len(points):
         return np.zeros(3, dtype=np.float32), 0.0
-    return _landmark(points[index], width, height)
+    return _landmark(points[index], width, height, detected_group=detected_group)
 
 
 def normalize_frame(
@@ -112,9 +116,9 @@ def normalize_frame(
     # unscaled. Missing detections stay exactly zero.
     groups = (
         [(pose, index, pose_points[index]) for index in POSE_INDICES],
-        [(face, index, _at(face, index, frame_width, frame_height)) for index in FACE_INDICES],
-        [(left_hand, index, _at(left_hand, index, frame_width, frame_height)) for index in range(HAND_POINTS)],
-        [(right_hand, index, _at(right_hand, index, frame_width, frame_height)) for index in range(HAND_POINTS)],
+        [(face, index, _at(face, index, frame_width, frame_height, detected_group=True)) for index in FACE_INDICES],
+        [(left_hand, index, _at(left_hand, index, frame_width, frame_height, detected_group=True)) for index in range(HAND_POINTS)],
+        [(right_hand, index, _at(right_hand, index, frame_width, frame_height, detected_group=True)) for index in range(HAND_POINTS)],
     )
     values: list[float] = []
     for points, _index, (xyz, confidence) in (

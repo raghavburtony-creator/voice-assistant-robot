@@ -7,7 +7,7 @@ name = "otto-bsl-research"
 version = "0.1.0"
 description = "Offline, personal British Sign Language isolated-sign research workspace for Otto"
 requires-python = ">=3.11,<3.13"
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=1.26,<2.0"]
 
 [project.optional-dependencies]
 capture = ["mediapipe>=0.10.30", "opencv-python>=4.10"]
