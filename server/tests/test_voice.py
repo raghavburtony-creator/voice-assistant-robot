@@ -1028,6 +1028,15 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert audit["verification_result"] == "process_spawned"
     assert audit["outcome_source"] == "webview_reported"
     assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": "started", "verification": "process_spawned"})
+    declined = _context()
+    declined.state["tool_policy_audit"] = [{
+        "request_id": "b" * 32, "tool": "desktop_action", "decision": "confirmation_required",
+        "scope": "action:launch_calculator", "execution_status": "awaiting_confirmation",
+    }]
+    assert POLICY_ENGINE.audit_outcome(declined, {"request_id": "b" * 32, "action": "launch_calculator", "ok": False, "status": "denied", "verification": "not_verified"})
+    assert declined.state["tool_policy_audit"][0]["consent_status"] == "denied"
+    assert declined.state["tool_policy_audit"][0]["execution_status"] == "denied"
+    assert declined.state["tool_policy_audit"][0]["verification_status"] == "not_run"
     sink.close("tool-test")
 
 
