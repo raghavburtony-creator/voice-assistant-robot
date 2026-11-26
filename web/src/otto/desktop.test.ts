@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
-import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady, verifyDesktopMovement } from './desktop'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { executeDesktopAction, getDesktopContext, getDesktopStatus, isDesktopPermissionEnabled, isDesktopRuntime, onDesktopError, onDesktopMovement, onDesktopReady, setDesktopPermissionEnabled, verifyDesktopMovement } from './desktop'
 import { toAssistantAction } from './messages'
 
 describe('desktop bridge in browser mode', () => {
@@ -37,6 +37,29 @@ describe('desktop movement events', () => {
 })
 
 describe('desktop action bridge', () => {
+  beforeEach(() => setDesktopPermissionEnabled(true))
+  afterEach(() => setDesktopPermissionEnabled(false))
+
+  it('requires explicit desktop permission before invoking the native gateway', async () => {
+    setDesktopPermissionEnabled(false)
+    const invoke = vi.fn()
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+      ok: false, status: 'denied', verification: 'unavailable',
+    })
+    expect(invoke).not.toHaveBeenCalled()
+    delete window.__TAURI__
+  })
+
+  it('permission defaults to off and can be revoked for the rest of the session', () => {
+    setDesktopPermissionEnabled(false)
+    expect(isDesktopPermissionEnabled()).toBe(false)
+    setDesktopPermissionEnabled(true)
+    expect(isDesktopPermissionEnabled()).toBe(true)
+    setDesktopPermissionEnabled(false)
+    expect(isDesktopPermissionEnabled()).toBe(false)
+  })
   it('accepts only the permissioned desktop action allow-list', () => {
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toEqual({
       action: 'desktop_action', desktop_action: 'move_top',
