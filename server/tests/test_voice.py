@@ -1012,7 +1012,11 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert result["policy"]["decision"] == "confirmation_required"
     assert result["policy"]["scope"] == "action:launch_calculator"
     assert result["policy"]["verification_status"] == "pending"
-    assert sink.drain("tool-test") == [{"action": "desktop_action", "desktop_action": "launch_calculator"}]
+    queued = sink.drain("tool-test")
+    assert queued == [{
+        "action": "desktop_action", "desktop_action": "launch_calculator",
+        "request_id": result["policy"]["request_id"],
+    }]
     audit = ctx.state["tool_policy_audit"][-1]
     assert audit["decision"] == "confirmation_required"
     assert audit["execution_status"] == "awaiting_confirmation"

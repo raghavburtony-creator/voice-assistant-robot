@@ -541,7 +541,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           break
       }
     }
-  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet])
+  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet, reportDesktopResult])
 
   /**
    * Starts a conversation, from a click. With the audio code loaded (the usual case) everything happens inside the click.

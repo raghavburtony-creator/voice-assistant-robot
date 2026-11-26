@@ -135,7 +135,7 @@ Copy `web/src/otto/`, `web/src/otto.config.ts`, `web/public/otto/` and `server/a
 4. Handle it in your `onAction`, and describe it so the panel's "Otto did" list says what happened: in `COMMAND_LABELS` for a command, or in `describeAction` (`useVoiceAssistant.ts`) for a new kind of action.
 5. Tell Otto when to use it in `system_instruction()`.
 
-The registry gateway applies a fail-closed, per-call policy decision from reviewed risk and permission metadata before dispatch. Desktop actions require desktop awareness and then explicit approval in the existing host UI; neither policy nor dispatch is consent. A bounded session-local audit stores the decision and outcome without raw arguments or user content.
+The registry gateway applies a fail-closed, per-call policy decision from reviewed risk and permission metadata before dispatch. Desktop actions require desktop awareness and then explicit approval in the existing host UI; neither policy nor dispatch is consent. A bounded session-local audit stores the decision and outcome without raw arguments or user content. For high-risk desktop actions, the native host issues an exact-action consent certificate after its OS dialog; the browser reports that receipt and the final execution/verification status to the server. The server binds it to one pending request and rejects mismatched or replayed receipts. These browser-transported records are marked native-host-reported, not cryptographically attested.
 
 A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 

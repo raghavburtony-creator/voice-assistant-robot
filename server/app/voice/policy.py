@@ -230,7 +230,7 @@ class PolicyEngine:
         pending = state.get(PENDING_STATE_KEY)
         pending = dict(pending) if isinstance(pending, dict) else {}
         expected = pending.get(request_id)
-        if not isinstance(expected, dict) or expected.get("action") != action:
+        if not isinstance(expected, dict) or expected.get("tool") != "desktop_action" or expected.get("action") != action:
             return False
         records = state.get(AUDIT_STATE_KEY)
         records = list(records) if isinstance(records, list) else []
