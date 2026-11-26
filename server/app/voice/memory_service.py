@@ -103,9 +103,26 @@ class SQLiteMemoryService:
                 )"""
             )
             db.execute("CREATE INDEX IF NOT EXISTS memories_identity_updated ON memories(identity_key, updated_at DESC)")
+            db.execute("""CREATE TABLE IF NOT EXISTS memory_audit (
+                audit_id TEXT PRIMARY KEY, identity_key TEXT NOT NULL, record_id TEXT NOT NULL,
+                action TEXT NOT NULL, provenance TEXT NOT NULL, created_at INTEGER NOT NULL
+            )""")
+            db.execute("CREATE INDEX IF NOT EXISTS memory_audit_identity_created ON memory_audit(identity_key, created_at DESC)")
 
     def _connect(self):
         return sqlite3.connect(self.path, timeout=5)
+
+    @staticmethod
+    def _audit(db: sqlite3.Connection, key: str, record_id: str, action: str, provenance: str, timestamp: int) -> None:
+        db.execute(
+            "INSERT INTO memory_audit VALUES (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), key, record_id, action, provenance, timestamp),
+        )
+        db.execute(
+            "DELETE FROM memory_audit WHERE identity_key = ? AND audit_id NOT IN "
+            "(SELECT audit_id FROM memory_audit WHERE identity_key = ? ORDER BY created_at DESC LIMIT 1000)",
+            (key, key),
+        )
 
     @staticmethod
     def _explicit(explicit: bool) -> None:
@@ -150,6 +167,7 @@ class SQLiteMemoryService:
                 "INSERT INTO memories VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (record_id, key, kind, clean_content, clean_provenance, sensitivity, timestamp, timestamp, related_json),
             )
+            self._audit(db, key, record_id, "remember", clean_provenance, timestamp)
         return MemoryRecord(record_id, kind, clean_content, clean_provenance, sensitivity, timestamp, timestamp, tuple(json.loads(related_json)))
 
     def recall(
@@ -235,19 +253,45 @@ class SQLiteMemoryService:
                 "WHERE id=? AND identity_key=?",
                 (new_content, new_provenance, new_sensitivity, timestamp, related_json, record_id, key),
             )
+            self._audit(db, key, record_id, "update", new_provenance, timestamp)
         return MemoryRecord(record_id, current.kind, new_content, new_provenance, new_sensitivity,
                             current.created_at, timestamp, tuple(json.loads(related_json)))
 
-    def forget(self, scope: str, identity: str, record_id: str, *, explicit: bool = False) -> bool:
+    def forget(
+        self, scope: str, identity: str, record_id: str, *,
+        explicit: bool = False, provenance: str = "explicit user request", now: int | None = None,
+    ) -> bool:
         self._explicit(explicit)
         key = _identity_key(scope, identity)
+        clean_provenance = _clean_text(provenance, MAX_PROVENANCE_CHARS)
+        timestamp = int(time.time()) if now is None else now
         with self._connect() as db:
             cursor = db.execute("DELETE FROM memories WHERE id = ? AND identity_key = ?", (record_id, key))
-            return cursor.rowcount == 1
+            if cursor.rowcount == 1:
+                self._audit(db, key, record_id, "forget", clean_provenance, timestamp)
+                return True
+            return False
 
-    def resurface(self, scope: str, identity: str, query: str, *, limit: int = 5) -> list[MemoryRecord]:
+    def audit_events(self, scope: str, identity: str, *, limit: int = 100) -> list[dict]:
+        """Return bounded metadata-only write history for the matching host identity."""
+        key = _identity_key(scope, identity)
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("Invalid audit limit")
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT record_id, action, provenance, created_at FROM memory_audit "
+                "WHERE identity_key = ? ORDER BY created_at DESC LIMIT ?", (key, limit)
+            ).fetchall()
+        return [
+            {"record_id": row[0], "action": row[1], "provenance": row[2], "created_at": row[3]}
+            for row in rows
+        ]
+
+    def resurface(
+        self, scope: str, identity: str, query: str, *, limit: int = 5, now: int | None = None
+    ) -> list[MemoryRecord]:
         """Return relevant, non-sensitive records; this method never emits events or performs actions."""
-        return self.recall(scope, identity, query=query, limit=limit)
+        return self.recall(scope, identity, query=query, limit=limit, now=now)
 
     def get_context(self, scope: str, identity: str, *, limit: int = 8) -> str:
         """Return bounded JSON data for the existing ADK instruction context."""
