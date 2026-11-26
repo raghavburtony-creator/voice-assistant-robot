@@ -1020,6 +1020,7 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert audit["execution_status"] == "awaiting_confirmation"
     from app.voice.policy import POLICY_ENGINE
     assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_text_editor", "ok": True, "status": "started", "verification": "process_spawned"})
+    assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": [], "verification": {}})
     assert POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": "started", "verification": "process_spawned"})
     assert audit["execution_status"] == "started"
     assert audit["consent_status"] == "approved"
@@ -1028,6 +1029,23 @@ def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled(
     assert audit["outcome_source"] == "webview_reported"
     assert not POLICY_ENGINE.audit_outcome(ctx, {"request_id": queued["request_id"], "action": "launch_calculator", "ok": True, "status": "started", "verification": "process_spawned"})
     sink.close("tool-test")
+
+
+
+def test_desktop_action_result_is_audit_only_and_never_model_context():
+    live = FakeLive()
+    live.state["tool_policy_audit"] = [{
+        "request_id": "a" * 32, "tool": "desktop_action", "decision": "confirmation_required",
+        "scope": "action:launch_calculator", "execution_status": "awaiting_confirmation",
+    }]
+    bridge = Bridge(object(), live)
+    asyncio.run(bridge.update_context({"key": "desktop_action_result", "data": {
+        "outcomes": [{"request_id": "a" * 32, "action": "launch_calculator", "ok": True,
+                      "status": "started", "verification": "process_spawned"}],
+    }}))
+    assert "desktop_action_result" not in live.state.get("screens", {})
+    assert live.state["tool_policy_audit"][0]["execution_status"] == "started"
+    sink.close(live.session_id)
 
 
 def test_policy_denies_desktop_context_until_visitor_enables_it():
