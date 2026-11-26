@@ -28,7 +28,6 @@ from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.perception import PerceptionGateway, PerceptionRejected, decode_frame
-from app.voice.orchestrator import AdkOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +124,7 @@ class _AdkLiveSession:
 @asynccontextmanager
 async def connect_adk(language: str, page: str, page_title: str, detail: str) -> AsyncIterator[LiveSession]:
     """One ADK live session for one browser connection. ADK is imported here, so a server that never opens one never loads it."""
+    from google.adk.agents import LlmAgent
     from google.adk.agents.live_request_queue import LiveRequestQueue
     from google.adk.agents.run_config import RunConfig, StreamingMode
     from google.adk.runners import Runner
@@ -134,12 +134,14 @@ async def connect_adk(language: str, page: str, page_title: str, detail: str) ->
     from app.voice.model import keyed_model
     from app.voice.tools import TOOLS
 
-    orchestrator = AdkOrchestrator(
+    # D-22: keep the existing ADK agent in the voice bridge; do not introduce
+    # a separate runtime orchestrator or a parallel tool-routing authority.
+    agent = LlmAgent(
+        name="voice_guide",
         model=keyed_model(settings.gemini_live_model),
         instruction=system_instruction(settings.app_name, language, PAGE_PLACEHOLDER, detail),
-        tools=TOOLS,
+        tools=list(TOOLS),
     )
-    agent = orchestrator.build_agent()
     service = InMemorySessionService()
     runner = Runner(app_name=APP_ID, agent=agent, session_service=service)
     session = await service.create_session(
