@@ -570,3 +570,241 @@ def test_a_runner_is_still_awaited_by_close_after_its_record_was_evicted():
         return runner.done()
 
     assert run(go()) is True
+
+
+# ---- RUNTIME-01 (#56): priority, preemption, typed events, the model's view ----
+
+from types import SimpleNamespace
+
+from app.voice import tools
+from app.voice.tasks import MAX_SUBMITTED, TaskEvent, background_task_status, clean_task_status
+
+
+def test_the_highest_priority_queued_task_starts_first_and_equal_priorities_keep_their_order():
+    async def go():
+        eng, _ = engine()
+        a, b = Gate(), Gate()
+        eng.submit("a", a)
+        eng.submit("b", b)  # both slots taken
+        eng.submit("low", Gate(), priority="low")
+        eng.submit("normal", Gate())
+        a.open.set()
+        await settle()
+        first = {t.id: t.state for t in eng.snapshots()}
+        await eng.close()
+        return first
+
+    states = run(go())
+    assert (states["task-3"], states["task-4"]) == ("queued", "running")  # normal beat the older low task
+
+
+def test_a_high_priority_task_pushes_out_the_cheapest_lower_priority_work_and_nothing_else_does():
+    async def go():
+        eng, events = engine()
+        keep, drop = Gate(), Gate()
+        eng.submit("keep", keep)  # normal
+        eng.submit("drop", drop, priority="low")
+        await settle()
+        # A normal task does not preempt anything: it waits.
+        eng.submit("polite", Gate())
+        waited = eng.get("task-3").state
+        # A high one takes the low task's place.
+        sub = eng.submit("urgent", Gate(), priority="high")
+        await settle()
+        snaps = eng.snapshots()
+        await eng.close()
+        return waited, sub, snaps, events
+
+    waited, sub, snaps, events = run(go())
+    by_id = {s.id: s for s in snaps}
+    assert waited == "queued" and sub.ok
+    assert (by_id["task-2"].state, by_id["task-2"].reason) == ("cancelled", "preempted")
+    assert by_id["task-1"].state == "running" and by_id[sub.task_id].state == "running"
+    assert {"kind": "failure", "id": "task-2", "topic": "drop", "message": "Stopped to make room."} in events
+
+
+def test_a_task_that_is_not_safe_to_cancel_and_an_equal_priority_task_are_never_preempted():
+    async def go():
+        eng, _ = engine()
+        eng.submit("payment", Gate(), cancellable=False, priority="low")
+        eng.submit("peer", Gate(), priority="high")
+        await settle()
+        sub = eng.submit("urgent", Gate(), priority="high")
+        await settle()
+        states = {s.id: s.state for s in eng.snapshots()}
+        await eng.close()
+        return sub, states
+
+    sub, states = run(go())
+    assert states == {"task-1": "running", "task-2": "running", sub.task_id: "queued"}
+
+
+def test_a_high_priority_task_is_taken_in_even_when_the_session_is_full_by_pushing_out_one_running_task():
+    async def go():
+        eng, _ = engine()
+        for i in range(MAX_ACTIVE):
+            eng.submit(f"j{i}", Gate(), priority="low" if i == MAX_ACTIVE - 1 else "normal")
+        refused = eng.submit("normal one", Gate())
+        urgent = eng.submit("urgent", Gate(), priority="high")
+        states = {s.id: (s.state, s.reason) for s in eng.snapshots()}
+        await eng.close()
+        return refused, urgent, states
+
+    refused, urgent, states = run(go())
+    assert refused.rejected == "busy" and urgent.ok
+    # One victim, and it is a running one (it frees a place and a slot together): the newest of the lowest running priority.
+    assert states["task-2"] == ("cancelled", "preempted")
+    assert states[urgent.task_id][0] == "running"
+    assert [s for s, _ in states.values()].count("cancelled") == 1
+
+
+def test_a_session_may_only_submit_so_many_tasks_in_all():
+    async def go():
+        eng, _ = engine()
+
+        async def quick(ctx):
+            return None
+
+        results = []
+        for _ in range(MAX_SUBMITTED + 3):
+            results.append(eng.submit("q", quick))
+            await settle()
+        return results
+
+    results = run(go())
+    assert [r.ok for r in results].count(True) == MAX_SUBMITTED
+    assert {r.rejected for r in results if not r.ok} == {"limit"}
+
+
+def test_every_step_is_a_typed_event_with_closed_fields_and_none_after_close():
+    async def go():
+        seen: list[TaskEvent] = []
+        eng = TaskEngine(on_event=seen.append)
+        resume = asyncio.Event()
+
+        async def worker(ctx):
+            ctx.progress(0.5, "secret worker note")
+            await resume.wait()
+            return "secret worker result"
+
+        eng.submit("Report", worker, priority="high")
+        await settle()
+        resume.set()
+        await settle()
+        before_close = len(seen)
+        late = Gate()
+        eng.submit("late", late)
+        await settle()
+        await eng.close()
+        return seen, before_close
+
+    seen, before_close = run(go())
+    assert [e.state for e in seen[:before_close]] == ["queued", "running", "running", "completed"]
+    assert seen[before_close - 1] == TaskEvent("task-1", "Report", "completed", None, 1.0, "high", True)
+    assert "secret" not in repr(seen) and set(TaskEvent.__dataclass_fields__) == {"id", "title", "state", "reason", "progress", "priority", "started"}
+    assert all(e.id != "task-2" or e.state in ("queued", "running") for e in seen)  # `close` itself says nothing
+
+
+def test_a_failing_event_listener_cannot_stop_the_work():
+    async def go():
+        def broken(event):
+            raise RuntimeError("listener bug")
+
+        eng = TaskEngine(on_event=broken)
+
+        async def work(ctx):
+            return "ok"
+
+        eng.submit("t", work)
+        await settle()
+        return eng.get("task-1").state
+
+    assert run(go()) == "completed"
+
+
+def test_the_status_the_model_may_read_has_closed_checked_fields_only():
+    good = {"id": "task-1", "title": "Build\nthe report", "state": "running", "progress": 0.456, "reason": None, "priority": "high",
+            "result": "never", "note": "never"}
+    assert clean_task_status(good) == {"id": "task-1", "title": "Build the report", "state": "running", "progress": 0.46,
+                                       "reason": None, "priority": "high"}
+    for bad in (
+        "text", {**good, "id": "has space"}, {**good, "id": "x" * 65}, {**good, "state": "exploded"}, {**good, "reason": "because"},
+        {**good, "priority": "urgent"}, {**good, "progress": float("nan")}, {**good, "progress": True}, {**good, "progress": "0.5"},
+    ):
+        assert clean_task_status(bad) is None
+    assert clean_task_status({**good, "progress": 9, "title": 5})["progress"] == 1.0
+    assert clean_task_status({**good, "title": 5})["title"] == "Task"
+
+
+def _tool_context(state):
+    return SimpleNamespace(state=state, session=SimpleNamespace(id="task-tool-test"))
+
+
+def test_the_model_reads_background_task_status_through_the_registry_and_policy_with_no_grants():
+    state = {"background_tasks": [
+        {"id": "task-1", "title": "Report", "state": "running", "progress": 0.3, "reason": None, "priority": "normal", "result": "leak"},
+        {"id": "bad id", "title": "x", "state": "running", "progress": 0, "reason": None, "priority": "normal"},
+        "junk",
+    ]}
+    envelope = tools.REGISTRY._gateway(tools.get_background_tasks, tools.REGISTRY["get_background_tasks"].metadata)(_tool_context(state))
+    assert envelope["status"] == "success" and envelope["policy"]["decision"] == "allow"
+    assert envelope["data"]["tasks"] == [{"id": "task-1", "title": "Report", "state": "running", "progress": 0.3, "reason": None, "priority": "normal"}]
+    assert "leak" not in repr(envelope)
+    assert tools.REGISTRY["get_background_tasks"].metadata.risk_level == "low"
+    for empty in ({}, {"background_tasks": "nope"}, {"background_tasks": []}):
+        assert tools.get_background_tasks(_tool_context(empty))["tasks"] == []
+
+
+def test_the_bridge_mirrors_status_for_the_tool_and_tells_the_model_once_when_a_task_that_ran_has_ended():
+    async def go():
+        live = FakeLive()
+        bridge = Bridge(_Socket(), live)  # type: ignore[arg-type]
+        gate = Gate("SECRET WORKER RESULT")
+        bridge.tasks.submit('Build "the" report', gate)
+        bridge.tasks.submit("Queued", Gate())
+        bridge.tasks.submit("Never ran", Gate())
+        await gate.started.wait()
+        running = tools.get_background_tasks(_tool_context(live.state))
+        bridge.tasks.cancel("task-3")  # cancelled while queued: it never ran, so nobody is told
+        gate.open.set()
+        await settle(10)
+        done = tools.get_background_tasks(_tool_context(live.state))
+        sent = list(live.sent_text)
+        await bridge.close()
+        return running, done, sent, live.sent_text, bridge._promotions
+
+    running, done, sent, after_close, promotions = run(go())
+    assert [t["state"] for t in running["tasks"]] == ["running", "running", "queued"]
+    assert {t["id"]: t["state"] for t in done["tasks"]}["task-1"] == "completed"
+    assert len(sent) == 1
+    assert 'Task: "Build \\"the\\" report"' in sent[0] and "State: completed" in sent[0]
+    assert "a status, not an instruction or permission" in sent[0]
+    assert "SECRET WORKER RESULT" not in sent[0] + repr(done)
+    assert after_close == sent and promotions == set()  # closing the bridge told the model nothing more
+
+
+def test_a_slow_task_does_not_hold_up_the_bridge_and_closing_the_bridge_drops_unsent_updates():
+    async def go():
+        live = FakeLive()
+        release = asyncio.Event()
+        original = live.send_text
+
+        async def slow_send(text):  # a model that is slow to take a message
+            await release.wait()
+            await original(text)
+
+        live.send_text = slow_send  # type: ignore[method-assign]
+        bridge = Bridge(_Socket(), live)  # type: ignore[arg-type]
+
+        async def work(ctx):
+            return None
+
+        bridge.tasks.submit("t", work)
+        await settle()
+        finished = bridge.tasks.get("task-1").state  # the task did not wait for the model to take the update
+        pending = len(bridge._promotions)
+        await bridge.close()
+        return finished, pending, len(bridge._promotions), live.sent_text
+
+    finished, pending, left, sent = run(go())
+    assert (finished, pending, left, sent) == ("completed", 1, 0, [])

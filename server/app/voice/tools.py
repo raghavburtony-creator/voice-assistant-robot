@@ -19,6 +19,7 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.context import clear_page_context
 from app.voice.sink import sink
+from app.voice.tasks import clean_task_status
 from app.voice.environmental import (
     EnvironmentalConfidence,
     EnvironmentalTopic,
@@ -355,6 +356,18 @@ def notice_environmental_observation(
     return {"accepted": True, "event": "attention", "topic": proposal.proposal.topic, "note": "A minor attention proposal was sent to Otto's existing awareness system. No action was taken."}
 
 
+def get_background_tasks(tool_context: ToolContext) -> dict:
+    """Return the status of the server's background tasks: which are queued, running, waiting or finished, and how each ended.
+
+    Status only: no result text and nothing a task's worker wrote. Use it to answer "is it done yet?" instead of guessing.
+    """
+    raw = tool_context.state.get("background_tasks")
+    tasks = [item for item in map(clean_task_status, raw if isinstance(raw, list) else []) if item is not None]
+    if not tasks:
+        return {"tasks": [], "note": "No background task is running or recent."}
+    return {"tasks": tasks, "note": "Status only. A finished task's outcome is in state and reason; say no more than that."}
+
+
 TOOL_FUNCTIONS = (
     navigate_to,
     explain_page,
@@ -369,6 +382,7 @@ TOOL_FUNCTIONS = (
     desktop_action,
     show_card,
     notice_environmental_observation,
+    get_background_tasks,
 )
 REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
 TOOLS = REGISTRY.adk_tools()

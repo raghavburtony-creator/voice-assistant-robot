@@ -60,6 +60,7 @@ _FIRST_PARTY_METADATA: tuple[ToolMetadata, ...] = (
     ToolMetadata("move_desktop", "computer", "Request a permission-gated move of Otto on the desktop.", "high", "desktop_action_approval", 15, False, True, ("desktop_action_request",)),
     ToolMetadata("desktop_action", "computer", "Request an allow-listed, user-approved desktop action.", "high", "desktop_action_approval", 15, False, True, ("desktop_action_request",)),
     ToolMetadata("show_card", "browser", "Show bounded plain text in the voice panel.", "low", "voice_session", 5, False, False, ("voice_panel_card",)),
+    ToolMetadata("get_background_tasks", "tasks", "Read the status of the server's background tasks.", "low", "voice_session", 5, False, False),
     ToolMetadata("notice_environmental_observation", "camera", "Propose a bounded attention event from a fresh, actively shared camera frame.", "medium", "active_camera_share", 5, False, True, ("awareness_event_proposal",)),
 )
 
