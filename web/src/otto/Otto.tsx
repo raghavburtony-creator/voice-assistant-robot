@@ -103,6 +103,11 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   }, [page, otto])
   const [open, setOpen] = useState(false)
   const [desktopAwarenessEnabled, setDesktopAwarenessEnabled] = useState(false)
+  // The permission lives in the desktop bridge module, so clear it when this owner unmounts.
+  // This prevents a later Otto instance from inheriting access after the conversation UI is gone.
+  useEffect(() => () => {
+    setDesktopPermissionEnabled(false)
+  }, [])
   const setDesktopAwareness = (enabled: boolean) => {
     setDesktopPermissionEnabled(enabled)
     setDesktopAwarenessEnabled(enabled)
