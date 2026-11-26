@@ -924,7 +924,10 @@ def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
         entry = registry[name]
         assert entry.input_schema["type"] == "object"
         assert entry.input_schema["additionalProperties"] is False
-        assert entry.output_schema["required"] == ["status", "data"]
+        assert entry.output_schema["required"] == [
+            "status", "data", "evidence", "provenance", "verification",
+            "error", "timestamps", "side_effects",
+        ]
         assert entry.metadata.timeout_seconds > 0
         assert entry.metadata.risk_level in {"low", "medium", "high"}
         assert entry.metadata.required_permission
@@ -938,24 +941,39 @@ def test_tool_registry_rejects_missing_or_duplicate_metadata():
 
 
 def test_tool_gateway_validates_arguments_and_normalizes_results():
-    gateway = tools.REGISTRY._gateway(tools.run_command)
+    gateway = tools.REGISTRY._gateway(tools.run_command, tools.REGISTRY["run_command"].metadata)
     sink.open("tool-test")
     ctx = _context()
     success = gateway("show_message", ctx)
-    assert success == {"status": "success", "data": {"ok": True, "command": "show_message"}}
+    assert success["status"] == "success"
+    assert success["data"] == {"ok": True, "command": "show_message"}
+    assert success["evidence"] == []
+    assert success["provenance"] == {"tool": "run_command", "source": "registered_tool"}
+    assert success["verification"] == {"required": False, "status": "not_required", "details": None}
+    assert success["error"] is None
+    assert success["timestamps"]["started_at"].endswith("Z")
+    assert success["timestamps"]["completed_at"].endswith("Z")
+    assert success["side_effects"] == ["browser_command"]
     assert sink.drain("tool-test") == [{"action": "command", "name": "show_message"}]
 
     invalid = gateway("rm -rf", ctx)
-    assert invalid == {
-        "status": "error",
-        "data": {"code": "invalid_arguments", "message": "Tool arguments did not match the declared schema."},
+    assert invalid["status"] == "error"
+    assert invalid["data"] == {}
+    assert invalid["error"] == {
+        "code": "invalid_arguments",
+        "message": "Tool arguments did not match the declared schema.",
     }
+    assert invalid["verification"]["status"] == "not_required"
+    assert invalid["timestamps"]["started_at"].endswith("Z")
     sink.close("tool-test")
 
 
 def test_tool_gateway_wraps_checked_tool_failures_in_the_same_envelope():
-    gateway = tools.REGISTRY._gateway(tools.show_target)
+    gateway = tools.REGISTRY._gateway(tools.show_target, tools.REGISTRY["show_target"].metadata)
     result = gateway("not-reported", _context())
     assert result["status"] == "error"
     assert result["data"]["ok"] is False
     assert "error" in result["data"]
+    assert result["error"]["code"] == "tool_execution_failed"
+    assert result["verification"]["status"] == "not_required"
+    assert result["provenance"]["tool"] == "show_target"
