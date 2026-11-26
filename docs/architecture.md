@@ -176,8 +176,21 @@ The richer evidence/provenance contract in #57 may extend the basic registry res
 - Session-only voice/perception state is discarded at session end (D-04, D-21).
 - Camera/screen frames are visitor-started, visibly shared, bounded and not retained by Otto (D-21).
 - Cross-session task continuity is a narrow host-scoped record, not general visitor memory (D-20, D-26).
-- Any future memory persistence needs explicit sensitivity, provenance, retention, deletion and user-control rules before implementation.
+- Memory persistence follows the data-class table below (`server/app/voice/privacy.py`): text is redacted before it is written, a redacted record is `sensitive`, and a host can delete everything for one identity with `forget_identity` (README, "Privacy").
 - Research and extension outputs remain untrusted data. They do not widen tool permissions or become actions without the normal checked path.
+
+| Data class | May persist | Sensitivity | Retention (existing rule) | Redaction |
+|---|---|---|---|---|
+| Voice transcript | no | sensitive | Not stored by the kit; session only (D-04); never in continuity (D-26) | not stored |
+| Screenshot | no | sensitive | Forwarded and dropped (D-21) | not stored |
+| Camera frame | no | sensitive | Forwarded and dropped (D-21, D-30) | not stored |
+| File | no | sensitive | The kit stores no files | not stored |
+| Tool arguments | no | sensitive | Not stored; the session audit keeps decision and outcome | not stored |
+| Tool results | no | normal | Not stored beyond the session | not stored |
+| Memory record | yes | normal, or sensitive when redacted | Until the host forgets it; 500 per identity; working memory left out of recall after 24 h | applied before write |
+| Continuity record | yes | normal | 7 days; removed on completion, cancel or withdrawal (D-26) | n/a (ids and time only) |
+
+Unknown classes are not persisted. The table is data, and `test_privacy.py` pins it. Redaction (emails, phones, Luhn-valid card numbers, keys and passwords) is best-effort and does not cover names or free-form personal facts. "Never persisted" for frames, screenshots and files is a policy plus a test, not a technical impossibility.
 
 For the origin and licence status of implemented assets and architectural references, see [source-attribution.md](source-attribution.md).
 

@@ -36,6 +36,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.config import settings
 from app.voice.app_config import LANGUAGE_NAMES, PAGES
 from app.voice.continuity import ContinuityContext, from_headers
+from app.voice.privacy import redact_text
 from app.voice.runtime import is_runtime_id, runtime_title
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -50,9 +51,25 @@ def connect_adk(language: str, page: str, page_title: str, detail: str):
     return real(language, page, page_title, detail)
 
 
-def _scrub(text: str) -> str:
-    key = settings.gemini_api_key.get_secret_value()
-    return text.replace(key, "[redacted]") if key else text
+_SCRUB_MAX_CHARS = 2000
+
+
+def _scrub(text: object) -> str:
+    """Error text for the log: the Gemini key first (exact match, D-01), cut to a bounded length, then pattern
+    redaction (privacy.py). Never raises: if redaction fails, only the exception type name is returned."""
+    try:
+        text = text if isinstance(text, str) else str(text)
+        key = settings.gemini_api_key.get_secret_value()
+        if key:
+            text = text.replace(key, "[redacted]")
+        if len(text) > _SCRUB_MAX_CHARS:
+            text = text[:_SCRUB_MAX_CHARS] + " …[truncated]"
+        try:
+            return redact_text(text)[0]
+        except Exception as exc:  # the unredacted text is dropped: it may hold what redaction missed
+            return f"[unredacted: {type(exc).__name__}]"
+    except Exception:
+        return "[unavailable]"
 
 
 async def _close(ws: WebSocket, payload: dict) -> None:
