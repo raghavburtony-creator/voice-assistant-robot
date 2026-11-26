@@ -87,6 +87,43 @@ describe('desktop action bridge', () => {
     delete window.__TAURI__
   })
 
+  it('does not open the native prompt if desktop awareness is revoked during movement preflight', async () => {
+    let resolvePreflight!: (context: {
+      platform: string
+      monitor: { x: number; y: number; width: number; height: number }
+      otto: { x: number | null; y: number | null; width: number; height: number; visible: boolean }
+      cursor: { x: number; y: number }
+      activeWindow: null
+    }) => void
+    const preflight = new Promise<{
+      platform: string
+      monitor: { x: number; y: number; width: number; height: number }
+      otto: { x: number | null; y: number | null; width: number; height: number; visible: boolean }
+      cursor: { x: number; y: number }
+      activeWindow: null
+    }>(resolve => { resolvePreflight = resolve })
+    const invoke = vi.fn().mockReturnValueOnce(preflight)
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    const action = executeDesktopAction('move_left', 'f'.repeat(32))
+    setDesktopPermissionEnabled(false)
+    resolvePreflight({
+      platform: 'linux',
+      monitor: { x: 0, y: 0, width: 1920, height: 1080 },
+      otto: { x: 200, y: 200, width: 420, height: 640, visible: true },
+      cursor: { x: 300, y: 300 },
+      activeWindow: null,
+    })
+
+    await expect(action).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'unavailable',
+      message: expect.stringContaining('turned off'),
+    })
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('desktop_context')
+    delete window.__TAURI__
+  })
+
   it('requires a fresh matching observation before reporting a native move as successful', async () => {
     const invoke = vi.fn()
       .mockResolvedValueOnce({
