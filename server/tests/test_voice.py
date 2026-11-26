@@ -23,6 +23,7 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
 from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_CONTEXT_BYTES, MAX_FRAME_BYTES, Bridge, context_bytes
 from app.voice.runtime import RUNTIME_TITLE_CHARS, runtime_title
 from app.voice.sink import sink
+from app.voice.tool_registry import TOOL_METADATA, ToolRegistry
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
 
@@ -909,3 +910,51 @@ def test_screen_context_does_not_bypass_the_desktop_awareness_tool():
     seen = tools.get_screen_context(ctx)
     assert "desktop_context" not in seen
     assert "Private window" not in json.dumps(seen)
+
+
+def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
+    registry = tools.REGISTRY
+    assert registry.names() == frozenset(fn.__name__ for fn in tools.TOOL_FUNCTIONS)
+    assert registry.names() == tools.TOOL_NAMES
+    assert {item.name for item in registry.metadata()} == registry.names()
+    assert {tool.name for tool in tools.TOOLS} == registry.names()
+    assert len(TOOL_METADATA) == len(registry.names())
+    for name in registry.names():
+        entry = registry[name]
+        assert entry.input_schema["type"] == "object"
+        assert entry.input_schema["additionalProperties"] is False
+        assert entry.output_schema["required"] == ["status", "data"]
+        assert entry.metadata.timeout_seconds > 0
+        assert entry.metadata.risk_level in {"low", "medium", "high"}
+        assert entry.metadata.required_permission
+
+
+def test_tool_registry_rejects_missing_or_duplicate_metadata():
+    with pytest.raises(ValueError, match="registry mismatch"):
+        ToolRegistry([tools.run_command])
+    with pytest.raises(ValueError, match="unique"):
+        ToolRegistry([tools.run_command, tools.run_command])
+
+
+def test_tool_gateway_validates_arguments_and_normalizes_results():
+    gateway = tools.REGISTRY._gateway(tools.run_command)
+    sink.open("tool-test")
+    ctx = _context()
+    success = gateway("show_message", ctx)
+    assert success == {"status": "success", "data": {"ok": True, "command": "show_message"}}
+    assert sink.drain("tool-test") == [{"action": "command", "name": "show_message"}]
+
+    invalid = gateway("rm -rf", ctx)
+    assert invalid == {
+        "status": "error",
+        "data": {"code": "invalid_arguments", "message": "Tool arguments did not match the declared schema."},
+    }
+    sink.close("tool-test")
+
+
+def test_tool_gateway_wraps_checked_tool_failures_in_the_same_envelope():
+    gateway = tools.REGISTRY._gateway(tools.show_target)
+    result = gateway("not-reported", _context())
+    assert result["status"] == "error"
+    assert result["data"]["ok"] is False
+    assert "error" in result["data"]
