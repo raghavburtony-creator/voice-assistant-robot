@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 from google.adk.sessions.state import State
@@ -151,7 +152,13 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
     writes = []
 
     class MemoryStub:
+        def __init__(self):
+            self.context_calls = 0
+
         def get_context(self, scope, identity):
+            self.context_calls += 1
+            if self.context_calls > 1:
+                raise RuntimeError("context refresh unavailable")
             return "[]"
 
         def remember(self, scope, identity, content, **kwargs):
@@ -184,9 +191,9 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         proposal = pending_memory_proposal(bridge.live.state, request_id)
         assert proposal is not None
         assert writes == []
-        saved = bridge.resolve_memory_consent({
+        saved = asyncio.run(bridge.resolve_memory_consent({
             "type": "memory_consent", "request_id": request_id, "accepted": True,
-        })
+        }))
         assert saved == {"type": "memory_result", "request_id": request_id, "status": "saved"}
         assert writes == [(
             "app", "opaque-host-id", "Contact me at [email]",
@@ -195,8 +202,8 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
                 "sensitivity": "sensitive", "redacted_categories": ("email",), "explicit": True,
             },
         )]
-        assert bridge.resolve_memory_consent({
+        assert asyncio.run(bridge.resolve_memory_consent({
             "type": "memory_consent", "request_id": request_id, "accepted": True,
-        }) is None
+        })) is None
     finally:
         sink.close(live.session_id)

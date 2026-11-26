@@ -323,7 +323,7 @@ class Bridge:
         if identity is not None:
             self.continuity_store.disable(identity.scope, identity.identity)
 
-    def resolve_memory_consent(self, event: object) -> dict[str, str] | None:
+    async def resolve_memory_consent(self, event: object) -> dict[str, str] | None:
         """Persist one proposal only after the visitor confirms its matching request id."""
         if not isinstance(event, dict):
             return None
@@ -343,7 +343,8 @@ class Bridge:
                 status = "expired"
             else:
                 try:
-                    memory_service.remember(
+                    await asyncio.to_thread(
+                        memory_service.remember,
                         identity.scope,
                         identity.identity,
                         proposal["content"],
@@ -355,8 +356,10 @@ class Bridge:
                     )
                     status = "saved"
                     try:
-                        self.live.state["memory_context"] = memory_service.get_context(
-                            identity.scope, identity.identity,
+                        self.live.state["memory_context"] = await asyncio.to_thread(
+                            memory_service.get_context,
+                            identity.scope,
+                            identity.identity,
                         )
                     except Exception as exc:
                         # A successful durable write must not be reported as failed if a context refresh fails.
@@ -433,7 +436,7 @@ class Bridge:
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
             elif kind == "memory_consent":
-                result = self.resolve_memory_consent(event)
+                result = await self.resolve_memory_consent(event)
                 if result is not None:
                     self.out.control(result)
             elif kind == "desktop_result":
