@@ -108,3 +108,53 @@ When this review was done, all 18 decisions were **current**: each one was enfor
 | D-17 snapshot only while talking, never stored | current | Continuity stores task state (within a tab, as ids, by D-20), and multimodal input adds camera and screen frames, sent while shared and never kept (D-21) | Q-03 |
 
 Issue #6 refers to "D-01 to D-19". At the time of the review the log ended at D-18. D-19 is the first new record from this work.
+
+
+## Service contracts and dependency direction
+
+This section describes the intended boundaries for the architecture issues. A row marked **planned** is a contract target, not a claim that the service already exists. The current implementation remains the “Today” pipeline above; issue state is tracked in [roadmap.md](roadmap.md) and GitHub.
+
+| Boundary | Contract | May depend on | Must not do |
+|---|---|---|---|
+| Voice/session adapter (implemented) | Own the WebSocket, ADK Live session, provider transport, event translation and single output writer | FastAPI, pinned Google ADK/GenAI adapters, typed protocol modules | Persist the provider session, expose the API key, or turn ordinary model text/transcripts into actions |
+| Tool implementations and action sink (implemented) | Validate model arguments against closed types or current-session allow-lists; queue bounded action requests | Session state, app configuration, the checked sink | Trust model-provided URLs/selectors/commands, bypass the browser check, or perform visitor-only consent actions |
+| Tool registry/gateway (proposed by #45; implementation under review in PR #105) | Describe registered tools with input/output schemas and policy metadata; validate call shape and normalize results | Checked tool functions and schema/adapter code | Grant permissions, replace the server/browser checks, or create an independent execution router |
+| Policy/consent boundary (proposed by #47–#48) | Return a scoped allow / require-visitor-confirmation / deny result and record the evidence needed for audit | Tool metadata, explicit visitor consent state, action identity and verification outcomes | Treat model intent as consent, broaden a permission beyond the specific action, or make unrelated conversation decisions |
+| Task engine (proposed by #49) | Track task id, lifecycle state, progress, cancellation, retry/timeout and terminal result; return typed events to the live session | Worker adapters, bounded task storage and the existing event/output path | Block the realtime voice loop, create a second event bus, or execute actions outside the same checks |
+| Memory service (proposed by #46) | Expose explicit remember/recall/update/forget/resurface/context operations with provenance and sensitivity metadata | An explicitly configured store and a caller that supplies the session/user scope | Write implicitly, retain raw multimodal input by default, or autonomously trigger user-facing actions |
+| Research service (proposed by #53) | Return retrieved, reranked and validated evidence with source, provenance and confidence/applicability metadata | Provider-neutral retrieval adapters and source validators | Present model-generated text as retrieved evidence, hide provenance, or execute tools/actions |
+| Perception boundary (implemented for shared-frame metadata; expanded recognition is separately scoped) | Accept only visitor-started, session-bound observations; keep current observations ephemeral and bounded | Existing capture consent, bridge and session state | Start capture itself, persist raw frames, or treat frame contents as instructions |
+| Extension boundary (proposed by #55) | Load declared skills/plugins/MCP capabilities with schemas and lifecycle/error isolation | Tool registry and the same policy/check path as built-in tools | Install a second orchestrator, bypass authorization, or let extension failure crash the live session |
+
+### Dependency direction
+
+The intended dependency direction is inward:
+
+1. **Pure contracts and rules** define identifiers, schemas, lifecycle transitions, limits and result types. They should be deterministic and independently testable, with no network, browser, FastAPI or provider dependency.
+2. **Adapters** translate external inputs/outputs: browser messages, WebSocket/ADK events, persistence, providers, workers and extension protocols. Adapters depend on contracts; contracts do not import adapters.
+3. **Services** compose contracts and adapters behind narrow operations. They return typed results/events and do not recursively call a conversation authority or decide the next spoken response.
+4. **The existing runtime path** delivers model proposals through checked server tools and the browser's independent validation. Visitor-only actions remain visitor-only. The host/native layer performs its own allow-list and approval checks.
+
+No new capability may create a parallel model channel, action route, task state machine beside guided-task rules, or event bus (D-19). A service can be centralized as a reusable implementation of one bounded check; it is not thereby a runtime orchestrator. In particular, #44's wording about a single orchestration authority conflicts with D-22 as currently recorded. It must not be implemented as a central runtime decision-maker unless the owner changes that decision through a new, explicit decision record.
+
+### Cross-cutting result and failure contract
+
+Service boundaries should return structured outcomes rather than ambiguous strings or exceptions used as control flow. At minimum, callers need to distinguish:
+- successful data from a rejected/failed operation;
+- validation failure from permission denial;
+- visitor confirmation required from authorization granted;
+- execution completion from independently verified completion;
+- retrieved evidence and its provenance from generated explanation;
+- cancellation, timeout and retryable failure from terminal failure.
+
+The richer evidence/provenance contract in #57 may extend the basic registry result envelope, but must not erase the original tool result or imply verification that did not occur. Failure to verify a side effect is not success.
+
+### Privacy and lifecycle invariants
+
+- Session-only voice/perception state is discarded at session end (D-04, D-21).
+- Camera/screen frames are visitor-started, visibly shared, bounded and not retained by Otto (D-21).
+- Cross-session task continuity is a narrow host-scoped record, not general visitor memory (D-20, D-26).
+- Any future memory persistence needs explicit sensitivity, provenance, retention, deletion and user-control rules before implementation.
+- Research and extension outputs remain untrusted data. They do not widen tool permissions or become actions without the normal checked path.
+
+For the origin and licence status of implemented assets and architectural references, see [source-attribution.md](source-attribution.md).

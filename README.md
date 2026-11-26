@@ -531,4 +531,4 @@ Otto chirps: six tiny cues synthesised with Web Audio, no audio files (`web/src/
 
 ## Where it came from
 
-The voice guide, the panel and the robot wiring come from the NASA Earth Jukebox (2026 NASA Space Apps Challenge). The voice guide was first ported from the FinAssist voice assistant. The jukebox-only parts (player, sound map, data sets, weather and Planetary Computer tools) are left out.
+The voice guide, the panel and the robot wiring come from the NASA Earth Jukebox (2026 NASA Space Apps Challenge). The voice guide was first ported from the FinAssist voice assistant. The jukebox-only parts (player, sound map, data sets, weather and Planetary Computer tools) are left out. The [architecture and source-attribution register](docs/source-attribution.md) distinguishes these implemented origins from reference-only patterns and records the licence checks still required.
