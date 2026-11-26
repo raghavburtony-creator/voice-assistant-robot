@@ -352,10 +352,14 @@ class Bridge:
                         sensitivity="sensitive" if proposal.get("sensitive") is True else "normal",
                         explicit=True,
                     )
-                    self.live.state["memory_context"] = memory_service.get_context(
-                        identity.scope, identity.identity,
-                    )
                     status = "saved"
+                    try:
+                        self.live.state["memory_context"] = memory_service.get_context(
+                            identity.scope, identity.identity,
+                        )
+                    except Exception as exc:
+                        # A successful durable write must not be reported as failed if a context refresh fails.
+                        logger.warning("Visitor-confirmed memory context refresh failed: %s", type(exc).__name__)
                 except Exception as exc:
                     logger.warning("Visitor-confirmed memory write failed: %s", type(exc).__name__)
                     status = "failed"

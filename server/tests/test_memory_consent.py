@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from google.adk.sessions.state import State
+
 from app.voice import bridge as bridge_module
 from app.voice.bridge import Bridge
 from app.voice.continuity import ContinuityContext
@@ -18,31 +20,13 @@ from app.voice.tool_registry import TOOL_METADATA
 from app.voice import tools
 
 
-class ADKStateLike:
-    """The pinned ADK State exposes dict accessors but is not a dict subclass."""
-
-    def __init__(self):
-        self.values = {}
-
-    def get(self, key, default=None):
-        return self.values.get(key, default)
-
-    def __getitem__(self, key):
-        return self.values[key]
-
-    def __setitem__(self, key, value):
-        self.values[key] = value
-
-    def __contains__(self, key):
-        return key in self.values
-
-
 def test_adk_state_object_can_stage_pending_proposals_and_consume_them_once():
-    state = ADKStateLike()
+    state = State({}, {})
     assert not isinstance(state, dict)
     proposal = stage_memory_proposal(state, "Prefers concise answers", "semantic", now=100)
     assert proposal is not None
     assert pending_memory_proposal(state, proposal["request_id"], now=101) == proposal
+    assert state.has_delta()
 
     status, consumed = consume_memory_proposal(state, proposal["request_id"], True, now=102)
 
@@ -52,7 +36,7 @@ def test_adk_state_object_can_stage_pending_proposals_and_consume_them_once():
 
 
 def test_adk_state_object_can_reject_and_discard_a_proposal():
-    state = ADKStateLike()
+    state = State({}, {})
     proposal = stage_memory_proposal(state, "Temporary note", "episodic", now=100)
     assert proposal is not None
     discard_memory_proposal(state, proposal["request_id"])
@@ -129,7 +113,7 @@ def test_invalid_or_untrusted_confirmation_is_ignored():
 
 
 def test_memory_policy_accepts_adk_state_like_objects_and_denies_missing_opt_in():
-    state = ADKStateLike()
+    state = State({}, {})
     context = SimpleNamespace(session=SimpleNamespace(id="session"), state=state)
     assert PermissionPolicy().evaluate("memory_opt_in", context)[0] == "deny"
     state["memory_enabled"] = True
@@ -172,7 +156,7 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
     try:
         bridge = Bridge(object(), live, store=ContinuityStub())
         tool_context = SimpleNamespace(
-            state=bridge.live.state,
+            state=State(bridge.live.state, {}),
             session=SimpleNamespace(id=live.session_id),
         )
         staged = tools.propose_memory("Prefers concise answers", "semantic", tool_context)
