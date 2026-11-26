@@ -23,7 +23,7 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
 from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_CONTEXT_BYTES, MAX_FRAME_BYTES, Bridge, context_bytes
 from app.voice.runtime import RUNTIME_TITLE_CHARS, runtime_title
 from app.voice.sink import sink
-from app.voice.tool_registry import TOOL_METADATA, ToolRegistry
+from app.voice.tool_registry import TOOL_FAMILIES, TOOL_METADATA, ToolRegistry
 
 WEB_CONFIG = Path(__file__).resolve().parents[2] / "web" / "src" / "otto.config.ts"
 
@@ -919,6 +919,7 @@ def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
     assert {item.name for item in registry.metadata()} == registry.names()
     assert {tool.name for tool in tools.TOOLS} == registry.names()
     assert len(TOOL_METADATA) == len(registry.names())
+    assert TOOL_FAMILIES == {"browser", "computer", "files", "screen", "camera", "web_research", "memory", "tasks"}
     for name in registry.names():
         entry = registry[name]
         assert entry.input_schema["type"] == "object"
