@@ -57,12 +57,13 @@ Q-03 is answered by D-26. The implementation starts with a narrow cross-session 
 
 ## E4 Sign-language support: first slices
 
-D-29 establishes that sign recognition cannot reuse the D-21 1 FPS still-frame feed as a continuous sign recognizer. Recognition must be a bounded, visitor-started temporal adapter whose results enter the existing conversation as text; the visitor can correct or discard uncertain results.
+D-29 establishes that sign recognition cannot reuse the D-21 1 FPS still-frame feed as a continuous sign recognizer. Recognition must be a bounded, visitor-started temporal adapter whose results enter the existing conversation as text; the visitor can correct or discard uncertain results. SIG-03 (#123) scopes its first prototype to British Sign Language isolated signs, recorded by the owner. That is a prototype scope, not an answer to Q-09: the language, pilot task and community validation stay open there, and no general release is authorized. It builds an offline training foundation from consented examples.
 
 | Slice | Outcome | Blocked by | Decisions |
 |---|---|---|---|
 | **SIG-01** ([#90](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/90)) | Investigate the existing capture/session boundary and establish the provider-neutral recognition contract | none | D-06, D-19, D-21, D-29 |
 | **SIG-02** ([#92](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/92)) | Add typed recognition updates and a deterministic test adapter, then hand confirmed text into the existing conversation path; no live model or camera capture | SIG-01 | D-02, D-06, D-19, D-22, D-29 |
+| **SIG-03** ([#123](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/123)) | Build the offline personal BSL landmark dataset and temporal-model training/export pipeline; no production camera or recognizer integration | owner-recorded examples; no external data dependency | D-13, D-19, D-21, D-29 |
 | **Q-09** ([#91](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91)) | Confirm the first sign language, community-validated pilot task and dataset/collection rights | community consultation | D-29 |
 
 ## E5 Environmental intelligence: first slice

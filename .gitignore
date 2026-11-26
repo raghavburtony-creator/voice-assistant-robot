@@ -25,3 +25,10 @@ web/src-tauri/gen/
 
 # Runtime data (the continuity store)
 server/data/
+
+# Local sign-language ML data and generated model artifacts
+ml/sign/data/
+ml/sign/runs/
+ml/sign/checkpoints/
+
+*.egg-info/

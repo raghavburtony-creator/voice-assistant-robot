@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "otto-sign-ml"
+version = "0.1.0"
+description = "Offline BSL sign collection and temporal-recognition training tools for Otto"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "numpy>=1.26,<2",
+  "torch>=2.5,<3",  # torch.onnx.export(dynamo=...) needs 2.5
+]
+
+[project.optional-dependencies]
+capture = [
+  "mediapipe>=0.10.21,<0.11",
+  "opencv-python>=4.10,<5",
+]
+export = [
+  "onnx>=1.17,<2",
+]
+test = [
+  "pytest>=8,<10",
+]
+
+[project.scripts]
+otto-sign-record = "otto_sign.record:main"
+otto-sign-train = "otto_sign.train:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
