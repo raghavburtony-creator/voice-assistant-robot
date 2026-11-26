@@ -11,7 +11,9 @@ import logging
 import re
 from typing import Literal, get_args
 
-from google.adk.tools import FunctionTool, ToolContext
+from google.adk.tools import ToolContext
+
+from app.voice.tool_registry import ToolRegistry
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
@@ -347,5 +349,21 @@ def notice_environmental_observation(
     return {"accepted": True, "event": "attention", "topic": proposal.proposal.topic, "note": "A minor attention proposal was sent to Otto's existing awareness system. No action was taken."}
 
 
-TOOLS = [FunctionTool(fn) for fn in (navigate_to, explain_page, get_screen_context, get_perception_context, get_desktop_context, run_command, show_target, start_guided_task, move_guided_task, move_desktop, desktop_action, show_card, notice_environmental_observation)]
-TOOL_NAMES = frozenset(tool.name for tool in TOOLS)
+TOOL_FUNCTIONS = (
+    navigate_to,
+    explain_page,
+    get_screen_context,
+    get_perception_context,
+    get_desktop_context,
+    run_command,
+    show_target,
+    start_guided_task,
+    move_guided_task,
+    move_desktop,
+    desktop_action,
+    show_card,
+    notice_environmental_observation,
+)
+REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
+TOOLS = REGISTRY.adk_tools()
+TOOL_NAMES = REGISTRY.names()

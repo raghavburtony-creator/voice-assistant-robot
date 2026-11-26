@@ -129,13 +129,15 @@ Copy `web/src/otto/`, `web/src/otto.config.ts`, `web/public/otto/` and `server/a
 
 ### Adding a tool
 
-1. Write the function in `server/app/voice/tools.py` and add it to `TOOLS`. Check every argument: the model's output is untrusted.
+1. Write the checked function in `server/app/voice/tools.py` and add it to `TOOL_FUNCTIONS`. Check every argument: the model's output is untrusted. Add matching metadata in `server/app/voice/tool_registry.py` (family, description, JSON schemas derived from annotations, risk, permission, timeout, async and verification flags); the registry rejects missing or duplicate entries.
 2. If it changes the page, return an action through `_send(...)`, for example `{"action": "command", "name": "open_cart"}`.
 3. Allow that action in the browser: add the command to `COMMANDS` in both config files (and to the `Command` type in `tools.py`), or, for a new kind of action, add a variant to `AssistantAction` in `web/src/otto/messages.ts`, with its check in `toAssistantAction` and any new field in `messageSchema` (`move_guided_task` and its `task_move` action are a worked example).
 4. Handle it in your `onAction`, and describe it so the panel's "Otto did" list says what happened: in `COMMAND_LABELS` for a command, or in `describeAction` (`useVoiceAssistant.ts`) for a new kind of action.
 5. Tell Otto when to use it in `system_instruction()`.
 
 A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
+
+`ToolRegistry` is the single source for the ADK tool adapters. Its gateway validates arguments against the registered annotations before calling the existing checked function and returns `{ status: 'success' | 'error', data: ... }`. The metadata records policy and execution requirements; it does not grant permissions or replace the server/browser/native checks (D-02, D-22). Current registered tools cover browser, computer, screen, camera and tasks. Files, web/research and memory remain unregistered until those capabilities have real implementations and explicit safety boundaries.
 
 ## How it works
 
@@ -529,4 +531,4 @@ Otto chirps: six tiny cues synthesised with Web Audio, no audio files (`web/src/
 
 ## Where it came from
 
-The voice guide, the panel and the robot wiring come from the NASA Earth Jukebox (2026 NASA Space Apps Challenge). The voice guide was first ported from the FinAssist voice assistant. The jukebox-only parts (player, sound map, data sets, weather and Planetary Computer tools) are left out.
+The voice guide, the panel and the robot wiring come from the NASA Earth Jukebox (2026 NASA Space Apps Challenge). The voice guide was first ported from the FinAssist voice assistant. The jukebox-only parts (player, sound map, data sets, weather and Planetary Computer tools) are left out. The [architecture and source-attribution register](docs/source-attribution.md) distinguishes these implemented origins from reference-only patterns and records the licence checks still required.
