@@ -82,16 +82,38 @@ enum DesktopAction {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ConsentCertificate {
+    certificate_id: String,
+    request_id: String,
+    action: DesktopAction,
+    decision: &'static str,
+    method: &'static str,
+    issued_at_unix_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DesktopActionResult {
     action: DesktopAction,
     ok: bool,
     status: &'static str,
     verification: &'static str,
     message: String,
+    consent_certificate: Option<ConsentCertificate>,
 }
 
 fn action_result(action: DesktopAction, ok: bool, status: &'static str, verification: &'static str, message: String) -> DesktopActionResult {
-    DesktopActionResult { action, ok, status, verification, message }
+    DesktopActionResult { action, ok, status, verification, message, consent_certificate: None }
+}
+
+fn consent_certificate(request_id: String, action: DesktopAction, decision: &'static str) -> ConsentCertificate {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let issued_at_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default()
+        .as_millis().min(u64::MAX as u128) as u64;
+    ConsentCertificate {
+        certificate_id: format!("{request_id}-{issued_at_unix_ms}"),
+        request_id, action, decision, method: "native_os_dialog", issued_at_unix_ms,
+    }
 }
 
 fn desktop_action_label(action: DesktopAction) -> &'static str {
@@ -122,7 +144,10 @@ fn desktop_status() -> DesktopStatus {
 /// Execute one allow-listed desktop action after the web UI has obtained explicit
 /// approval for that exact request. The native enum is the final argument boundary.
 #[tauri::command]
-async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionResult {
+async fn desktop_action(app: AppHandle, action: DesktopAction, request_id: String) -> DesktopActionResult {
+    if request_id.len() != 32 || !request_id.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return action_result(action, false, "failed", "unavailable", "The desktop request identifier is invalid.".into());
+    }
     let window = match app.get_webview_window("main") {
         Some(window) => window,
         None => return action_result(action, false, "failed", "unavailable", "Otto's desktop window is unavailable.".into()),
@@ -137,13 +162,19 @@ async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionR
         .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Cancel".into()))
         .blocking_show();
     if !approved {
-        return action_result(action, false, "denied", "not_verified", "The visitor declined this desktop action. Nothing was executed.".into());
+        let mut result = action_result(action, false, "denied", "not_verified", "The visitor declined this desktop action. Nothing was executed.".into());
+        result.consent_certificate = Some(consent_certificate(request_id, action, "denied"));
+        return result;
     }
 
-    match action {
+    // Timestamp the receipt at the moment the visitor approves, before execution.
+    let approved_certificate = consent_certificate(request_id.clone(), action, "approved");
+    let mut result = match action {
         DesktopAction::MinimizeOtto => {
             if let Err(error) = window.minimize() {
-                return action_result(action, false, "failed", "unavailable", format!("Otto could not be minimized: {error}"));
+                let mut result = action_result(action, false, "failed", "unavailable", format!("Otto could not be minimized: {error}"));
+                result.consent_certificate = Some(approved_certificate.clone());
+                return result;
             }
             match window.is_minimized() {
                 Ok(true) => action_result(action, true, "completed", "verified", "Otto is minimized.".into()),
@@ -154,7 +185,9 @@ async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionR
         DesktopAction::RestoreOtto => {
             let result = window.unminimize().and_then(|_| window.show()).and_then(|_| window.set_focus());
             if let Err(error) = result {
-                return action_result(action, false, "failed", "unavailable", format!("Otto could not be restored: {error}"));
+                let mut result = action_result(action, false, "failed", "unavailable", format!("Otto could not be restored: {error}"));
+                result.consent_certificate = Some(approved_certificate.clone());
+                return result;
             }
             match (window.is_minimized(), window.is_visible()) {
                 (Ok(false), Ok(true)) => action_result(action, true, "completed", "verified", "Otto is visible and restored.".into()),
@@ -181,7 +214,9 @@ async fn desktop_action(app: AppHandle, action: DesktopAction) -> DesktopActionR
                 Err(error) => action_result(action, false, "failed", "unavailable", error),
             }
         }
-    }
+    };
+    result.consent_certificate = Some(approved_certificate);
+    result
 }
 
 fn launch_allowlisted_application(action: DesktopAction) -> Result<&'static str, String> {
@@ -416,7 +451,22 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{desktop_action_label, resolve_destination, DesktopAction};
+    use super::{consent_certificate, desktop_action_label, resolve_destination, DesktopAction};
+
+    #[test]
+    fn native_consent_receipt_binds_the_request_action_and_decision() {
+        let receipt = consent_certificate(
+            "0123456789abcdef0123456789abcdef".into(),
+            DesktopAction::LaunchCalculator,
+            "approved",
+        );
+        assert_eq!(receipt.request_id, "0123456789abcdef0123456789abcdef");
+        assert!(receipt.certificate_id.starts_with(&receipt.request_id));
+        assert!(matches!(receipt.action, DesktopAction::LaunchCalculator));
+        assert_eq!(receipt.decision, "approved");
+        assert_eq!(receipt.method, "native_os_dialog");
+        assert!(receipt.issued_at_unix_ms > 0);
+    }
 
     #[test]
     fn every_native_action_has_a_specific_confirmation_label() {

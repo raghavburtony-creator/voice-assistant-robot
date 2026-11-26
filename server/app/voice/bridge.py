@@ -29,6 +29,7 @@ from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
+from app.voice.policy import POLICY_ENGINE
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +387,8 @@ class Bridge:
                 await self.live.audio_end()
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
+            elif kind == "desktop_result":
+                POLICY_ENGINE.record_host_result(self.live.state, event)
             elif kind == "stop":
                 return
 

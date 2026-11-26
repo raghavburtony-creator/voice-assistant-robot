@@ -268,6 +268,10 @@ class ToolRegistry:
                     policy=decision.as_dict(),
                 )
 
+            state = getattr(context, "state", None)
+            previous_policy = state.get("_active_policy_decision") if isinstance(state, dict) else None
+            if isinstance(state, dict):
+                state["_active_policy_decision"] = decision.as_dict()
             try:
                 raw_result = function(*bound.args, **bound.kwargs)
             except Exception as exc:
@@ -279,6 +283,12 @@ class ToolRegistry:
                     error={"code": "tool_execution_error", "message": "The tool could not complete its operation."},
                     policy=decision.as_dict(),
                 )
+            finally:
+                if isinstance(state, dict):
+                    if previous_policy is None:
+                        state.pop("_active_policy_decision", None)
+                    else:
+                        state["_active_policy_decision"] = previous_policy
 
             result = raw_result if isinstance(raw_result, dict) else {"value": raw_result}
             failed = (

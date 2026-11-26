@@ -19,7 +19,7 @@ import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
 import { toEnvironmentalAttention } from './awareness/environmental'
 import type { OttoEvent } from './awareness/events'
-import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
+import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard, type ReportDesktopActionResult } from './messages'
 import { isRuntimeId } from './runtimeId'
 
 export type { AssistantAction } from './messages'
@@ -79,7 +79,7 @@ export const NO_RETRY_CODES = ['not_configured', 'bad_start']
 type Options = {
   language: string
   page: string
-  onAction: (action: AssistantAction) => void
+  onAction: (action: AssistantAction, reportDesktopResult: ReportDesktopActionResult) => void
   /** For tests and the lab: make the socket (a stand-in for the server). Default: a real WebSocket. */
   createSocket?: (url: string) => WebSocket
   /** Privacy-safe voice events (speech start and end, interruption accepted or rejected and why). Levels and reasons, never audio. */
@@ -185,6 +185,13 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const openEntry = useRef<{ role: TranscriptEntry['role']; id: number } | null>(null)
   const nextId = useRef(0)
   const actionRef = useRef(onAction)
+  const reportDesktopResult = useCallback<ReportDesktopActionResult>(report => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN) return false
+    ws.send(JSON.stringify({ type: 'desktop_result', ...report }))
+    return true
+  }, [])
+
   const diagnosticRef = useRef(onDiagnostic)
   const avatarRef = useRef(onAvatar)
   const environmentalRef = useRef(onEnvironmental)
@@ -525,7 +532,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)
               if (action.action === 'card') addCard(action.card)
-              actionRef.current(action)
+              actionRef.current(action, reportDesktopResult)
             }
           }
           break
@@ -541,7 +548,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
           break
       }
     }
-  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet])
+  }, [language, teardown, fail, addTranscript, addCard, forwardContext, record, startMic, armQuiet, reportDesktopResult])
 
   /**
    * Starts a conversation, from a click. With the audio code loaded (the usual case) everything happens inside the click.
@@ -617,8 +624,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     const latest = records.current[records.current.length - 1]
     if (!latest?.inverse) return
     record(`Undid: ${latest.label}`, null)
-    actionRef.current(latest.inverse)
-  }, [record])
+    actionRef.current(latest.inverse, reportDesktopResult)
+  }, [record, reportDesktopResult])
 
   /** The open mic's Mute microphone. Unmuting starts its 60 seconds again. */
   const toggleMute = useCallback(() => {
