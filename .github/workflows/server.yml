@@ -1,0 +1,24 @@
+name: Server
+
+# The server suite (pytest) also checks the docs numbering, the decisions index and the label/milestone files
+# (server/tests/test_docs.py), and the architecture and integration tests (TEST-01), so it runs on every PR and
+# on main, not only when server/ changes. It is quick and needs no Gemini key.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: server } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13', cache: pip, cache-dependency-path: server/requirements.txt }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
