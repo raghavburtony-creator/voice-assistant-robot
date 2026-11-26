@@ -67,21 +67,19 @@ export default function App() {
         data: { action: action.desktop_action },
       })
       void executeDesktopAction(action.desktop_action, action.request_id).then(result => {
-        if (result.consentCertificate) {
-          reportDesktopResult({
-            request_id: action.request_id,
-            action: action.desktop_action,
-            consent_certificate: {
-              certificate_id: result.consentCertificate.certificateId,
-              request_id: result.consentCertificate.requestId,
-              action: result.consentCertificate.action,
-              decision: result.consentCertificate.decision,
-              method: result.consentCertificate.method,
-              issued_at_unix_ms: result.consentCertificate.issuedAtUnixMs,
-            },
-            result: { ok: result.ok, status: result.status, verification: result.verification },
-          })
-        }
+        reportDesktopResult({
+          request_id: action.request_id,
+          action: action.desktop_action,
+          consent_certificate: result.consentCertificate ? {
+            certificate_id: result.consentCertificate.certificateId,
+            request_id: result.consentCertificate.requestId,
+            action: result.consentCertificate.action,
+            decision: result.consentCertificate.decision,
+            method: result.consentCertificate.method,
+            issued_at_unix_ms: result.consentCertificate.issuedAtUnixMs,
+          } : null,
+          result: { ok: result.ok, status: result.status, verification: result.verification },
+        })
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
       }).catch(() => desktopTask.fail(`Otto could not ${description}.`))

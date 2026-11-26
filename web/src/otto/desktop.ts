@@ -52,7 +52,7 @@ export type DesktopConsentCertificateReport = {
 export type DesktopActionReport = {
   request_id: string
   action: DesktopAction
-  consent_certificate: DesktopConsentCertificateReport
+  consent_certificate: DesktopConsentCertificateReport | null
   result: Pick<DesktopActionResult, 'ok' | 'status' | 'verification'>
 }
 
