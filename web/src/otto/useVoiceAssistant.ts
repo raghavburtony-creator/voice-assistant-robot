@@ -19,7 +19,7 @@ import { findGuideTarget, findGuideTask } from './guidance/targets'
 import { parseAvatarEvent, type AvatarEvent } from './awareness/avatar'
 import { toEnvironmentalAttention } from './awareness/environmental'
 import type { OttoEvent } from './awareness/events'
-import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard } from './messages'
+import { parseServerMessage, toAssistantAction, type AssistantAction, type AssistantCard, type ReportDesktopActionResult } from './messages'
 import { isRuntimeId } from './runtimeId'
 
 export type { AssistantAction } from './messages'
@@ -79,7 +79,7 @@ export const NO_RETRY_CODES = ['not_configured', 'bad_start']
 type Options = {
   language: string
   page: string
-  onAction: (action: AssistantAction) => void
+  onAction: (action: AssistantAction, reportDesktopResult: ReportDesktopActionResult) => void
   /** For tests and the lab: make the socket (a stand-in for the server). Default: a real WebSocket. */
   createSocket?: (url: string) => WebSocket
   /** Privacy-safe voice events (speech start and end, interruption accepted or rejected and why). Levels and reasons, never audio. */
@@ -525,7 +525,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
               const { label, inverse } = describeAction(action, pageRef.current)
               record(label, inverse)
               if (action.action === 'card') addCard(action.card)
-              actionRef.current(action)
+              actionRef.current(action, reportDesktopResult)
             }
           }
           break
@@ -676,6 +676,13 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   }, [addTranscript])
 
   /** Tells the server a share started (camera or screen) or stopped (null). Only while a conversation is open (D-21). */
+  const reportDesktopResult = useCallback<ReportDesktopActionResult>(report => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN) return false
+    ws.send(JSON.stringify({ type: 'desktop_result', ...report }))
+    return true
+  }, [])
+
   const sendCapture = useCallback((source: CaptureSource | null) => {
     const ws = socket.current
     if (ws?.readyState !== WebSocket.OPEN) return false
@@ -717,6 +724,6 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     mouth, speech, interrupt, interruptions,
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, reportDesktopResult, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }
