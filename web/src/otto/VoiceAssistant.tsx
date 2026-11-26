@@ -81,7 +81,7 @@ function VoiceMemoryProposal({ proposal, onResolve }: {
   </article>
 }
 
-const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[]const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
+const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
 
 export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void }) {
   const {
