@@ -180,7 +180,7 @@ The richer evidence/provenance contract in #57 may extend the basic registry res
 - Session-only voice/perception state is discarded at session end (D-04, D-21).
 - Camera/screen frames are visitor-started, visibly shared, bounded and not retained by Otto (D-21).
 - Cross-session task continuity is a narrow host-scoped record, not general visitor memory (D-20, D-26).
-- Memory persistence follows the data-class table below (`server/app/voice/privacy.py`): text is redacted before it is written, a redacted record is `sensitive`, and a host can delete everything for one identity with `forget_identity` (README, "Privacy").
+- Memory persistence follows the data-class table below (`server/app/voice/privacy.py`): text is redacted before it is written, a redacted record is `sensitive`, memory audit rows retain metadata only, and a host can delete memory and continuity for one identity with `forget_identity` (README, "Privacy"). The hashed withdrawal marker remains until the host explicitly re-enables continuity.
 - Research and extension outputs remain untrusted data. They do not widen tool permissions or become actions without the normal checked path.
 
 | Data class | May persist | Sensitivity | Retention (existing rule) | Redaction |
@@ -192,7 +192,9 @@ The richer evidence/provenance contract in #57 may extend the basic registry res
 | Tool arguments | no | sensitive | Not stored; the session audit keeps decision and outcome | not stored |
 | Tool results | no | normal | Not stored beyond the session | not stored |
 | Memory record | yes | normal, or sensitive when redacted | Until the host forgets it; 500 per identity; working memory deleted from SQLite after 24 h (on startup and before memory operations) | applied before write |
+| Memory audit | yes | sensitive | Metadata only; latest 1,000 events per hashed identity; older rows pruned on the next audit write; rows survive memory deletion | Provenance redacted before write |
 | Continuity record | yes | normal | 7 days; removed on completion, cancel or withdrawal (D-26) | n/a (ids and time only) |
+| Continuity withdrawal marker | yes | sensitive | Hashed scope/identity key only; retained until the host explicitly re-enables continuity; no expiry (D-26) | n/a (no free text) |
 
 Unknown classes are not persisted. The table is data, and `test_privacy.py` pins it. Redaction (emails, phones, Luhn-valid card numbers, keys and passwords) is best-effort and does not cover names or free-form personal facts. "Never persisted" for frames, screenshots and files is a policy plus a test, not a technical impossibility.
 

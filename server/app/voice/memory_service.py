@@ -25,6 +25,7 @@ Sensitivity = Literal["normal", "sensitive"]
 MAX_CONTENT_CHARS = 2_000
 MAX_PROVENANCE_CHARS = 240
 MAX_RECORDS_PER_IDENTITY = 500
+MAX_AUDIT_EVENTS_PER_IDENTITY = 1_000
 MAX_CONTEXT_CHARS = 1_200
 DEFAULT_LIMIT = 20
 WORKING_RETENTION_SECONDS = 24 * 60 * 60
@@ -163,8 +164,8 @@ class SQLiteMemoryService:
         )
         db.execute(
             "DELETE FROM memory_audit WHERE identity_key = ? AND audit_id NOT IN "
-            "(SELECT audit_id FROM memory_audit WHERE identity_key = ? ORDER BY created_at DESC LIMIT 1000)",
-            (key, key),
+            "(SELECT audit_id FROM memory_audit WHERE identity_key = ? ORDER BY created_at DESC LIMIT ?)",
+            (key, key, MAX_AUDIT_EVENTS_PER_IDENTITY),
         )
 
     @staticmethod

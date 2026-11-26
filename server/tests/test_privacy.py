@@ -1,7 +1,8 @@
-"""PRIV-01 slice 1: the data-class policy, pattern redaction, memory redaction, the log scrub and forget_identity."""
+"""PRIV-01: data-class policy, redaction, retention, log scrubbing and identity forgetting."""
 from __future__ import annotations
 
 import ast
+import hashlib
 import sqlite3
 import time
 from pathlib import Path
@@ -11,7 +12,7 @@ import pytest
 from app.voice import route
 from app.voice.continuity_store import RETENTION_SECONDS, ContinuityRecord, SQLiteContinuityStore
 from app.voice.forget import forget_identity
-from app.voice.memory_service import WORKING_RETENTION_SECONDS, SQLiteMemoryService
+from app.voice.memory_service import MAX_AUDIT_EVENTS_PER_IDENTITY, WORKING_RETENTION_SECONDS, SQLiteMemoryService
 from app.voice.perception import PerceptionGateway
 from app.voice.privacy import CATEGORIES, DATA_CLASSES, REDACTION_APPLIED, luhn_valid, persist_allowed, redact_text
 
@@ -30,11 +31,13 @@ def test_unknown_or_malformed_class_fails_closed():
         assert persist_allowed(value) is False
 
 
-def test_only_the_two_stores_may_persist():
-    assert {n for n, p in DATA_CLASSES.items() if p.may_persist} == {"memory_record", "continuity_record"}
+def test_only_the_four_declared_store_classes_may_persist():
+    assert {n for n, p in DATA_CLASSES.items() if p.may_persist} == {
+        "memory_record", "memory_audit", "continuity_record", "continuity_withdrawal",
+    }
     assert set(DATA_CLASSES) == {
         "voice_transcript", "screenshot", "camera_frame", "file", "tool_arguments", "tool_results",
-        "memory_record", "continuity_record",
+        "memory_record", "memory_audit", "continuity_record", "continuity_withdrawal",
     }
 
 
@@ -43,6 +46,14 @@ def test_retention_text_states_the_existing_rules():
     assert f"{RETENTION_SECONDS // 86400} days" in DATA_CLASSES["continuity_record"].retention
     assert "deleted from SQLite" in DATA_CLASSES["memory_record"].retention
     assert DATA_CLASSES["memory_record"].redaction == REDACTION_APPLIED
+    audit = DATA_CLASSES["memory_audit"]
+    assert str(MAX_AUDIT_EVENTS_PER_IDENTITY) in audit.retention
+    assert "survive memory deletion" in audit.retention
+    assert audit.sensitivity == "sensitive" and audit.redaction == REDACTION_APPLIED
+    withdrawal = DATA_CLASSES["continuity_withdrawal"]
+    assert "until the host explicitly re-enables" in withdrawal.retention
+    assert "No expiry" in withdrawal.retention
+    assert withdrawal.sensitivity == "sensitive" and "no free text" in withdrawal.redaction
 
 
 def test_policy_states_the_truth_about_redaction():
@@ -52,8 +63,49 @@ def test_policy_states_the_truth_about_redaction():
         assert "never stored" in policy.redaction and policy.redaction != REDACTION_APPLIED, name
         assert "not stored" in policy.retention.lower() or "never kept" in policy.retention.lower() or "stores no" in policy.retention.lower(), name
     claiming = {n for n, p in DATA_CLASSES.items() if p.redaction == REDACTION_APPLIED}
-    assert claiming == {"memory_record"}
+    assert claiming == {"memory_record", "memory_audit"}
     assert "no free text" in DATA_CLASSES["continuity_record"].redaction
+    assert "no free text" in DATA_CLASSES["continuity_withdrawal"].redaction
+
+
+def test_memory_audit_prunes_to_the_latest_bounded_metadata_rows(tmp_path):
+    memory = SQLiteMemoryService(tmp_path / "memory.sqlite3")
+    identity_key = hashlib.sha256(("demo" + chr(0) + "visitor").encode("utf-8")).hexdigest()
+
+    with memory._connection() as db:
+        for timestamp in range(MAX_AUDIT_EVENTS_PER_IDENTITY + 1):
+            memory._audit(db, identity_key, f"record-{timestamp}", "remember", "[email]", timestamp)
+
+    with sqlite3.connect(memory.path) as db:
+        rows = db.execute(
+            "SELECT record_id, provenance, created_at FROM memory_audit WHERE identity_key = ?",
+            (identity_key,),
+        ).fetchall()
+
+    assert len(rows) == MAX_AUDIT_EVENTS_PER_IDENTITY
+    assert min(row[2] for row in rows) == 1
+    assert max(row[2] for row in rows) == MAX_AUDIT_EVENTS_PER_IDENTITY
+    assert all(row[1] == "[email]" for row in rows)
+
+
+def test_continuity_withdrawal_marker_is_hash_only_and_has_no_expiry(tmp_path):
+    store = SQLiteContinuityStore(tmp_path / "continuity.sqlite3")
+    expected_key = hashlib.sha256(("demo" + chr(0) + "visitor").encode("utf-8")).hexdigest()
+
+    store.disable("demo", "visitor")
+    # The marker has no timestamp or identity in its payload, so it cannot age out.
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT record_key FROM continuity_disabled").fetchall() == [(expected_key,)]
+
+    # Even a save years later remains suppressed until the host explicitly re-enables continuity.
+    store.save(ContinuityRecord("demo", "tour", "step1", int(time.time())), "visitor")
+    assert store.load("demo", "visitor", now=int(time.time()) + 10 * RETENTION_SECONDS) is None
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT record_key FROM continuity_disabled").fetchall() == [(expected_key,)]
+
+    store.enable("demo", "visitor")
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT record_key FROM continuity_disabled").fetchall() == []
 
 
 # ---- redaction: each category, positive and negative -----------------------------------------
