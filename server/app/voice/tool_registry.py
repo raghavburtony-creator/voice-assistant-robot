@@ -17,7 +17,7 @@ from typing import Any, Callable, get_type_hints
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
 
-from app.voice.policy import POLICY_ENGINE
+from app.voice.policy import POLICY_ENGINE, clear_state_key, supports_state
 
 
 logger = logging.getLogger(__name__)
@@ -271,8 +271,8 @@ class ToolRegistry:
                 )
 
             state = getattr(context, "state", None)
-            previous_policy = state.get("_active_policy_decision") if isinstance(state, dict) else None
-            if isinstance(state, dict):
+            previous_policy = state.get("_active_policy_decision") if supports_state(state) else None
+            if supports_state(state):
                 state["_active_policy_decision"] = decision.as_dict()
             try:
                 raw_result = function(*bound.args, **bound.kwargs)
@@ -286,9 +286,9 @@ class ToolRegistry:
                     policy=decision.as_dict(),
                 )
             finally:
-                if isinstance(state, dict):
+                if supports_state(state):
                     if previous_policy is None:
-                        state.pop("_active_policy_decision", None)
+                        clear_state_key(state, "_active_policy_decision")
                     else:
                         state["_active_policy_decision"] = previous_policy
 

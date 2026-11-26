@@ -52,6 +52,22 @@ class RiskClassifier:
         return risk if risk in KNOWN_RISKS else "invalid"
 
 
+def supports_state(state: object) -> bool:
+    """True for the session state a tool really receives: a plain dict, or ADK's `State`, which wraps the session's dict.
+
+    `State` is not a `dict` (it has no `pop` or `del`), so a check for `dict` alone denies every tool in a live session while
+    passing every test that builds its context by hand. Every place that reads or writes state goes through this check."""
+    return all(callable(getattr(state, name, None)) for name in ("get", "__getitem__", "__setitem__", "__contains__"))
+
+
+def clear_state_key(state: object, key: str) -> None:
+    """Removes `key` from a dict, or empties it on a `State`, which cannot delete. A later `get` sees nothing either way."""
+    if isinstance(state, dict):
+        state.pop(key, None)
+    elif supports_state(state) and key in state:  # type: ignore[operator]
+        state[key] = None  # type: ignore[index]
+
+
 class PermissionPolicy:
     """Resolve the small set of permissions currently represented by the registry."""
 
@@ -60,7 +76,7 @@ class PermissionPolicy:
             return "deny", "A live voice session is required."
 
         state = getattr(context, "state", None)
-        if not all(callable(getattr(state, name, None)) for name in ("get", "__getitem__", "__setitem__", "__contains__")):
+        if not supports_state(state):
             return "deny", "Session permission state is unavailable."
 
         if permission == "voice_session":
@@ -137,7 +153,7 @@ class AuditLog:
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         state = getattr(context, "state", None)
-        if isinstance(state, dict):
+        if supports_state(state):
             records = state.get(AUDIT_STATE_KEY)
             records = list(records) if isinstance(records, list) else []
             records.append(asdict(record))
@@ -218,7 +234,7 @@ class PolicyEngine:
         The OS dialog remains the execution authority. Browser-transported reports
         are audit provenance, not cryptographic attestation or execution authority.
         """
-        if not isinstance(state, dict) or not isinstance(report, dict):
+        if not supports_state(state) or not isinstance(report, dict):
             return False
         if set(report) not in (
             {"request_id", "action", "consent_certificate", "result"},

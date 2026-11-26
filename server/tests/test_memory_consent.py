@@ -226,3 +226,34 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         assert bridge.live.state["memory_enabled"] is True
     finally:
         sink.close(live.session_id)
+
+
+def test_confirming_a_proposal_that_a_newer_one_pruned_is_answered_expired_not_silence():
+    """The panel hides the buttons when Save is pressed and then waits for an answer; silence left it stuck forever."""
+    state: dict = {}
+    first = stage_memory_proposal(state, "Prefers short answers", "semantic", now=1000)
+    stage_memory_proposal(state, "Likes the dark theme", "semantic", now=1130)  # prunes the first (older than the TTL)
+    assert consume_memory_proposal(state, first["request_id"], True, now=1135) == ("expired", None)
+    assert state.get("memory_pending") and first["request_id"] not in state["memory_pending"]
+
+
+def test_an_id_that_never_existed_in_this_session_is_also_answered_expired_without_revealing_anything():
+    assert consume_memory_proposal({}, "a" * 32, True, now=1) == ("expired", None)
+
+
+def test_a_repeat_of_an_answered_proposal_stays_silent_so_it_cannot_overwrite_a_saved_status():
+    state: dict = {}
+    proposal = stage_memory_proposal(state, "Prefers short answers", "semantic", now=100)
+    assert consume_memory_proposal(state, proposal["request_id"], True, now=101)[0] == "accepted"
+    assert consume_memory_proposal(state, proposal["request_id"], True, now=102) == (None, None)
+    assert consume_memory_proposal(state, proposal["request_id"], False, now=103) == (None, None)
+
+
+def test_the_list_of_answered_ids_is_bounded():
+    from app.voice.memory_consent import MAX_RESOLVED_MEMORY, RESOLVED_MEMORY_KEY
+
+    state: dict = {}
+    for index in range(MAX_RESOLVED_MEMORY + 5):
+        proposal = stage_memory_proposal(state, f"Fact number {index}", "semantic", now=100 + index)
+        consume_memory_proposal(state, proposal["request_id"], False, now=100 + index)
+    assert len(state[RESOLVED_MEMORY_KEY]) == MAX_RESOLVED_MEMORY

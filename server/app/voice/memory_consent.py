@@ -8,6 +8,10 @@ from typing import Any
 from app.voice.privacy import CATEGORIES, redact_text
 
 PENDING_MEMORY_KEY = "memory_pending"
+#: The last few proposal ids that already got an answer, so a repeat of one stays silent while an id that was pruned or
+#: never existed gets `expired` (otherwise the panel waits for an answer that never comes).
+RESOLVED_MEMORY_KEY = "memory_resolved"
+MAX_RESOLVED_MEMORY = 16
 MAX_PENDING_MEMORY = 3
 MEMORY_PROPOSAL_TTL_SECONDS = 120
 MEMORY_PROPOSAL_MAX_CHARS = 600
@@ -31,6 +35,15 @@ def _pending(state: object) -> dict[str, dict[str, Any]]:
 def _write_pending(state: object, pending: dict[str, dict[str, Any]]) -> None:
     # Assign a new nested mapping so ADK State records the update as a state delta.
     state[PENDING_MEMORY_KEY] = pending  # type: ignore[index]
+
+
+def _resolved(state: object) -> list[str]:
+    value = state.get(RESOLVED_MEMORY_KEY)  # type: ignore[attr-defined]
+    return [item for item in value if _valid_request_id(item)] if isinstance(value, list) else []
+
+
+def _mark_resolved(state: object, request_id: str) -> None:
+    state[RESOLVED_MEMORY_KEY] = [*_resolved(state), request_id][-MAX_RESOLVED_MEMORY:]  # type: ignore[index]
 
 
 def _prune(state: object, now: float) -> dict[str, dict[str, Any]]:
@@ -104,16 +117,20 @@ def consume_memory_proposal(state: object, request_id: object, accepted: object,
     original_item = original_pending.get(request_id)
     if not isinstance(original_item, dict):
         _prune(state, timestamp)
-        return None, None
+        # A repeat of an id that was already answered stays silent. Any other well-formed id (pruned by a newer proposal,
+        # or never staged here) is answered the same way, so the panel is never left waiting and nothing is revealed.
+        return (None, None) if request_id in _resolved(state) else ("expired", None)
     created = original_item.get("created_at")
     age = timestamp - created if type(created) in (int, float) else None
     if age is None or age < 0 or age > MEMORY_PROPOSAL_TTL_SECONDS:
         _prune(state, timestamp)
+        _mark_resolved(state, request_id)
         return "expired", None
 
     pending = _prune(state, timestamp)
     item = pending.pop(request_id, None)
     _write_pending(state, pending)
+    _mark_resolved(state, request_id)
     if not isinstance(item, dict):
         return None, None
     if not isinstance(item.get("kind"), str) or item.get("kind") not in _MEMORY_KINDS or not isinstance(item.get("content"), str):
