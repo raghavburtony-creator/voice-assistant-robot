@@ -5,6 +5,7 @@ It never executes desktop actions or treats a model proposal as consent.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar, Token
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -13,6 +14,19 @@ from uuid import uuid4
 
 AUDIT_STATE_KEY = "tool_policy_audit"
 MAX_AUDIT_RECORDS = 50
+_CURRENT_REQUEST_ID: ContextVar[str | None] = ContextVar("otto_policy_request_id", default=None)
+
+
+def bind_request_id(request_id: str) -> Token[str | None]:
+    return _CURRENT_REQUEST_ID.set(request_id)
+
+
+def reset_request_id(token: Token[str | None]) -> None:
+    _CURRENT_REQUEST_ID.reset(token)
+
+
+def current_request_id() -> str | None:
+    return _CURRENT_REQUEST_ID.get()
 KNOWN_RISKS = frozenset({"low", "medium", "high"})
 
 
@@ -138,6 +152,46 @@ class AuditLog:
             state[AUDIT_STATE_KEY] = records[-MAX_AUDIT_RECORDS:]
         return record
 
+    def record_outcome(self, context: Any, outcome: Any) -> bool:
+        """Attach a validated, webview-reported desktop result to its exact pending request."""
+        if not isinstance(outcome, dict):
+            return False
+        request_id, action = outcome.get("request_id"), outcome.get("action")
+        ok, status, verification = outcome.get("ok"), outcome.get("status"), outcome.get("verification")
+        if (not isinstance(request_id, str) or len(request_id) != 32
+                or any(char not in "0123456789abcdef" for char in request_id)
+                or not isinstance(action, str) or not isinstance(ok, bool)
+                or status not in {"completed", "started", "failed", "denied"}
+                or verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}):
+            return False
+        if (ok and status in {"failed", "denied"}) or (not ok and status in {"completed", "started"}):
+            return False
+        state = getattr(context, "state", None)
+        records = state.get(AUDIT_STATE_KEY) if isinstance(state, dict) else None
+        if not isinstance(records, list):
+            return False
+        record = next((item for item in reversed(records)
+                       if isinstance(item, dict) and item.get("request_id") == request_id), None)
+        if (record is None or record.get("tool") not in {"desktop_action", "move_desktop"}
+                or record.get("decision") != "confirmation_required"
+                or record.get("execution_status") != "awaiting_confirmation"
+                or record.get("scope") != f"action:{action}"
+                or record.get("outcome_received") is True):
+            return False
+        record["execution_status"] = status if ok else ("denied" if status == "denied" else "failed")
+        record["consent_status"] = "approved" if status != "denied" else "denied"
+        record["verification_result"] = verification
+        record["verification_status"] = {
+            "verified": "passed",
+            "not_verified": "failed",
+            "unavailable": "not_run",
+            "native_api_completed": "pending",
+            "process_spawned": "pending",
+        }[verification]
+        record["outcome_received"] = True
+        record["outcome_source"] = "webview_reported"
+        return True
+
 
 class PolicyEngine:
     def __init__(self) -> None:
@@ -194,6 +248,9 @@ class PolicyEngine:
         return self.audit_log.record(
             context, metadata=metadata, decision=decision, execution_status=execution_status
         )
+
+    def audit_outcome(self, context: Any, outcome: Any) -> bool:
+        return self.audit_log.record_outcome(context, outcome)
 
 
 POLICY_ENGINE = PolicyEngine()
