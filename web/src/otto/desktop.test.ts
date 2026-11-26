@@ -61,9 +61,11 @@ describe('desktop action bridge', () => {
     expect(isDesktopPermissionEnabled()).toBe(false)
   })
   it('accepts only the permissioned desktop action allow-list', () => {
-    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toEqual({
-      action: 'desktop_action', desktop_action: 'move_top',
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top', request_id: '0123456789abcdef0123456789abcdef' })).toEqual({
+      action: 'desktop_action', desktop_action: 'move_top', request_id: '0123456789abcdef0123456789abcdef',
     })
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toBeNull()
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top', request_id: 'not-a-request' })).toBeNull()
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'run_shell' })).toBeNull()
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 12 })).toBeNull()
   })
