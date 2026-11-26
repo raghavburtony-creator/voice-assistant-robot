@@ -138,7 +138,8 @@ export class FakeVoiceServer {
       }
       const saved = this.continuitySaved
       if (message.key === 'guide_tasks' && saved) {
-        const tasks = message.data as Array<{ id?: unknown; stepIds?: unknown }> | null
+        // The page sends the list under `tasks` (capList in Otto.tsx), not as a bare array.
+        const tasks = (message.data as { tasks?: Array<{ id?: unknown; stepIds?: unknown }> } | null)?.tasks
         if (!tasks?.length) return
         const match = tasks.find(task => task.id === saved.task)
         if (!Array.isArray(match?.stepIds) || !match.stepIds.includes(saved.step)) {

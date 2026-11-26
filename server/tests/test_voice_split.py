@@ -123,6 +123,7 @@ class ScriptedLive:
 
     def __init__(self, count: int) -> None:
         self.session_id = "split"
+        self.continuity = None
         self.state = {"page": "home", "page_title": "Home", "screens": {}}
         self.count, self.pulled, self.sent_text = count, 0, []
         sink.open(self.session_id)

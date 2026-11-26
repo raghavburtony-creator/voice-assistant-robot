@@ -18,7 +18,7 @@ from pydantic import SecretStr
 
 from app.config import settings
 from app.main import app
-from app.voice import route, tools
+from app.voice import bridge as bridge_module, route, tools
 from app.voice.app_config import COMMANDS, PAGE_IDS, system_instruction
 from app.voice.bridge import FRAME_GAP_SECONDS, JPEG_MAGIC, MAX_CONTEXT_BYTES, MAX_FRAME_BYTES, Bridge, context_bytes
 from app.voice.runtime import RUNTIME_TITLE_CHARS, runtime_title
@@ -372,6 +372,8 @@ def test_action_kinds_match_on_both_ends():
     """D-22: the server link and the browser link name the same actions. A tool that sends a kind the browser drops, or a
     browser variant no tool sends, means one of the two checks (D-02) is missing for it."""
     sent = set(re.findall(r'_send\(tool_context, \{"action": "([a-z_]+)"', Path(tools.__file__).read_text(encoding="utf-8")))
+    # The bridge also sends one server-origin action: the continuity resume (D-26). The browser checks it like any other.
+    sent |= set(re.findall(r'"type": "action", "action": "([a-z_]+)"', Path(bridge_module.__file__).read_text(encoding="utf-8")))
     text = (WEB_CONFIG.parent / "otto" / "messages.ts").read_text(encoding="utf-8")
     union = re.search(r"export type AssistantAction = (.*?)\n\n", text, flags=re.S)
     assert union

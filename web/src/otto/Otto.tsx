@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSISTANT_NAME, LANGUAGE, OTTO_CONFIG, STORAGE_PREFIX } from '../otto.config'
+import { toOttoEvents, type AvatarEvent } from './awareness/avatar'
 import { busyContext, EMPTY_BUSY, nextBusy } from './awareness/busy'
 import { createOttoEvents, type OttoEvents } from './awareness/events'
 import type { OttoConfig } from './config'
@@ -129,7 +130,9 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
     if (action.action === 'task_move') ottoGuide.move(action.move)
     onAction(action)
   }, [ottoGuide, onAction])
-  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket,
+  // The server's avatar events (working, asking permission...) go through the one event path (D-19): Otto's own judgement decides.
+  const handleAvatar = useCallback((avatar: AvatarEvent) => toOttoEvents(avatar).forEach(event => otto.notify(event)), [otto])
+  const assistant = useVoiceAssistant({ language: LANGUAGE, page, onAction: handleAction, createSocket, onAvatar: handleAvatar,
     onEnvironmental: event => otto.notify(event) })
   const { status, sendText, start, stop, transcript, mouth, speech, interruptions } = assistant
   // Barge-ins too: whatever Otto was doing stops, and he nods (the config's gestures.onInterrupt) as he goes back to listening.
