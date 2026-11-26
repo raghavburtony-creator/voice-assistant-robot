@@ -161,7 +161,8 @@ class AuditLog:
         if (not isinstance(request_id, str) or len(request_id) != 32
                 or any(char not in "0123456789abcdef" for char in request_id)
                 or not isinstance(action, str) or not isinstance(ok, bool)
-                or status not in {"completed", "started", "failed", "denied"}
+                or not isinstance(status, str) or status not in {"completed", "started", "failed", "denied"}
+                or not isinstance(verification, str)
                 or verification not in {"verified", "native_api_completed", "process_spawned", "not_verified", "unavailable"}):
             return False
         if (ok and status in {"failed", "denied"}) or (not ok and status in {"completed", "started"}):
