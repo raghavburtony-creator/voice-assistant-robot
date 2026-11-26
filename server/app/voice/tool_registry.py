@@ -17,7 +17,7 @@ from typing import Any, Callable, get_type_hints
 from google.adk.tools import FunctionTool
 from pydantic import TypeAdapter, ValidationError
 
-from app.voice.policy import POLICY_ENGINE
+from app.voice.policy import POLICY_ENGINE, bind_request_id, reset_request_id
 
 
 logger = logging.getLogger(__name__)
@@ -262,6 +262,7 @@ class ToolRegistry:
                     policy=decision.as_dict(),
                 )
 
+            request_token = bind_request_id(decision.request_id)
             try:
                 raw_result = function(*bound.args, **bound.kwargs)
             except Exception as exc:
@@ -273,6 +274,8 @@ class ToolRegistry:
                     error={"code": "tool_execution_error", "message": "The tool could not complete its operation."},
                     policy=decision.as_dict(),
                 )
+            finally:
+                reset_request_id(request_token)
 
             result = raw_result if isinstance(raw_result, dict) else {"value": raw_result}
             failed = (
