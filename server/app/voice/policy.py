@@ -176,8 +176,21 @@ class AuditLog:
         if (record is None or record.get("tool") not in {"desktop_action", "move_desktop"}
                 or record.get("decision") != "confirmation_required"
                 or record.get("execution_status") != "awaiting_confirmation"
-                or record.get("scope") != f"action:{action}"
                 or record.get("outcome_received") is True):
+            return False
+        expected_scope = f"action:{action}"
+        if record.get("tool") == "move_desktop":
+            destination = {
+                "move_home": "home",
+                "move_left": "desktop-left",
+                "move_right": "desktop-right",
+                "move_top": "top",
+                "move_bottom": "bottom",
+            }.get(action)
+            if destination is None:
+                return False
+            expected_scope = f"destination:{destination}"
+        if record.get("scope") != expected_scope:
             return False
         record["execution_status"] = status if ok else ("denied" if status == "denied" else "failed")
         record["consent_status"] = "denied" if status == "denied" else (
