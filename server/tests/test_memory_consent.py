@@ -178,6 +178,9 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         def load(self, scope, identity):
             return None
 
+        def disable(self, scope, identity):
+            pass
+
     sink.open(live.session_id)
     try:
         bridge = Bridge(object(), live, store=ContinuityStub())
@@ -205,5 +208,21 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         assert asyncio.run(bridge.resolve_memory_consent({
             "type": "memory_consent", "request_id": request_id, "accepted": True,
         })) is None
+
+        staged_after = tools.propose_memory("Likes green tea", "semantic", tool_context)
+        assert staged_after["ok"] is True
+        pending_after = next(
+            item for item in bridge.live.state[PENDING_MEMORY_KEY] if item != request_id
+        )
+        bridge.withdraw_continuity()
+        withdrawn = asyncio.run(bridge.resolve_memory_consent({
+            "type": "memory_consent", "request_id": pending_after, "accepted": True,
+        }))
+        assert withdrawn == {
+            "type": "memory_result", "request_id": pending_after, "status": "unavailable",
+        }
+        assert len(writes) == 1
+        assert bridge.live.state["memory_enabled"] is False
+        assert bridge.live.state["memory_context"] == "[]"
     finally:
         sink.close(live.session_id)

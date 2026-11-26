@@ -320,6 +320,8 @@ class Bridge:
         identity = self.live.continuity
         self.continuity_withdrawn = True
         self.pending_continuity = None
+        self.live.state["memory_enabled"] = False
+        self.live.state["memory_context"] = "[]"
         if identity is not None:
             self.continuity_store.disable(identity.scope, identity.identity)
 
@@ -337,7 +339,11 @@ class Bridge:
             return None
         if status == "accepted":
             identity = self.live.continuity
-            if identity is None or self.live.state.get("memory_enabled") is not True:
+            if (
+                identity is None
+                or self.continuity_withdrawn
+                or self.live.state.get("memory_enabled") is not True
+            ):
                 status = "unavailable"
             elif proposal is None:
                 status = "expired"
