@@ -17,6 +17,10 @@ Bounds, all per session because the bridge owns one engine: `MAX_ACTIVE` unfinis
 `verify` does not return exactly `True` is `failed` ("verification_failed"), never `completed` (POL-02's rule: a failed
 check is a failure). An exception's text is never stored or sent: it can carry anything.
 
+Priority (`low`, `normal`, `high`): a free slot goes to the highest first; only `high` preempts (`submit`). At most
+`MAX_SUBMITTED` tasks per session. Each step is a `TaskEvent` for one listener, the bridge (`on_event`), beside `emit`,
+which carries the same steps to Otto's face; neither is a bus, and both go quiet when the engine closes.
+
 Pure asyncio: no FastAPI, no ADK, no I/O of its own.
 """
 from __future__ import annotations
@@ -95,8 +99,9 @@ class TaskSnapshot:
 
 @dataclass(frozen=True)
 class TaskEvent:
-    """One typed step in a task's life, for whoever owns the engine (the bridge). Closed fields only: nothing a worker
-    wrote (its result or note) travels in an event, so nothing in it can be an instruction to the model."""
+    """One typed step in a task's life, for whoever owns the engine (the bridge). Nothing a worker wrote (its result or
+    note) travels in an event. The state, reason and priority are closed values; the title is server-set text and is the
+    one free-text field, so whoever shows it to the model must label it untrusted."""
     id: str
     title: str
     state: State
@@ -299,8 +304,15 @@ class TaskEngine:
 
     def _preempt(self, rank: int) -> bool:
         """Cancels one running task below `rank` to free a slot: the lowest priority, then the newest (it has done the
-        least work). A task submitted `cancellable=False` is never chosen. True when one was cancelled."""
-        candidates = [r for r in self._records.values() if r.state in _RUNNING and RANK[r.priority] < rank and r.cancellable]
+        least work). A task submitted `cancellable=False` is never chosen, and neither is one already `verifying`, whose
+        work is done. True when one was cancelled.
+
+        A slot is held by a task's state, not its coroutine: a worker that swallows its cancellation frees its slot at
+        once but may keep running until `close`, which is bounded."""
+        candidates = [
+            r for r in self._records.values()
+            if r.state in ("running", "waiting") and RANK[r.priority] < rank and r.cancellable
+        ]
         if not candidates:
             return False
         victim = min(candidates, key=lambda r: (RANK[r.priority], -r.seq))
