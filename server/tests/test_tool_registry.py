@@ -98,7 +98,7 @@ def test_gateway_separates_tool_execution_failure_from_verification_failure():
     assert "internal detail" not in str(result)
 
 
-def test_gateway_converts_unhandled_tool_exception_to_safe_error_envelope():
+def test_gateway_converts_unhandled_tool_exception_to_safe_error_envelope(caplog):
     def sample() -> dict:
         raise RuntimeError("sensitive internal detail")
 
@@ -108,6 +108,8 @@ def test_gateway_converts_unhandled_tool_exception_to_safe_error_envelope():
     assert result["status"] == "error"
     assert result["error"]["code"] == "tool_execution_error"
     assert "sensitive internal detail" not in str(result)
+    assert "RuntimeError" in caplog.text
+    assert "sensitive internal detail" not in caplog.text
 
 
 def test_registry_output_schema_requires_evidence_provenance_verification_and_side_effects():

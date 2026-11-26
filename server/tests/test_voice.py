@@ -977,3 +977,71 @@ def test_tool_gateway_wraps_checked_tool_failures_in_the_same_envelope():
     assert result["error"]["code"] == "tool_execution_failed"
     assert result["verification"]["status"] == "not_required"
     assert result["provenance"]["tool"] == "show_target"
+
+
+
+def test_policy_denies_capture_tools_without_active_visitor_share():
+    ctx = _context()
+    gateway = tools.REGISTRY._gateway(tools.get_perception_context, tools.REGISTRY["get_perception_context"].metadata)
+    result = gateway(ctx)
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "permission_denied"
+    assert result["policy"]["decision"] == "deny"
+    assert ctx.state["tool_policy_audit"][-1]["execution_status"] == "denied"
+
+
+def test_policy_requires_desktop_awareness_before_host_approval_dispatch():
+    sink.open("tool-test")
+    ctx = _context()
+    result = tools.REGISTRY._gateway(tools.desktop_action, tools.REGISTRY["desktop_action"].metadata)("launch_calculator", ctx)
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "permission_denied"
+    assert result["policy"]["decision"] == "deny"
+    assert sink.drain("tool-test") == []
+    assert ctx.state["tool_policy_audit"][-1]["execution_status"] == "denied"
+    sink.close("tool-test")
+
+
+def test_policy_requires_exact_host_approval_after_desktop_awareness_is_enabled():
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"desktop_context": {"enabled": True}}
+    result = tools.REGISTRY._gateway(tools.desktop_action, tools.REGISTRY["desktop_action"].metadata)("launch_calculator", ctx)
+    assert result["status"] == "success"
+    assert result["data"]["status"] == "awaiting_user_approval"
+    assert result["policy"]["decision"] == "confirmation_required"
+    assert result["policy"]["scope"] == "action:launch_calculator"
+    assert result["policy"]["verification_status"] == "pending"
+    assert sink.drain("tool-test") == [{"action": "desktop_action", "desktop_action": "launch_calculator"}]
+    audit = ctx.state["tool_policy_audit"][-1]
+    assert audit["decision"] == "confirmation_required"
+    assert audit["execution_status"] == "awaiting_confirmation"
+    sink.close("tool-test")
+
+
+def test_policy_denies_desktop_context_until_visitor_enables_it():
+    ctx = _context()
+    result = tools.REGISTRY._gateway(tools.get_desktop_context, tools.REGISTRY["get_desktop_context"].metadata)(ctx)
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "permission_denied"
+    assert result["policy"]["decision"] == "deny"
+
+
+def test_policy_audit_is_bounded_and_does_not_store_tool_arguments():
+    from app.voice.policy import AuditLog, PolicyDecision
+    from app.voice.tool_registry import TOOL_METADATA
+
+    ctx = _context()
+    metadata = next(item for item in TOOL_METADATA if item.name == "run_command")
+    audit = AuditLog()
+    for index in range(60):
+        decision = PolicyDecision(
+            request_id=str(index), decision="allow", risk_level="medium",
+            required_permission="voice_session", reason="test", scope=None,
+            verification_status="not_required",
+        )
+        audit.record(ctx, metadata=metadata, decision=decision, execution_status="returned")
+    records = ctx.state["tool_policy_audit"]
+    assert len(records) == 50
+    assert records[-1]["request_id"] == "59"
+    assert "arguments" not in records[-1]

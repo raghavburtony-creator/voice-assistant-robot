@@ -257,7 +257,7 @@ This applies to every camera, screen or surroundings input: multimodal input, si
 - Limits wider than a session wait on an identity (Q-03, Q-08). A central component wouldn't have one either.
 
 A single component couldn't replace the two checks, because they sit on two machines that don't trust each other (D-02). So it would be a third place to keep in step, with no check of its own to run. That is the parallel system D-19 rules out.
-**Where:** [architecture.md](architecture.md#who-decides-at-runtime). The checks are in `server/app/voice/tools.py`, `sink.py` and `web/src/otto/messages.ts`. Otto's own actions are carried out by `handleAction` in `web/src/otto/Otto.tsx`. The adapter drops actions at `web/src/otto/gemini/transports.ts`, tested in `bridge.test.ts`. The test `test_action_kinds_match_on_both_ends` is in `server/tests/test_voice.py`. The existing tests for D-02, D-08, D-18 and D-21 cover the rest.
+**Where:** [architecture.md](architecture.md#who-decides-at-runtime). The server checks are in `server/app/voice/policy.py`, `tool_registry.py`, `tools.py` and `sink.py`; the browser checks are in `web/src/otto/messages.ts`. Otto's own actions are carried out by `handleAction` in `web/src/otto/Otto.tsx`. The adapter drops actions at `web/src/otto/gemini/transports.ts`, tested in `bridge.test.ts`. The test `test_action_kinds_match_on_both_ends` and the policy tests are in `server/tests/test_voice.py`. The existing tests for D-02, D-08, D-18 and D-21 cover the rest.
 
 ## D-23 What the page may report at runtime, and what the deployment must register
 
