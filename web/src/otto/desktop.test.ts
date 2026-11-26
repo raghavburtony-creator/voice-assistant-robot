@@ -45,7 +45,7 @@ describe('desktop action bridge', () => {
     const invoke = vi.fn()
     window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
 
-    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+    await expect(executeDesktopAction('launch_calculator', 'a'.repeat(32))).resolves.toMatchObject({
       ok: false, status: 'denied', verification: 'unavailable',
     })
     expect(invoke).not.toHaveBeenCalled()
@@ -61,9 +61,10 @@ describe('desktop action bridge', () => {
     expect(isDesktopPermissionEnabled()).toBe(false)
   })
   it('accepts only the permissioned desktop action allow-list', () => {
-    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toEqual({
-      action: 'desktop_action', desktop_action: 'move_top',
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top', request_id: 'a'.repeat(32) })).toEqual({
+      action: 'desktop_action', desktop_action: 'move_top', request_id: 'a'.repeat(32),
     })
+    expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'move_top' })).toBeNull()
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 'run_shell' })).toBeNull()
     expect(toAssistantAction({ action: 'desktop_action', desktop_action: 12 })).toBeNull()
   })
@@ -72,12 +73,17 @@ describe('desktop action bridge', () => {
     const invoke = vi.fn().mockResolvedValue({
       action: 'launch_calculator', ok: true, status: 'started',
       verification: 'process_spawned', message: 'Calculator was launched.',
+      consentCertificate: {
+        certificateId: 'a'.repeat(32) + '-123', requestId: 'a'.repeat(32),
+        action: 'launch_calculator', decision: 'approved', method: 'native_os_dialog', issuedAtUnixMs: 123,
+      },
     })
     window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
-    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+    await expect(executeDesktopAction('launch_calculator', 'a'.repeat(32))).resolves.toMatchObject({
       ok: true, status: 'started', verification: 'process_spawned',
+      consentCertificate: { requestId: 'a'.repeat(32), decision: 'approved' },
     })
-    expect(invoke).toHaveBeenCalledWith('desktop_action', { action: 'launch_calculator' })
+    expect(invoke).toHaveBeenCalledWith('desktop_action', { action: 'launch_calculator', requestId: 'a'.repeat(32) })
     delete window.__TAURI__
   })
 
@@ -103,7 +109,7 @@ describe('desktop action bridge', () => {
       })
     window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
 
-    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+    await expect(executeDesktopAction('move_left', 'd'.repeat(32))).resolves.toMatchObject({
       ok: true, status: 'completed', verification: 'verified',
     })
     expect(invoke).toHaveBeenNthCalledWith(1, 'desktop_context')
@@ -134,15 +140,25 @@ describe('desktop action bridge', () => {
       })
     window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
 
-    await expect(executeDesktopAction('move_left')).resolves.toMatchObject({
+    await expect(executeDesktopAction('move_left', 'd'.repeat(32))).resolves.toMatchObject({
       ok: false, status: 'failed', verification: 'not_verified',
     })
     delete window.__TAURI__
   })
 
+  it('rejects a missing or malformed server request id before invoking the host', async () => {
+    const invoke = vi.fn()
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+    await expect(executeDesktopAction('launch_calculator', 'not-a-request-id')).resolves.toMatchObject({
+      ok: false, status: 'failed', verification: 'unavailable',
+    })
+    expect(invoke).not.toHaveBeenCalled()
+    delete window.__TAURI__
+  })
+
   it('does not execute desktop actions in browser mode', async () => {
     delete window.__TAURI__
-    await expect(executeDesktopAction('launch_calculator')).resolves.toMatchObject({
+    await expect(executeDesktopAction('launch_calculator', 'e'.repeat(32))).resolves.toMatchObject({
       ok: false, status: 'failed', verification: 'unavailable',
     })
   })

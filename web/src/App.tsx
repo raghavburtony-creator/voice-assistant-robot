@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPage, PAGES, SHORTCUT_LABEL, type PageId } from './otto.config'
 import { Otto, createOttoEvents, createOttoGuide, registerGuideTask, useAssistantContext, type AssistantAction, type GuideTaskHandle } from './otto'
-import { executeDesktopAction } from './otto/desktop'
+import { executeDesktopAction, type DesktopActionReport } from './otto/desktop'
 
 function pageFromHash(): PageId {
   const id = window.location.hash.slice(1)
@@ -42,7 +42,7 @@ export default function App() {
   const goTo = (next: PageId) => { window.location.hash = next }
 
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
-  const onAction = useCallback((action: AssistantAction) => {
+  const onAction = useCallback((action: AssistantAction, reportDesktopResult: (report: DesktopActionReport) => boolean) => {
     if (action.action === 'navigate') {
       if (isPage(action.page)) goTo(action.page)
       return
@@ -66,7 +66,22 @@ export default function App() {
         message: `Otto is requesting permission to ${description}.`,
         data: { action: action.desktop_action },
       })
-      void executeDesktopAction(action.desktop_action).then(result => {
+      void executeDesktopAction(action.desktop_action, action.request_id).then(result => {
+        if (result.consentCertificate) {
+          reportDesktopResult({
+            request_id: action.request_id,
+            action: action.desktop_action,
+            consent_certificate: {
+              certificate_id: result.consentCertificate.certificateId,
+              request_id: result.consentCertificate.requestId,
+              action: result.consentCertificate.action,
+              decision: result.consentCertificate.decision,
+              method: result.consentCertificate.method,
+              issued_at_unix_ms: result.consentCertificate.issuedAtUnixMs,
+            },
+            result: { ok: result.ok, status: result.status, verification: result.verification },
+          })
+        }
         if (result.ok) desktopTask.succeed(`${result.message} Verification: ${result.verification}.`)
         else desktopTask.fail(`${result.message} Verification: ${result.verification}.`)
       }).catch(() => desktopTask.fail(`Otto could not ${description}.`))

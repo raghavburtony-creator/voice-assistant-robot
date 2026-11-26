@@ -22,12 +22,38 @@ export const DESKTOP_ACTIONS = [
 ] as const
 export type DesktopAction = typeof DESKTOP_ACTIONS[number]
 
+export type DesktopConsentCertificate = {
+  certificateId: string
+  requestId: string
+  action: DesktopAction
+  decision: 'approved' | 'denied'
+  method: 'native_os_dialog'
+  issuedAtUnixMs: number
+}
+
 export type DesktopActionResult = {
   action: DesktopAction
   ok: boolean
   status: 'completed' | 'started' | 'failed' | 'denied'
   verification: 'verified' | 'native_api_completed' | 'process_spawned' | 'not_verified' | 'unavailable'
   message: string
+  consentCertificate?: DesktopConsentCertificate | null
+}
+
+export type DesktopConsentCertificateReport = {
+  certificate_id: string
+  request_id: string
+  action: DesktopAction
+  decision: 'approved' | 'denied'
+  method: 'native_os_dialog'
+  issued_at_unix_ms: number
+}
+
+export type DesktopActionReport = {
+  request_id: string
+  action: DesktopAction
+  consent_certificate: DesktopConsentCertificateReport
+  result: Pick<DesktopActionResult, 'ok' | 'status' | 'verification'>
 }
 
 export type DesktopMovementEvent = {
@@ -151,8 +177,8 @@ export function verifyDesktopMovement(action: DesktopAction, context: DesktopCon
 }
 
 /** Execute one allow-listed action through the native permission gateway. */
-export async function executeDesktopAction(action: DesktopAction): Promise<DesktopActionResult> {
-  if (!(DESKTOP_ACTIONS as readonly string[]).includes(action)) {
+export async function executeDesktopAction(action: DesktopAction, requestId: string): Promise<DesktopActionResult> {
+  if (!(DESKTOP_ACTIONS as readonly string[]).includes(action) || !/^[0-9a-f]{32}$/.test(requestId)) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Unsupported desktop action.' }
   }
   if (!desktopPermissionEnabled) {
@@ -165,12 +191,14 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
   if (!runtime) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
   }
+  let consentCertificate: DesktopConsentCertificate | null = null
   try {
     const isMovement = action === 'move_home' || action === 'move_left' || action === 'move_right' || action === 'move_top' || action === 'move_bottom'
     // Observe the current desktop before asking the native gateway to act. If the host
     // cannot provide a baseline, fail closed rather than executing an unverifiable move.
     if (isMovement) await runtime.core.invoke<DesktopContext>('desktop_context')
-    const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action })
+    const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action, requestId })
+    consentCertificate = result.consentCertificate ?? null
     if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
 
     // Native API completion is not proof that the window reached its requested position.
@@ -190,6 +218,7 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
     return {
       action, ok: false, status: 'failed', verification: 'unavailable',
       message: error instanceof Error ? error.message : 'The desktop host could not execute the action.',
+      consentCertificate,
     }
   }
 }
