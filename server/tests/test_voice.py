@@ -925,7 +925,7 @@ def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
         assert entry.input_schema["type"] == "object"
         assert entry.input_schema["additionalProperties"] is False
         assert entry.output_schema["required"] == [
-            "status", "data", "evidence", "provenance", "verification",
+            "status", "data", "policy", "evidence", "provenance", "verification",
             "error", "timestamps", "side_effects",
         ]
         assert entry.metadata.timeout_seconds > 0
