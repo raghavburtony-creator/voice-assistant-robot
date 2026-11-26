@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ASSISTANT_NAME } from '../otto.config'
-import { isDesktopRuntime } from './desktop'
+import { isDesktopRuntime, setDesktopPermissionEnabled } from './desktop'
 import type { AnswerLength } from './consent'
 import type { AssistantCard } from './messages'
 import ScreenShare, { canShare } from './ScreenShare'
@@ -200,8 +200,13 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
       <legend>Desktop awareness</legend>
       <label className="ui-choice">
         <input type="checkbox" checked={desktopAwarenessEnabled}
-          onChange={event => onDesktopAwarenessChange(event.target.checked)} />
+          onChange={event => {
+          const enabled = event.target.checked
+          setDesktopPermissionEnabled(enabled)
+          onDesktopAwarenessChange(enabled)
+        }} />
         <span>Share desktop context with Otto</span>
+        <p className="voice-assistant__why">While enabled, Otto may receive limited desktop metadata such as the current monitor and active window. Turn this off to stop sharing it.</p>
       </label>
       <p className="voice-assistant__why">
         While enabled in this conversation, Otto receives your monitor and window positions, visibility, cursor position,

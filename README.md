@@ -68,7 +68,7 @@ The native/web boundary stays intent-based:
 - movement emits structured `started`, `completed` or `failed` events on `otto://desktop-movement`, available through `onDesktopMovement()`;
 - the ADK `desktop_action` tool exposes the same fixed action set; `move_desktop` routes through it for compatibility;
 - `getDesktopContext()` reports monitor work area, Otto's window position/visibility and cursor position; on Windows it also reports the foreground application's executable name and window title only.
-- The voice panel has a session-only **Share desktop context with Otto** switch. Sampling runs only while a conversation is open and the switch is on, and stops immediately when disabled or the conversation ends.
+- The voice panel has a session-only **Share desktop context with Otto** switch. Sampling runs only while a conversation is open and the switch is on, and stops immediately when disabled or the conversation ends. The same session permission gates desktop metadata reads and desktop actions; it is off again after a reload/restart, and disabling it does not persist a grant.
 - No screenshots, application contents, keystrokes, process ids or executable paths are sent.
 - the native Tauri command displays an operating-system confirmation for each exact action before execution; a direct webview invocation cannot skip approval, and the Rust host independently deserializes a closed action enum and rejects unknown variants;
 - application launching is limited to Calculator and Text Editor, using fixed platform-specific executable/app identifiers and no caller-supplied arguments;

@@ -58,6 +58,18 @@ function host(): TauriHost | null {
   return typeof window === 'undefined' ? null : window.__TAURI__ ?? null
 }
 
+// Desktop awareness is an explicit, session-only permission. It deliberately lives in
+// memory rather than storage so a reload/restart cannot silently re-enable desktop access.
+let desktopPermissionEnabled = false
+
+export function isDesktopPermissionEnabled(): boolean {
+  return desktopPermissionEnabled
+}
+
+export function setDesktopPermissionEnabled(enabled: boolean): void {
+  desktopPermissionEnabled = enabled
+}
+
 export function isDesktopRuntime(): boolean {
   return host() !== null
 }
@@ -143,6 +155,12 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
   if (!(DESKTOP_ACTIONS as readonly string[]).includes(action)) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Unsupported desktop action.' }
   }
+  if (!desktopPermissionEnabled) {
+    return {
+      action, ok: false, status: 'denied', verification: 'unavailable',
+      message: 'Desktop access is disabled. Enable Desktop awareness in the voice panel before using desktop actions.',
+    }
+  }
   const runtime = host()
   if (!runtime) {
     return { action, ok: false, status: 'failed', verification: 'unavailable', message: 'Desktop actions are only available in the Otto desktop app.' }
@@ -176,8 +194,9 @@ export async function executeDesktopAction(action: DesktopAction): Promise<Deskt
   }
 }
 
-/** Read metadata from the native host. Call only while the visitor's desktop-awareness switch is on. */
+/** Read metadata from the native host only while the session's desktop permission is enabled. */
 export async function getDesktopContext(): Promise<DesktopContext | null> {
+  if (!desktopPermissionEnabled) return null
   const runtime = host()
   if (!runtime) return null
   return runtime.core.invoke<DesktopContext>('desktop_context')

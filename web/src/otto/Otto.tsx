@@ -26,7 +26,7 @@ import { useOwnStage } from './movement/useStage'
 import OttoDock from './OttoDock'
 import type { IdleControls } from './OttoStage'
 import { clearPageContext, publishContext } from './context'
-import { getDesktopContext, isDesktopRuntime } from './desktop'
+import { getDesktopContext, isDesktopRuntime, setDesktopPermissionEnabled } from './desktop'
 import { capList } from './contextBudget'
 import type { IdleState } from './idle'
 import type { RobotExpression } from './robot/robot'
@@ -103,6 +103,15 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   }, [page, otto])
   const [open, setOpen] = useState(false)
   const [desktopAwarenessEnabled, setDesktopAwarenessEnabled] = useState(false)
+  // The permission lives in the desktop bridge module, so clear it when this owner unmounts.
+  // This prevents a later Otto instance from inheriting access after the conversation UI is gone.
+  useEffect(() => () => {
+    setDesktopPermissionEnabled(false)
+  }, [])
+  const setDesktopAwareness = (enabled: boolean) => {
+    setDesktopPermissionEnabled(enabled)
+    setDesktopAwarenessEnabled(enabled)
+  }
   const opener = useRef<HTMLElement | null>(null)
   const ownGuide = useMemo(createOttoGuide, [])
   const ottoGuide = guide ?? ownGuide
@@ -287,7 +296,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   }, [conversing, desktopAwarenessEnabled])
 
   useEffect(() => {
-    if (!conversing && desktopAwarenessEnabled) setDesktopAwarenessEnabled(false)
+    if (!conversing && desktopAwarenessEnabled) setDesktopAwareness(false)
   }, [conversing, desktopAwarenessEnabled])
 
   /** What Otto is saying now, for the robot to mouth: the spoken channel only (no URLs, code or markdown in the bubble). */
@@ -303,7 +312,7 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
   const wakeQuestion = useRef<string | null>(null)
   const closePanel = useCallback(() => {
     wakeQuestion.current = null
-    setDesktopAwarenessEnabled(false)
+    setDesktopAwareness(false)
     publishContext('desktop_context', null)
     stop()
     setOpen(false)
@@ -359,6 +368,6 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
       ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
           events={otto} idleControls={idleControls} face={guideFace} onIdleState={state => { idleRef.current = state }} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
-    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} desktopAwarenessEnabled={desktopAwarenessEnabled} onDesktopAwarenessChange={setDesktopAwarenessEnabled} />}
+    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} desktopAwarenessEnabled={desktopAwarenessEnabled} onDesktopAwarenessChange={setDesktopAwareness} />}
   </>
 }
