@@ -53,6 +53,8 @@ MAX_RETRIES = 2
 DEFAULT_TIMEOUT = 30.0
 MAX_TIMEOUT = 300.0
 MAX_BACKOFF = 10.0
+#: How long `close` waits for cancelled workers before it gives up on one that will not stop.
+CLOSE_TIMEOUT = 5.0
 RESULT_CHARS = 500
 NOTE_CHARS = 140
 
@@ -156,6 +158,7 @@ class TaskEngine:
         self._queue: list[str] = []
         self._count = 0
         self._closed = False
+        self._runners: set[asyncio.Task] = set()  # kept apart from the records, so eviction cannot hide one from `close`
 
     # ---- starting and stopping ----
 
@@ -208,18 +211,18 @@ class TaskEngine:
         self._pump()
         return "cancelled"
 
-    async def close(self) -> None:
-        """Ends the session's work: every unfinished task is cancelled and awaited, and nothing more is sent or accepted."""
+    async def close(self, timeout: float = CLOSE_TIMEOUT) -> None:
+        """Ends the session's work: every unfinished task is cancelled and awaited, and nothing more is sent or accepted.
+
+        Bounded: a worker that swallows its cancellation is left behind after `timeout` seconds, so it cannot hold the
+        session (and its D-04 slot) open. Its task is already marked cancelled and can no longer tell Otto anything."""
         self._closed = True
-        runners = []
         for record in list(self._records.values()):
             if record.state not in TERMINAL:
                 self._cancel(record)
-            if record.runner is not None:
-                runners.append(record.runner)
-        if runners:
-            await asyncio.gather(*runners, return_exceptions=True)
         self._queue.clear()
+        if self._runners:
+            await asyncio.wait(set(self._runners), timeout=timeout)
 
     # ---- reading ----
 
@@ -243,6 +246,8 @@ class TaskEngine:
             # Take the slot now, not when the task first runs, or two pumps in a row would start too many.
             self._transition(record, "running")
             record.runner = asyncio.get_running_loop().create_task(self._run(record), name=record.id)
+            self._runners.add(record.runner)
+            record.runner.add_done_callback(self._runners.discard)
 
     async def _run(self, record: _Record) -> None:
         try:
@@ -258,10 +263,12 @@ class TaskEngine:
                         return self._fail(record, "error")
                     self._resume(record)
                     await self._sleep(record.backoff)
-                except TimeoutError:
+                except TimeoutError:  # a worker's own timeout (a socket, say) counts too: it is not retried either
                     return self._fail(record, "timeout")
                 except Exception:  # noqa: BLE001 - a worker may raise anything; its text is never kept
                     return self._fail(record, "error")
+            if record.state in TERMINAL:  # cancelled while the worker ignored it: skip the check and the result
+                return
             self._resume(record)
             if record.verify is not None:
                 self._transition(record, "verifying")
@@ -270,6 +277,8 @@ class TaskEngine:
                         verified = await record.verify(result)
                 except Exception:  # noqa: BLE001 - a check that cannot finish confirms nothing
                     verified = False
+                if record.state in TERMINAL:
+                    return
                 if verified is not True:
                     return self._fail(record, "verification_failed")
             record.result = _clip(result, RESULT_CHARS)

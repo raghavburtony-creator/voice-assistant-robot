@@ -501,3 +501,72 @@ def test_the_route_closes_the_engine_when_the_session_ends(monkeypatch):
     snap = seen["bridge"].tasks.get("task-1")
     assert snap.state == "cancelled"
     assert seen["bridge"].tasks.submit("after", Gate()).rejected == "closed"
+
+
+# ---- review findings (otto-code-reviewer) ----
+
+def test_close_gives_up_on_a_worker_that_will_not_stop_instead_of_holding_the_session_open():
+    async def go():
+        eng, events = engine()
+        stubborn, release = asyncio.Event(), asyncio.Event()
+
+        async def refuses(ctx):
+            while not release.is_set():
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    stubborn.set()
+
+        eng.submit("Stubborn", refuses)
+        await settle()
+        await eng.close(timeout=0.05)  # returns; the worker is left behind
+        state = eng.get("task-1").state
+        release.set()  # let it go, so the loop can shut down
+        await settle(10)
+        return state, stubborn.is_set(), len(events)
+
+    state, saw_cancel, count = run(go())
+    assert state == "cancelled" and saw_cancel
+    assert count == 1  # only `working`: nothing was sent after close began
+
+
+def test_a_worker_that_swallows_its_cancellation_and_returns_cannot_complete_or_verify():
+    async def go():
+        eng, events = engine()
+        checked = []
+
+        async def ignores(ctx):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                return "finished anyway"
+
+        async def verify(result):
+            checked.append(result)
+            return True
+
+        eng.submit("Ignores", ignores, verify=verify)
+        await settle()
+        eng.cancel("task-1")
+        await settle(10)
+        runner_errors = [r for r in eng._runners if r.done() and r.exception()]
+        return eng.get("task-1"), checked, runner_errors, events
+
+    snap, checked, errors, events = run(go())
+    assert (snap.state, snap.result) == ("cancelled", None)
+    assert checked == [] and errors == []
+    assert [e["kind"] for e in events] == ["working", "failure"]
+
+
+def test_a_runner_is_still_awaited_by_close_after_its_record_was_evicted():
+    async def go():
+        eng, _ = engine()
+        eng.submit("held", Gate())
+        await settle()
+        runner = eng._records["task-1"].runner
+        eng.cancel("task-1")  # its runner has a cancellation pending but has not unwound yet
+        del eng._records["task-1"]  # as eviction of a finished task would
+        await eng.close()
+        return runner.done()
+
+    assert run(go()) is True
