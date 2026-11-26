@@ -30,6 +30,7 @@ const CORE = [
   'runtimeId.ts',
   'soundCues.ts',
   'speechGate.ts',
+  'sign/sign.ts',
   'signRecognition.ts',
 ]
 

@@ -1,11 +1,12 @@
 // Provider-neutral sign-recognition contract (SIG-02, D-29).
-// Text metadata only: no camera, network, storage or model dependency.
+// Text metadata only: no camera, network, storage or model dependency. This is the ONE update type and the ONE validator:
+// useSign runs every update an adapter emits through a SignRecognitionGate (a new gate for each capture).
 export const SIGN_TEXT_MAX_CHARS = 500
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/
 const LANGUAGE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
 type Base = { sessionId: string; sequence: number; capturedAtMs: number; utteranceId: string; language: string }
 export type SignRecognitionUpdate =
-  | (Base & { kind: 'partial' | 'final'; text: string })
+  | (Base & { kind: 'partial' | 'final'; text: string; confidence?: number })
   | (Base & { kind: 'unrecognized'; reason: 'uncertain' | 'unsupported' | 'not_recognized' })
 export type SignUpdateRejection = 'malformed' | 'wrong_session' | 'wrong_language' | 'out_of_order' | 'invalid_time' | 'invalid_text' | 'oversized_text' | 'after_final'
 export type SignUpdateResult = { accepted: true; update: SignRecognitionUpdate } | { accepted: false; reason: SignUpdateRejection }
@@ -39,7 +40,9 @@ export class SignRecognitionGate {
       if (value.text.length > SIGN_TEXT_MAX_CHARS) return { accepted: false, reason: 'oversized_text' }
       // eslint-disable-next-line no-control-regex
       if (/[\u0000-\u001F\u007F]/.test(value.text)) return { accepted: false, reason: 'invalid_text' }
-      update = { sessionId, sequence, capturedAtMs, utteranceId, language, kind, text: value.text.trim() }
+      // A confidence is a hint in 0..1; anything else is malformed. It never replaces the visitor's check.
+      if (value.confidence !== undefined && (typeof value.confidence !== 'number' || !Number.isFinite(value.confidence) || value.confidence < 0 || value.confidence > 1)) return { accepted: false, reason: 'malformed' }
+      update = { sessionId, sequence, capturedAtMs, utteranceId, language, kind, text: value.text.trim(), ...(value.confidence === undefined ? {} : { confidence: value.confidence }) }
       if (kind === 'final') this.finalized.add(utteranceId)
     } else if (kind === 'unrecognized' && (value.reason === 'uncertain' || value.reason === 'unsupported' || value.reason === 'not_recognized')) {
       update = { sessionId, sequence, capturedAtMs, utteranceId, language, kind, reason: value.reason }
@@ -53,16 +56,4 @@ function record(value: unknown): value is Record<string, unknown> { return typeo
 /** Only final results may enter the existing conversation input path. */
 export function confirmedTextForConversation(update: SignRecognitionUpdate): string | null {
   return update.kind === 'final' ? update.text : null
-}
-export interface SignRecognitionAdapter { run(onUpdate: (update: unknown) => void): void; stop(): void }
-/** Deterministic fixture adapter for tests; it has no capture or provider implementation. */
-export class FakeSignRecognitionAdapter implements SignRecognitionAdapter {
-  private stopped = false
-  private readonly fixtures: readonly unknown[]
-  constructor(fixtures: readonly unknown[]) { this.fixtures = fixtures }
-  run(onUpdate: (update: unknown) => void): void {
-    if (this.stopped) return
-    for (const fixture of this.fixtures) { if (this.stopped) break; onUpdate(fixture) }
-  }
-  stop(): void { this.stopped = true }
 }
