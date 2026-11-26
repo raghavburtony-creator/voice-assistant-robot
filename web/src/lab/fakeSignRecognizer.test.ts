@@ -17,6 +17,32 @@ describe('FakeSignRecognizer', () => {
       }
     } finally { vi.useRealTimers() }
   })
+  it('emits exactly the scripted fixtures, in order, tagged with its session and language', () => {
+    vi.useFakeTimers()
+    try {
+      for (const steps of Object.values(FAKE_SIGN_SCRIPTS)) {
+        const fake = new FakeSignRecognizer(steps)
+        const received: unknown[] = []
+        fake.start('sign-7', v => received.push(v))
+        vi.advanceTimersByTime(10_000)
+        expect(received).toEqual(steps.map((step, i) => ({
+          ...step.update, sessionId: 'sign-7', sequence: i, capturedAtMs: steps.slice(0, i + 1).reduce((t, x) => t + x.afterMs, 0),
+          utteranceId: 'utterance-1', language: 'und',
+        })))
+      }
+    } finally { vi.useRealTimers() }
+  })
+  it('emits nothing more after it is stopped, even before its timers would fire', () => {
+    vi.useFakeTimers()
+    try {
+      const fake = new FakeSignRecognizer()
+      const received: unknown[] = []
+      fake.start('sign-1', v => received.push(v))
+      fake.stop()
+      vi.advanceTimersByTime(10_000)
+      expect(received).toEqual([])
+    } finally { vi.useRealTimers() }
+  })
   it('stops emitting immediately when stopped', () => {
     vi.useFakeTimers()
     try {
