@@ -147,7 +147,7 @@ The server includes an explicit, identity-scoped memory store (`server/app/voice
 
 ## Privacy
 
-What the server may keep is one table, `DATA_CLASSES` in `server/app/voice/privacy.py` (the same table is in [docs/architecture.md](docs/architecture.md#privacy-and-lifecycle-invariants)). In plain words: only two things are ever persisted, a memory record and the continuity record (task id, step id and time). Voice transcripts, screenshots, camera frames, files, tool arguments and tool results are not. `persist_allowed(name)` is false for those, and false for any name it does not know.
+What the server may keep is listed in `DATA_CLASSES` in `server/app/voice/privacy.py` (the same table is in [docs/architecture.md](docs/architecture.md#privacy-and-lifecycle-invariants)). Four classes are persisted: memory records; metadata-only memory audit rows; continuity records (task id, step id and time); and a hashed continuity-withdrawal marker. Voice transcripts, screenshots, camera frames, files, tool arguments and tool results are not. `persist_allowed(name)` is false for those, and false for any name it does not know.
 
 **Redaction.** Memory content and provenance pass through `redact_text` before they are written, on `remember` and `update`. It replaces email addresses (`[email]`), phone numbers in the `(555) 123-4567` or `+44 ...` shapes (`[phone]`), payment-card numbers that pass the Luhn check (`[card]`), and API keys, bearer tokens, `?api_key=` values, passwords inside URLs and "password is ..." phrasing (`[secret]`). A record that needed redaction is stored as `sensitive`, which recall and model context leave out by default, and `update` never lowers that. The audit table keeps the category names for a write (`audit_events` shows them as `redacted`), never the values. The same function also runs over the error text the voice route logs, after the Gemini key is removed.
 
@@ -166,6 +166,8 @@ counts = forget_identity(memory_service, continuity_store, scope, identity, expl
 ```
 
 It deletes every memory record for that scope and identity, writes one audit row with the action and the count, deletes the continuity record and disables continuity for that identity, as a withdrawal does (D-26). Continuity comes back only when the host next opens a session with that identity enabled. Other identities and other scopes are untouched. Earlier `memory_audit` rows survive it: they hold only the hashed identity key, a redacted provenance string and category names, never the values. `forget_identity` is synchronous (SQLite); from async code call it with `await asyncio.to_thread(forget_identity, ...)`. The two stores are separate databases, so the call is not atomic: if one part fails, the other is still done and `ForgetIncomplete` names what is not. Call it again; repeating is safe.
+
+**Audit and withdrawal retention.** `memory_audit` contains only the hashed identity key, record id, action, timestamp, redacted provenance and redaction-category names; it never stores memory content or the values that were redacted. It keeps the latest 1,000 events per identity and prunes older rows on the next audit write. Existing audit rows deliberately survive `forget_identity` as a metadata-only record of the deletion. `continuity_withdrawal` contains only a SHA-256 key derived from the host scope and identity. It has no time-based expiry: it remains until the host explicitly re-enables continuity, so a visitor's withdrawal cannot silently lapse (D-26).
 
 ## How it works
 

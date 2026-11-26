@@ -67,6 +67,18 @@ _POLICIES = (
         "Task id, step id and saved time only. Expires after 7 days (RETENTION_SECONDS); removed on "
         "completion, cancellation or withdrawal (D-26).", _NO_TEXT,
     ),
+    DataClassPolicy(
+        "memory_audit", True, "sensitive",
+        "Metadata only: at most 1000 events per hashed identity; older rows are pruned on the next audit write. "
+        "Rows survive memory deletion to retain the metadata-only audit trail. Provenance is redacted before write.",
+        REDACTION_APPLIED,
+    ),
+    DataClassPolicy(
+        "continuity_withdrawal", True, "sensitive",
+        "Hashed scope and identity key only; retained until the host explicitly re-enables continuity (D-26). "
+        "No expiry, so withdrawal cannot silently lapse.",
+        _NO_TEXT,
+    ),
 )
 
 DATA_CLASSES: dict[str, DataClassPolicy] = {item.name: item for item in _POLICIES}
