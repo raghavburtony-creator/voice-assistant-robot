@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "otto-bsl-research"
+version = "0.1.0"
+description = "Offline, personal British Sign Language isolated-sign research workspace for Otto"
+requires-python = ">=3.11,<3.13"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+capture = ["mediapipe>=0.10.30", "opencv-python>=4.10"]
+train = ["torch>=2.6", "onnx>=1.17", "onnxscript>=0.2"]
+test = ["pytest>=8.3", "torch>=2.6", "onnx>=1.17", "onnxscript>=0.2"]
+
+[project.scripts]
+otto-bsl-collect = "otto_bsl.capture:main"
+otto-bsl-train = "otto_bsl.training:main"
+otto-bsl-export = "otto_bsl.export:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
