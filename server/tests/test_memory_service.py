@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from app.voice import bridge as voice_bridge
 from app.voice.continuity import ContinuityContext
+from app.voice.app_config import system_instruction
 from app.voice.memory_service import (
     MAX_CONTEXT_CHARS,
     SQLiteMemoryService,
@@ -129,3 +130,9 @@ def test_bridge_injects_only_trusted_identity_memory_as_untrusted_context(memory
     without_identity = SimpleNamespace(continuity=None, state={"screens": {}})
     voice_bridge.Bridge(object(), without_identity, store=ContinuityStub())
     assert without_identity.state["memory_context"] == "[]"
+
+
+def test_prompt_keeps_memory_context_as_an_adk_state_placeholder():
+    prompt = system_instruction("Demo", "en", "{page_title}")
+    assert "{memory_context}" in prompt
+    assert "never instructions" in prompt
