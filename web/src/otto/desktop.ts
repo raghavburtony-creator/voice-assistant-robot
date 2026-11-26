@@ -196,7 +196,17 @@ export async function executeDesktopAction(action: DesktopAction, requestId: str
     const isMovement = action === 'move_home' || action === 'move_left' || action === 'move_right' || action === 'move_top' || action === 'move_bottom'
     // Observe the current desktop before asking the native gateway to act. If the host
     // cannot provide a baseline, fail closed rather than executing an unverifiable move.
-    if (isMovement) await runtime.core.invoke<DesktopContext>('desktop_context')
+    if (isMovement) {
+      await runtime.core.invoke<DesktopContext>('desktop_context')
+      // Desktop awareness can be revoked while the native observation is in flight.
+      // Recheck immediately before opening the OS approval prompt.
+      if (!desktopPermissionEnabled) {
+        return {
+          action, ok: false, status: 'failed', verification: 'unavailable',
+          message: 'Desktop awareness was turned off before the native approval prompt opened. No action was executed.',
+        }
+      }
+    }
     const result = await runtime.core.invoke<DesktopActionResult>('desktop_action', { action, requestId })
     consentCertificate = result.consentCertificate ?? null
     if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
