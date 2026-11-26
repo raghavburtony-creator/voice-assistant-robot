@@ -40,10 +40,19 @@ export type DesktopActionResult = {
   consentCertificate?: DesktopConsentCertificate | null
 }
 
+export type DesktopConsentCertificateReport = {
+  certificate_id: string
+  request_id: string
+  action: DesktopAction
+  decision: 'approved' | 'denied'
+  method: 'native_os_dialog'
+  issued_at_unix_ms: number
+}
+
 export type DesktopActionReport = {
   request_id: string
   action: DesktopAction
-  consent_certificate: DesktopConsentCertificate
+  consent_certificate: DesktopConsentCertificateReport
   result: Pick<DesktopActionResult, 'ok' | 'status' | 'verification'>
 }
 

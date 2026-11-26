@@ -71,7 +71,14 @@ export default function App() {
           reportDesktopResult({
             request_id: action.request_id,
             action: action.desktop_action,
-            consent_certificate: result.consentCertificate,
+            consent_certificate: {
+              certificate_id: result.consentCertificate.certificateId,
+              request_id: result.consentCertificate.requestId,
+              action: result.consentCertificate.action,
+              decision: result.consentCertificate.decision,
+              method: result.consentCertificate.method,
+              issued_at_unix_ms: result.consentCertificate.issuedAtUnixMs,
+            },
             result: { ok: result.ok, status: result.status, verification: result.verification },
           })
         }

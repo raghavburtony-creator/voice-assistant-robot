@@ -1104,3 +1104,52 @@ def test_native_decline_is_recorded_as_cancellation_not_success():
     assert record["consent_status"] == "denied"
     assert record["execution_status"] == "cancelled"
     assert record["result_ok"] is False
+
+
+
+def test_move_desktop_compatibility_tool_receipt_uses_the_mapped_native_action():
+    from app.voice.policy import POLICY_ENGINE
+
+    sink.open("tool-test")
+    ctx = _context()
+    ctx.state["screens"] = {"desktop_context": {"enabled": True}}
+    gateway = tools.REGISTRY._gateway(tools.move_desktop, tools.REGISTRY["move_desktop"].metadata)
+    result = gateway("desktop-left", ctx)
+    assert result["policy"]["scope"] == "action:move_left"
+    queued = sink.drain("tool-test")
+    assert queued == [{
+        "action": "desktop_action", "desktop_action": "move_left",
+        "request_id": result["policy"]["request_id"],
+    }]
+    report = {
+        "request_id": result["policy"]["request_id"], "action": "move_left",
+        "consent_certificate": {
+            "certificate_id": result["policy"]["request_id"] + "-123",
+            "request_id": result["policy"]["request_id"], "action": "move_left",
+            "decision": "approved", "method": "native_os_dialog", "issued_at_unix_ms": 123,
+        },
+        "result": {"ok": True, "status": "completed", "verification": "verified"},
+    }
+    assert POLICY_ENGINE.record_host_result(ctx.state, report) is True
+    assert ctx.state["tool_policy_audit"][-1]["verification_status"] == "passed"
+    sink.close("tool-test")
+
+
+def test_process_spawn_consent_receipt_remains_pending_verification():
+    from app.voice.policy import POLICY_ENGINE, PolicyDecision
+
+    state = {}
+    decision = PolicyDecision("d" * 32, "confirmation_required", "high", "desktop_action_approval",
+        "approval required", "action:launch_calculator", "pending")
+    POLICY_ENGINE.audit(SimpleNamespace(state=state), tools.REGISTRY["desktop_action"].metadata, decision, "awaiting_confirmation")
+    report = {
+        "request_id": "d" * 32, "action": "launch_calculator",
+        "consent_certificate": {
+            "certificate_id": "d" * 32 + "-123", "request_id": "d" * 32,
+            "action": "launch_calculator", "decision": "approved",
+            "method": "native_os_dialog", "issued_at_unix_ms": 123,
+        },
+        "result": {"ok": True, "status": "started", "verification": "process_spawned"},
+    }
+    assert POLICY_ENGINE.record_host_result(state, report) is True
+    assert state["tool_policy_audit"][-1]["verification_status"] == "pending"
