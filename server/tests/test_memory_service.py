@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
 
+from app.voice import bridge as voice_bridge
+from app.voice.continuity import ContinuityContext
 from app.voice.memory_service import (
     MAX_CONTEXT_CHARS,
     SQLiteMemoryService,
@@ -100,3 +103,29 @@ def test_context_is_bounded_and_serialized_as_data(memory):
     context = memory.get_context("demo", "opaque-a")
     assert len(context) <= MAX_CONTEXT_CHARS
     assert context.startswith("[") and context.endswith("]")
+
+
+def test_bridge_injects_only_trusted_identity_memory_as_untrusted_context(memory, monkeypatch):
+    memory.remember(
+        "otto-demo", "opaque-host-id", "Prefers concise explanations",
+        provenance="explicit request", explicit=True,
+    )
+    monkeypatch.setattr(voice_bridge, "memory_service", memory)
+
+    class ContinuityStub:
+        def enable(self, scope, identity):
+            pass
+
+        def load(self, scope, identity):
+            return None
+
+    live = SimpleNamespace(
+        continuity=ContinuityContext(scope="otto-demo", identity="opaque-host-id"),
+        state={"screens": {}},
+    )
+    voice_bridge.Bridge(object(), live, store=ContinuityStub())
+    assert "Prefers concise explanations" in live.state["memory_context"]
+
+    without_identity = SimpleNamespace(continuity=None, state={"screens": {}})
+    voice_bridge.Bridge(object(), without_identity, store=ContinuityStub())
+    assert without_identity.state["memory_context"] == "[]"
