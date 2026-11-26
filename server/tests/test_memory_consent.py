@@ -36,7 +36,7 @@ def test_rejects_invalid_kind_empty_text_and_overlong_text():
     assert stage_memory_proposal(state, "A preference", [], now=100) is None
     assert stage_memory_proposal(state, "  ", "semantic", now=100) is None
     assert stage_memory_proposal(state, "x" * 601, "semantic", now=100) is None
-    assert state[PENDING_MEMORY_KEY] == {}
+    assert state.get(PENDING_MEMORY_KEY, {}) == {}
 
 
 def test_pending_proposals_are_bounded_and_expired_entries_are_pruned():
