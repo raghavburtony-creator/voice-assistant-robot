@@ -12,6 +12,7 @@ import re
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -88,7 +89,7 @@ class SQLiteMemoryService:
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute(
                 """CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY,
@@ -111,6 +112,15 @@ class SQLiteMemoryService:
 
     def _connect(self):
         return sqlite3.connect(self.path, timeout=5)
+
+    @contextmanager
+    def _connection(self):
+        db = self._connect()
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _audit(db: sqlite3.Connection, key: str, record_id: str, action: str, provenance: str, timestamp: int) -> None:
