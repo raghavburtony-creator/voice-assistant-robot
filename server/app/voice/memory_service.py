@@ -165,7 +165,7 @@ class SQLiteMemoryService:
         timestamp = int(time.time()) if now is None else now
         record_id = str(uuid.uuid4())
         related_json = json.dumps(list(dict.fromkeys(related_ids)), separators=(",", ":"))
-        with self._connect() as db:
+        with self._connection() as db:
             count = db.execute("SELECT COUNT(*) FROM memories WHERE identity_key = ?", (key,)).fetchone()[0]
             if count >= MAX_RECORDS_PER_IDENTITY:
                 oldest = db.execute(
@@ -206,7 +206,7 @@ class SQLiteMemoryService:
             params.append(kind)
         clauses.append("(kind != 'working' OR updated_at >= ?)")
         params.append(timestamp - WORKING_RETENTION_SECONDS)
-        with self._connect() as db:
+        with self._connection() as db:
             rows = db.execute(
                 "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE " + " AND ".join(clauses) + " ORDER BY updated_at DESC LIMIT 500",
@@ -241,7 +241,7 @@ class SQLiteMemoryService:
         if not isinstance(record_id, str):
             raise ValueError("Invalid memory id")
         timestamp = int(time.time()) if now is None else now
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute(
                 "SELECT id, kind, content, provenance, sensitivity, created_at, updated_at, identity_key, related_ids "
                 "FROM memories WHERE id = ? AND identity_key = ?", (record_id, key)
@@ -275,7 +275,7 @@ class SQLiteMemoryService:
         key = _identity_key(scope, identity)
         clean_provenance = _clean_text(provenance, MAX_PROVENANCE_CHARS)
         timestamp = int(time.time()) if now is None else now
-        with self._connect() as db:
+        with self._connection() as db:
             cursor = db.execute("DELETE FROM memories WHERE id = ? AND identity_key = ?", (record_id, key))
             if cursor.rowcount == 1:
                 self._audit(db, key, record_id, "forget", clean_provenance, timestamp)
@@ -287,7 +287,7 @@ class SQLiteMemoryService:
         key = _identity_key(scope, identity)
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Invalid audit limit")
-        with self._connect() as db:
+        with self._connection() as db:
             rows = db.execute(
                 "SELECT record_id, action, provenance, created_at FROM memory_audit "
                 "WHERE identity_key = ? ORDER BY created_at DESC LIMIT ?", (key, limit)
