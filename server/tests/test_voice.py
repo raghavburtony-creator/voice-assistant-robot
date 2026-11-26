@@ -924,7 +924,7 @@ def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
         entry = registry[name]
         assert entry.input_schema["type"] == "object"
         assert entry.input_schema["additionalProperties"] is False
-        assert entry.output_schema["required"] == ["status", "data"]
+        assert entry.output_schema["required"] == ["status", "data", "policy"]
         assert entry.metadata.timeout_seconds > 0
         assert entry.metadata.risk_level in {"low", "medium", "high"}
         assert entry.metadata.required_permission
