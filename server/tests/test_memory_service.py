@@ -72,6 +72,21 @@ def test_update_and_forget_are_explicit_and_identity_scoped(memory):
     assert all("content" not in item for item in audit)
 
 
+def test_memory_audit_keeps_redaction_categories_for_pre_redacted_proposals(memory):
+    saved = memory.remember(
+        "demo", "opaque-a", "Contact me at [email]",
+        provenance="visitor approved in voice panel",
+        sensitivity="sensitive",
+        redacted_categories=("email",),
+        explicit=True,
+        now=100,
+    )
+
+    assert saved.sensitivity == "sensitive"
+    audit = memory.audit_events("demo", "opaque-a")
+    assert audit[0]["redacted"] == ["email"]
+
+
 def test_resurface_ranks_relevant_records_without_emitting_actions(memory):
     memory.remember(
         "demo", "opaque-a", "Uses Python for backend work", provenance="explicit request",

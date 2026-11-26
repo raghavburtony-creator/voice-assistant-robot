@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any
 
-from app.voice.privacy import redact_text
+from app.voice.privacy import CATEGORIES, redact_text
 
 PENDING_MEMORY_KEY = "memory_pending"
 MAX_PENDING_MEMORY = 3
@@ -65,7 +65,8 @@ def stage_memory_proposal(state: object, content: object, kind: object, *, now: 
         return None
     request_id = uuid.uuid4().hex
     pending[request_id] = {
-        "content": cleaned, "kind": kind, "sensitive": bool(categories), "created_at": timestamp,
+        "content": cleaned, "kind": kind, "sensitive": bool(categories),
+        "redacted_categories": list(categories), "created_at": timestamp,
     }
     _write_pending(state, pending)
     return {"request_id": request_id, "content": cleaned, "kind": kind, "redacted": bool(categories)}
@@ -87,9 +88,9 @@ def pending_memory_proposal(state: object, request_id: object, *, now: float | N
     }
 
 
-def discard_memory_proposal(state: object, request_id: object) -> None:
+def discard_memory_proposal(state: object, request_id: object, *, now: float | None = None) -> None:
     if _supports_state(state) and _valid_request_id(request_id):
-        pending = _prune(state, time.time())
+        pending = _prune(state, time.time() if now is None else now)
         pending.pop(request_id, None)
         _write_pending(state, pending)
 
@@ -111,6 +112,12 @@ def consume_memory_proposal(state: object, request_id: object, accepted: object,
         return "expired", None
     if not accepted:
         return "discarded", None
+    categories = item.get("redacted_categories", [])
+    if not isinstance(categories, list):
+        categories = []
+    categories = tuple(sorted({value for value in categories if isinstance(value, str) and value in CATEGORIES}))
     return "accepted", {
-        "content": item["content"], "kind": item["kind"], "sensitive": item.get("sensitive") is True,
+        "content": item["content"], "kind": item["kind"],
+        "sensitive": item.get("sensitive") is True or bool(categories),
+        "redacted_categories": categories,
     }

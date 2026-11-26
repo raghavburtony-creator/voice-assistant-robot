@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from app.voice.privacy import has_placeholder, redact_text
+from app.voice.privacy import CATEGORIES, has_placeholder, redact_text
 
 MemoryKind = Literal["episodic", "semantic", "working"]
 Sensitivity = Literal["normal", "sensitive"]
@@ -183,15 +183,20 @@ class SQLiteMemoryService:
         sensitivity: Sensitivity = "normal",
         related_ids: tuple[str, ...] | list[str] = (),
         explicit: bool = False,
+        redacted_categories: tuple[str, ...] | list[str] = (),
         now: int | None = None,
     ) -> MemoryRecord:
         self._explicit(explicit)
         key = _identity_key(scope, identity)
+        if not isinstance(redacted_categories, (tuple, list)) or any(
+            not isinstance(category, str) or category not in CATEGORIES for category in redacted_categories
+        ):
+            raise ValueError("Unsupported redaction category")
         if kind not in _KIND_VALUES or sensitivity not in _SENSITIVITY_VALUES:
             raise ValueError("Unsupported memory kind or sensitivity")
         clean_content, content_cats = _clean_redacted(content, MAX_CONTENT_CHARS)
         clean_provenance, provenance_cats = _clean_redacted(provenance, MAX_PROVENANCE_CHARS)
-        categories = tuple(sorted(set(content_cats) | set(provenance_cats)))
+        categories = tuple(sorted(set(content_cats) | set(provenance_cats) | set(redacted_categories)))
         if categories:
             sensitivity = "sensitive"  # D-17: what had to be redacted is not offered back by default
         if not isinstance(related_ids, (tuple, list)) or len(related_ids) > 20 or any(

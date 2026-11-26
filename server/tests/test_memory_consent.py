@@ -31,7 +31,10 @@ def test_adk_state_object_can_stage_pending_proposals_and_consume_them_once():
     status, consumed = consume_memory_proposal(state, proposal["request_id"], True, now=102)
 
     assert status == "accepted"
-    assert consumed == {"content": "Prefers concise answers", "kind": "semantic", "sensitive": False}
+    assert consumed == {
+        "content": "Prefers concise answers", "kind": "semantic", "sensitive": False,
+        "redacted_categories": (),
+    }
     assert pending_memory_proposal(state, proposal["request_id"], now=103) is None
 
 
@@ -39,7 +42,7 @@ def test_adk_state_object_can_reject_and_discard_a_proposal():
     state = State({}, {})
     proposal = stage_memory_proposal(state, "Temporary note", "episodic", now=100)
     assert proposal is not None
-    discard_memory_proposal(state, proposal["request_id"])
+    discard_memory_proposal(state, proposal["request_id"], now=101)
     assert pending_memory_proposal(state, proposal["request_id"], now=101) is None
 
 
@@ -64,6 +67,7 @@ def test_proposal_is_redacted_before_it_is_exposed_and_marked_sensitive():
     assert proposal["redacted"] is True
     assert "visitor@example.com" not in str(state)
     assert state[PENDING_MEMORY_KEY][proposal["request_id"]]["sensitive"] is True
+    assert state[PENDING_MEMORY_KEY][proposal["request_id"]]["redacted_categories"] == ["email"]
 
 
 def test_rejects_invalid_kind_empty_text_and_overlong_text():
@@ -170,7 +174,7 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
             state=State(bridge.live.state, {}),
             session=SimpleNamespace(id=live.session_id),
         )
-        staged = tools.propose_memory("Prefers concise answers", "semantic", tool_context)
+        staged = tools.propose_memory("Contact me at visitor@example.com", "semantic", tool_context)
         assert staged["ok"] is True and staged["awaiting_confirmation"] is True
         request_id = next(iter(bridge.live.state[PENDING_MEMORY_KEY]))
         proposal = pending_memory_proposal(bridge.live.state, request_id)
@@ -181,10 +185,10 @@ def test_bridge_persists_only_after_a_matching_browser_confirmation(monkeypatch)
         })
         assert saved == {"type": "memory_result", "request_id": request_id, "status": "saved"}
         assert writes == [(
-            "app", "opaque-host-id", "Prefers concise answers",
+            "app", "opaque-host-id", "Contact me at [email]",
             {
                 "kind": "semantic", "provenance": "visitor approved in voice panel",
-                "sensitivity": "normal", "explicit": True,
+                "sensitivity": "sensitive", "redacted_categories": ("email",), "explicit": True,
             },
         )]
         assert bridge.resolve_memory_consent({

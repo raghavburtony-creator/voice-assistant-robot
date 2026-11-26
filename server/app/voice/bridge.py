@@ -350,6 +350,7 @@ class Bridge:
                         kind=proposal["kind"],
                         provenance="visitor approved in voice panel",
                         sensitivity="sensitive" if proposal.get("sensitive") is True else "normal",
+                        redacted_categories=proposal.get("redacted_categories", ()),
                         explicit=True,
                     )
                     status = "saved"
