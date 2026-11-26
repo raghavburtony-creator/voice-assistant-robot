@@ -1,0 +1,3 @@
+# Install the full local capture, training, export and test environment.
+# PyTorch device-specific wheels may be installed separately for CUDA systems.
+-e .[capture,export,test]

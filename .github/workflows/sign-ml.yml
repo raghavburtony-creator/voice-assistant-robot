@@ -1,0 +1,28 @@
+name: Sign ML
+
+on:
+  pull_request:
+    paths: ['ml/sign/**', '.github/workflows/sign-ml.yml']
+  push:
+    branches: [main]
+    paths: ['ml/sign/**', '.github/workflows/sign-ml.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: BSL training pipeline tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml/sign
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ml/sign/pyproject.toml
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q
