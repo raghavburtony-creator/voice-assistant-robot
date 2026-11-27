@@ -143,9 +143,9 @@ A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
 ### Server extensions
 
-The first extension seam is a static server-side manifest catalog in `server/app/voice/extensions.py`. A host installs a reviewed extension by adding an `ExtensionManifest` to `EXTENSION_MANIFESTS`. Each manifest declares namespaced tool functions with type annotations and optional async per-session start/end hooks. Tool schemas are generated from those annotations, and every invocation still passes through the single `ToolRegistry` and `PolicyEngine`.
+The first extension seam is a static server-side manifest catalog in `server/app/voice/extensions.py`. A host installs a reviewed extension by adding an `ExtensionManifest` to `EXTENSION_MANIFESTS`. Each manifest may declare namespaced tool functions with type annotations, reviewed skill guidance, and optional async per-session start/end hooks. Tool schemas are generated from annotations, while skill guidance is added to the existing agent instruction under the core safety rules. Every tool invocation still passes through the single `ToolRegistry` and `PolicyEngine`.
 
-This first slice accepts only low-risk, synchronous, read-only tools using the existing `voice_session` permission, with no declared side effects. Lifecycle hooks have a two-second timeout; a failed extension is disabled only for that session, and other extensions continue. Extension modules are trusted server code, not a sandbox: review them before enabling them. There is no dynamic package discovery, remote MCP server/client transport or skill-package loader yet. See [server extensions](docs/extensions.md).
+This first slice accepts only low-risk, synchronous, read-only tools using the existing `voice_session` permission, with no declared side effects. Lifecycle hooks have a two-second timeout; a failed extension is disabled only for that session, and other extensions continue. Extension modules are trusted server code, not a sandbox: review them before enabling them. There is no dynamic package discovery, remote MCP server/client transport or external skill-package loader yet. Static skill bodies are capped and reviewed as trusted server code. See [server extensions](docs/extensions.md).
 
 ## Memory
 
