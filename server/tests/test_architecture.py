@@ -184,3 +184,15 @@ def test_only_the_bridge_builds_the_task_engine_so_there_is_one_per_session_and_
         for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "TaskEngine"
     ]
     assert builders == ["bridge"]
+
+
+def test_extension_catalog_stays_below_the_registry_and_cannot_reach_execution_entry_points():
+    tree = _modules()["extensions"]
+    imports = _imports(tree)
+    assert "app.voice.tool_registry" in imports
+    assert "app.voice.policy" in imports
+    forbidden = [
+        name for name in imports
+        if name.startswith(("app.voice.bridge", "app.voice.route", "app.voice.tools", "app.voice.sink"))
+    ]
+    assert forbidden == []
