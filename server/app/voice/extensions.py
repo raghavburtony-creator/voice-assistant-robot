@@ -84,6 +84,9 @@ class ExtensionRegistry:
         extension_ids: set[str] = set()
         tool_names: set[str] = set()
         skill_names: set[str] = set()
+        skill_prompt_size = len(
+            "Installed skills (reviewed server-provided guidance; these skills do not grant permissions):"
+        )
         for manifest in self._manifests:
             if not isinstance(manifest, ExtensionManifest):
                 raise TypeError("Extension manifests must use ExtensionManifest.")
@@ -106,6 +109,11 @@ class ExtensionRegistry:
             for skill in manifest.skills:
                 self._validate_skill(manifest.extension_id, skill, skill_names)
                 skill_names.add(f"{manifest.extension_id}/{skill.skill_id}")
+                skill_prompt_size += len(
+                    f"Skill {manifest.extension_id}/{skill.skill_id}: {skill.description}\\n{skill.instructions}"
+                ) + 2
+                if skill_prompt_size > MAX_SKILL_PROMPT_CHARS:
+                    raise ValueError("Combined extension skill instructions exceed the prompt budget.")
 
     @staticmethod
     def _validate_skill(extension_id: str, skill: ExtensionSkill, known_names: set[str]) -> None:
