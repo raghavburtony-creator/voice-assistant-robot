@@ -44,6 +44,7 @@ def test_extension_tool_uses_generated_schema_and_the_existing_policy_gateway():
 
     assert entry.input_schema["properties"] == {"query": {"type": "string"}}
     assert entry.input_schema["additionalProperties"] is False
+    assert "ext_catalog_lookup" in {tool.name for tool in registry.adk_tools()}
     assert entry.metadata.family == "extension"
     assert entry.metadata.required_permission == "extension:catalog"
     assert entry.metadata.extension_id == "catalog"

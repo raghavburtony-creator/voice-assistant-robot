@@ -95,7 +95,7 @@ def _plain_text(value: object, limit: int) -> bool:
 def _skill_text(value: object) -> bool:
     return (
         isinstance(value, str) and bool(value.strip()) and len(value) <= MAX_SKILL_CHARS
-        and all(ord(char) >= 32 or char in "\\n\\t" for char in value)
+        and all(ord(char) >= 32 or char in "\n\t" for char in value)
     )
 
 
@@ -163,6 +163,9 @@ def _binding(extension_id: str, name: str, description: str, model_type: type[Ba
         arguments = model.model_validate(kwargs)
         result = handler(arguments)
         if inspect.isawaitable(result):
+            close = getattr(result, "close", None)
+            if callable(close):
+                close()
             raise TypeError("Extension handler returned an awaitable.")
         bounded = _bounded_json(result)
         encoded = json.dumps(bounded, ensure_ascii=False, separators=(",", ":"))
@@ -199,11 +202,9 @@ class ExtensionSession:
         for extension_id, skill in self._skills:
             block = (
                 f"\nExtension {extension_id}; skill {skill.name} ({skill.description}). "
-                f"Reference text: {json.dumps(skill.instructions, ensure_ascii=False)}"
+                f"Reference text: {json.dumps(skill.instructions, ensure_ascii=True)}"
             )
             if len(block) > remaining:
-                if remaining > 80:
-                    chunks.append(block[:remaining])
                 break
             chunks.append(block)
             remaining -= len(block)
@@ -270,7 +271,10 @@ class ExtensionRegistry:
             skill_names.add(skill.name)
         server_ids: set[str] = set()
         for server in extension.mcp_servers:
-            if not _TOOL_ID.fullmatch(server.server_id) or server.server_id in server_ids or not callable(server.connect):
+            if (
+                not _TOOL_ID.fullmatch(server.server_id) or server.server_id in server_ids
+                or not callable(server.connect) or inspect.iscoroutinefunction(server.connect)
+            ):
                 raise ValueError("MCP server ids must be safe and unique, with a connect adapter.")
             server_ids.add(server.server_id)
 
@@ -328,7 +332,12 @@ class ExtensionRegistry:
                     if inspect.isawaitable(client):
                         raise TypeError("MCP connect adapters must be synchronous.")
                     definitions = client.list_tools()
-                    if inspect.isawaitable(definitions) or not isinstance(definitions, (list, tuple)) or len(definitions) > MAX_TOOLS:
+                    if inspect.isawaitable(definitions):
+                        close = getattr(definitions, "close", None)
+                        if callable(close):
+                            close()
+                        raise ValueError("MCP tool discovery must be synchronous.")
+                    if not isinstance(definitions, (list, tuple)) or len(definitions) > MAX_TOOLS:
                         raise ValueError("MCP tool discovery returned an unsupported manifest.")
                     pending: list[ExtensionToolBinding] = []
                     server_names: set[str] = set()
