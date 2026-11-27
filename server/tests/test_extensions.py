@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -51,8 +52,7 @@ def gateway_for(registry: ExtensionRegistry):
     return registered, tool_registry._gateway(registered.function, registered.metadata)
 
 
-@pytest.mark.asyncio
-async def test_manifest_tool_is_namespaced_schema_checked_and_policy_gated():
+def test_manifest_tool_is_namespaced_schema_checked_and_policy_gated():
     calls: list[str] = []
     tool = make_tool(calls=calls)
     registry = ExtensionRegistry((ExtensionManifest("weather", "1.0.0", (tool,)),))
@@ -62,7 +62,7 @@ async def test_manifest_tool_is_namespaced_schema_checked_and_policy_gated():
     assert before_start["status"] == "error"
     assert calls == []
 
-    results = await registry.start_session("session-1")
+    results = asyncio.run(registry.start_session("session-1"))
     assert results[0].success is True
     assert registry.is_active("session-1", "weather")
 
@@ -75,19 +75,17 @@ async def test_manifest_tool_is_namespaced_schema_checked_and_policy_gated():
     assert calls == ["Port Louis"]
 
 
-@pytest.mark.asyncio
-async def test_policy_chain_denies_extension_tool_without_a_live_voice_session():
+def test_policy_chain_denies_extension_tool_without_a_live_voice_session():
     registry = ExtensionRegistry((ExtensionManifest("weather", "1.0.0", (make_tool(),)),))
     registered, gateway = gateway_for(registry)
-    await registry.start_session("session-1")
+    asyncio.run(registry.start_session("session-1"))
 
     result = gateway(city="Curepipe", tool_context=SimpleNamespace(session=None, state={}))
     assert result["status"] == "error"
     assert result["policy"]["decision"] == "deny"
 
 
-@pytest.mark.asyncio
-async def test_failed_start_hook_disables_only_that_extension():
+def test_failed_start_hook_disables_only_that_extension():
     calls: list[str] = []
 
     async def broken_start(session_id: str) -> None:
@@ -100,15 +98,14 @@ async def test_failed_start_hook_disables_only_that_extension():
     healthy = ExtensionManifest("healthy", "1.0.0", (make_tool("ext_healthy_lookup"),), healthy_start)
     registry = ExtensionRegistry((broken, healthy))
 
-    results = await registry.start_session("session-2")
+    results = asyncio.run(registry.start_session("session-2"))
     assert [result.success for result in results] == [False, True]
     assert registry.is_active("session-2", "healthy")
     assert not registry.is_active("session-2", "broken")
     assert calls == ["session-2"]
 
 
-@pytest.mark.asyncio
-async def test_end_hooks_run_in_reverse_order_and_one_failure_does_not_skip_the_next(caplog):
+def test_end_hooks_run_in_reverse_order_and_one_failure_does_not_skip_the_next(caplog):
     ended: list[str] = []
 
     async def first_end(session_id: str) -> None:
@@ -122,8 +119,8 @@ async def test_end_hooks_run_in_reverse_order_and_one_failure_does_not_skip_the_
         ExtensionManifest("first", "1.0.0", (make_tool("ext_first_lookup"),), on_session_end=first_end),
         ExtensionManifest("second", "1.0.0", (make_tool("ext_second_lookup"),), on_session_end=second_end),
     ))
-    await registry.start_session("session-3")
-    results = await registry.stop_session("session-3")
+    asyncio.run(registry.start_session("session-3"))
+    results = asyncio.run(registry.stop_session("session-3"))
 
     assert ended == ["second", "first"]
     assert [result.success for result in results] == [True, False]
@@ -190,11 +187,10 @@ def test_duplicate_extension_ids_and_tool_names_are_rejected():
         ExtensionRegistry((duplicate_tools,))
 
 
-@pytest.mark.asyncio
-async def test_extension_session_activation_is_scoped_to_each_session():
+def test_extension_session_activation_is_scoped_to_each_session():
     registry = ExtensionRegistry((ExtensionManifest("weather", "1.0.0", (make_tool(),)),))
-    await registry.start_session("session-a")
+    asyncio.run(registry.start_session("session-a"))
     assert registry.is_active("session-a", "weather")
     assert not registry.is_active("session-b", "weather")
-    await registry.stop_session("session-a")
+    asyncio.run(registry.stop_session("session-a"))
     assert not registry.is_active("session-a", "weather")
