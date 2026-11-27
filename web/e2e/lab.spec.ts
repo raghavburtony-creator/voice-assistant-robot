@@ -109,3 +109,22 @@ test('a memory proposal is saved only after the visitor presses Save', async ({ 
   await expect(server).toContainText('memory: saved')
   await expect(server).toContainText('memory: discarded')
 })
+
+
+test('the visitor can stop a task the server is running, and only that task goes', async ({ page }) => {
+  await page.goto('/lab.html')
+  await page.getByLabel('Use the real Otto').check()
+  await page.getByRole('button', { name: 'Talk to Otto' }).dispatchEvent('click')
+  const panel = page.getByRole('region', { name: 'Voice guide' })
+  await panel.getByRole('button', { name: 'Start talking' }).click()
+  await panel.getByRole('button', { name: 'Use text only' }).click()
+  await expect(panel.getByRole('textbox', { name: 'Type a question instead' })).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Server: a long job starts' }).click()
+  const running = panel.getByRole('list', { name: 'Running in the background' })
+  await expect(running).toContainText('a long job')  // as text in the panel, not only in Otto's face (D-06)
+  await running.getByRole('button', { name: 'Stop: a long job' }).click()
+  await expect(running).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Simulated server' })).toContainText('cancelled lab-job')
+  await expect(page.getByRole('region', { name: 'Simulated server' })).toContainText('"message":"Cancelled."')
+})

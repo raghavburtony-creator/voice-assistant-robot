@@ -60,7 +60,7 @@ When you change this flow, keep every rule in "Session caps" and "Async in the s
 | `test_voice_split.py` | Typed events, the one output writer, interruption |
 | `test_architecture.py`, `test_integration_chain.py`, `test_orchestration_contract.py` | The D-22 authority chain: dependency direction, tool → policy → host receipt → model |
 | `test_tool_registry.py`, `test_adk_state.py` | Registry envelopes; tools working on ADK's `State` |
-| `test_tasks.py`, `test_task_start.py` | Task engine lifecycle, bounds, cancellation; starting a task by voice, its worker, its card, and the voice loop turning meanwhile |
+| `test_tasks.py`, `test_task_start.py`, `test_task_cancel.py` | Task engine lifecycle, bounds, cancellation; starting a task by voice, its worker, its card, and the voice loop turning meanwhile; the visitor's `cancel_task` |
 | `test_privacy.py`, `test_memory_*.py`, `test_continuity*.py` | Storage, redaction, consent, forgetting, continuity |
 | `test_extensions.py`, `test_research.py`, `test_perception.py`, `test_environmental.py`, `test_avatar.py` | The capability layers |
 | `test_docs.py` | Decision numbering and index, labels and milestones vs CONTRIBUTING.md, the issue templates |

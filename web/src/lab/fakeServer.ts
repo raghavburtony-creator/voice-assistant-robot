@@ -93,6 +93,8 @@ export class FakeVoiceServer {
   private contexts = new Map<string, unknown>()
   private continuitySeenRunning = false
   private memoryRequestCounter = 0
+  /** The ids of the background tasks the lab's "server" has said are working, so a Stop can end one. */
+  private workingTasks = new Set<string>()
   private pendingMemory: { request_id: string; content: string; kind: 'episodic' | 'semantic' } | null = null
   private resolvedMemory: string[] = []
   private readonly savedMemories: string[] = []
@@ -109,6 +111,7 @@ export class FakeVoiceServer {
     const socket = new FakeSocket(this)
     this.socket = socket
     this.log(`connect ${new URL(url).pathname}`)
+    this.workingTasks.clear()
     this.later(() => { socket.readyState = 1; socket.onopen?.() }, 300)
     return socket as unknown as WebSocket
   }
@@ -119,7 +122,7 @@ export class FakeVoiceServer {
     if (typeof data !== 'string') return
     const message = JSON.parse(data) as {
       type: string; text?: string; key?: string; data?: unknown; source?: unknown; generation?: unknown;
-      proposal?: unknown; request_id?: unknown; accepted?: unknown;
+      proposal?: unknown; request_id?: unknown; accepted?: unknown; id?: unknown;
     }
     if (message.type === 'memory_consent') {
       const pending = this.pendingMemory
@@ -138,6 +141,14 @@ export class FakeVoiceServer {
         // waits; a repeat of one already answered stays silent.
         this.send({ type: 'memory_result', request_id: message.request_id, status: 'expired' })
         this.log('memory: expired')
+      }
+      return
+    }
+    if (message.type === 'cancel_task') {
+      // Like the server: only a task it is running can be stopped, and it says so the way it says any ending.
+      if (typeof message.id === 'string' && this.workingTasks.has(message.id)) {
+        this.avatar({ kind: 'failure', id: message.id, message: 'Cancelled.' })
+        this.log(`cancelled ${message.id}`)
       }
       return
     }
@@ -282,6 +293,8 @@ export class FakeVoiceServer {
   /** The server says how things are going (server/app/voice/avatar.py): working, asking permission, success... */
   avatar(event: Record<string, unknown>) {
     if (!this.socket || !this.connected) return false
+    if (event.kind === 'working' && typeof event.id === 'string') this.workingTasks.add(event.id)
+    if ((event.kind === 'success' || event.kind === 'failure') && typeof event.id === 'string') this.workingTasks.delete(event.id)
     this.send({ type: 'avatar', event })
     this.log(`avatar: ${JSON.stringify(event)}`)
     return true

@@ -8,6 +8,7 @@ shows it on a card (D-18). It never goes to the model (`tasks.py` keeps results 
 """
 from __future__ import annotations
 
+import re
 from typing import Awaitable, Callable, Protocol
 
 from app.voice.research import ResearchRequest
@@ -22,6 +23,14 @@ MAX_QUERY_CHARS = 200
 MAX_CARD_MATCHES = 3
 EXCERPT_CHARS = 110
 NO_MATCH = "No matching section in the project docs."
+#: A web address in a doc's own text. A card has no links (D-18), so these are dropped from an excerpt rather than shown as
+#: text a visitor might copy.
+_WEB_ADDRESS = re.compile(r"(?:\b[a-z][a-z0-9+.-]*://|\bwww\.)\S*", re.IGNORECASE)
+
+
+def _plain_excerpt(text: str) -> str:
+    """One line of text, without web addresses, at most EXCERPT_CHARS."""
+    return " ".join(_WEB_ADDRESS.sub(" ", text).split())[:EXCERPT_CHARS]
 
 
 class _Searches(Protocol):
@@ -31,16 +40,17 @@ class _Searches(Protocol):
 def project_research_worker(service: _Searches, query: str) -> Callable[[TaskContext], Awaitable[str]]:
     """A worker that searches the allow-listed project docs and returns a short plain-text summary.
 
-    The summary names each match by its document and section title and a short excerpt. It never carries a locator or a
-    URL (D-18: nothing on a card is a link). A search that finds nothing still completes, with `NO_MATCH`: an empty answer is
-    an answer, and the verifier below only rejects a worker that returned nothing at all."""
+    The summary names each match by its document and section title and a short excerpt. It never carries a locator, and
+    web addresses in the doc's own text are dropped from the excerpt (D-18: nothing on a card is a link). A search that
+    finds nothing still completes, with `NO_MATCH`: an empty answer is an answer, and the verifier below only rejects a
+    worker that returned nothing at all."""
 
     async def work(ctx: TaskContext) -> str:
         ctx.progress(0.1, "Searching the project docs")
         result = await service.search(ResearchRequest(query=query, limit=MAX_CARD_MATCHES, sources=("project",)))
         ctx.progress(0.8, "Writing up what I found")
         parts = [
-            f"{item.evidence.title}: {' '.join(item.evidence.excerpt.split())[:EXCERPT_CHARS]}"
+            f"{item.evidence.title}: {_plain_excerpt(item.evidence.excerpt)}"
             for item in result.evidence[:MAX_CARD_MATCHES]
         ]
         return " | ".join(parts) if parts else NO_MATCH

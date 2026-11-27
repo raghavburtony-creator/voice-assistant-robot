@@ -97,6 +97,8 @@
 .voice-assistant__card, .voice-assistant__memory { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem 0.8rem; border-radius: 14px;
   border: 1px solid var(--otto-line); background: var(--otto-surface); }
 .voice-assistant__memory-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.voice-assistant__tasks { display: flex; flex-direction: column; gap: 0.25rem; margin: 0; padding: 0; list-style: none; font-size: 0.9rem; color: var(--otto-muted); }
+.voice-assistant__tasks li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .voice-assistant__memory-status { margin: 0; color: var(--otto-muted); font-size: 0.9rem; }
 .voice-assistant__card-title { margin: 0; font-size: 0.95rem; }
 .voice-assistant__card-body { margin: 0; }
