@@ -17,6 +17,7 @@ _TOOL_ID = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 MAX_EXTENSIONS = 20
 MAX_TOOLS = 30
+MAX_SESSION_TOOLS = 100
 MAX_SKILLS = 10
 MAX_MCP_SERVERS = 5
 MAX_SKILL_CHARS = 4_000
@@ -91,6 +92,13 @@ def _plain_text(value: object, limit: int) -> bool:
     return isinstance(value, str) and bool(value.strip()) and len(value) <= limit and not _CONTROL.search(value)
 
 
+def _skill_text(value: object) -> bool:
+    return (
+        isinstance(value, str) and bool(value.strip()) and len(value) <= MAX_SKILL_CHARS
+        and all(ord(char) >= 32 or char in "\\n\\t" for char in value)
+    )
+
+
 def _input_model(model: object) -> type[BaseModel]:
     if not isinstance(model, type) or not issubclass(model, BaseModel):
         raise ValueError("Extension inputs must be Pydantic models.")
@@ -106,10 +114,15 @@ def _input_model(model: object) -> type[BaseModel]:
     return model
 
 
-def _bounded_json(value: Any, depth: int = 0) -> Any:
+def _bounded_json(value: Any, depth: int = 0, budget: list[int] | None = None) -> Any:
     """Copy results to bounded JSON-only data; external SDK objects never reach the model."""
+    if budget is None:
+        budget = [250]
     if depth > 6:
         return "[depth limit]"
+    if budget[0] <= 0:
+        return "[item limit]"
+    budget[0] -= 1
     if value is None or isinstance(value, (bool, int)):
         return value
     if isinstance(value, float):
@@ -117,14 +130,14 @@ def _bounded_json(value: Any, depth: int = 0) -> Any:
     if isinstance(value, str):
         return _CONTROL.sub(" ", value)[:2_000]
     if isinstance(value, (list, tuple)):
-        return [_bounded_json(item, depth + 1) for item in value[:40]]
+        return [_bounded_json(item, depth + 1, budget) for item in value[:40]]
     if isinstance(value, dict):
         return {
-            _CONTROL.sub(" ", key)[:100]: _bounded_json(item, depth + 1)
+            _CONTROL.sub(" ", key)[:100]: _bounded_json(item, depth + 1, budget)
             for key, item in list(value.items())[:40] if isinstance(key, str)
         }
     if isinstance(value, BaseModel):
-        return _bounded_json(value.model_dump(mode="json"), depth + 1)
+        return _bounded_json(value.model_dump(mode="json"), depth + 1, budget)
     return {"unsupported_value": type(value).__name__[:80]}
 
 
@@ -252,7 +265,7 @@ class ExtensionRegistry:
         for skill in extension.skills:
             if not _TOOL_ID.fullmatch(skill.name) or skill.name in skill_names:
                 raise ValueError("Extension skill names must be safe and unique.")
-            if not _plain_text(skill.description, 300) or not _plain_text(skill.instructions, MAX_SKILL_CHARS):
+            if not _plain_text(skill.description, 300) or not _skill_text(skill.instructions):
                 raise ValueError("Extension skill content exceeds the text limit.")
             skill_names.add(skill.name)
         server_ids: set[str] = set()
@@ -301,6 +314,8 @@ class ExtensionRegistry:
             skills.extend((extension_id, skill) for skill in extension.skills)
             used_names = {tool.name for tool in extension.tools}
             for tool in extension.tools:
+                if len(bindings) >= MAX_SESSION_TOOLS:
+                    break
                 try:
                     bindings.append(_binding(extension_id, tool.name, tool.description, tool.input_model, tool.handler))
                 except Exception as exc:
@@ -318,13 +333,20 @@ class ExtensionRegistry:
                     pending: list[ExtensionToolBinding] = []
                     server_names: set[str] = set()
                     for definition in definitions:
+                        if len(bindings) + len(pending) >= MAX_SESSION_TOOLS:
+                            break
                         if not isinstance(definition, MCPToolManifest) or not _TOOL_ID.fullmatch(definition.name):
                             continue
                         if definition.name in server_names or definition.name in used_names or not _plain_text(definition.description, 300):
                             continue
                         server_names.add(definition.name)
-                        handler = lambda arguments, c=client, n=definition.name: c.call_tool(n, arguments.model_dump(mode="json"))
-                        pending.append(_binding(extension_id, definition.name, definition.description, definition.input_model, handler))
+                        def mcp_handler(arguments: BaseModel, c=client, n=definition.name):
+                            result = c.call_tool(n, arguments.model_dump(mode="json"))
+                            if isinstance(result, dict) and result.get("isError") is True:
+                                raise RuntimeError("MCP tool reported an error.")
+                            return result
+
+                        pending.append(_binding(extension_id, definition.name, definition.description, definition.input_model, mcp_handler))
                     for binding in pending:
                         bindings.append(binding)
                         used_names.add(binding.name.removeprefix(f"ext_{extension_id.replace('-', '_')}_"))

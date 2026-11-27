@@ -139,13 +139,13 @@ The registry gateway applies a fail-closed, per-call policy decision from review
 
 A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
-`ToolRegistry` is the single source for the ADK tool adapters. Its gateway validates arguments against the registered annotations before calling the existing checked function and returns a stable envelope: `status` (`success` or `error`), the original structured `data`, `evidence` (an empty list when none is supplied), `provenance`, `verification` (`required`, `status` and optional `details`), a safe `error` object or `null`, UTC `timestamps` (`started_at`, `completed_at`) and declared `side_effects`. Execution status is separate from verification: a queued or approval-requested action can be successful with verification `pending`; it is not proof that the effect happened. Execution failures use `not_run` when verification was required. Evidence is never inferred, and side-effect labels are declarations, not proof. The `policy` field records the request id, risk, required permission, decision and verification state. Denied requests never reach the checked function; high-risk desktop requests are dispatched only after desktop awareness is enabled and still require exact host approval. Exception diagnostics log only the tool name and exception class, while model-visible errors remain generic. The metadata records policy and execution requirements; it does not grant permissions or replace the server/browser/native checks (D-02, D-22). Current registered tools cover browser, computer, screen, camera and tasks. Files, web/research and memory remain unregistered until those capabilities have real implementations and explicit safety boundaries.
+`ToolRegistry` is the single source for the ADK tool adapters. Its gateway validates arguments against the registered annotations before calling the existing checked function and returns a stable envelope: `status` (`success` or `error`), the original structured `data`, `evidence` (an empty list when none is supplied), `provenance`, `verification` (`required`, `status` and optional `details`), a safe `error` object or `null`, UTC `timestamps` (`started_at`, `completed_at`) and declared `side_effects`. Execution status is separate from verification: a queued or approval-requested action can be successful with verification `pending`; it is not proof that the effect happened. Execution failures use `not_run` when verification was required. Evidence is never inferred, and side-effect labels are declarations, not proof. The `policy` field records the request id, risk, required permission, decision and verification state. Denied requests never reach the checked function; high-risk desktop requests are dispatched only after desktop awareness is enabled and still require exact host approval. Exception diagnostics log only the tool name and exception class, while model-visible errors remain generic. The metadata records policy and execution requirements; it does not grant permissions or replace the server/browser/native checks (D-02, D-22). Built-in tools cover browser, computer, screen, camera, tasks and memory. Host-installed extensions add optional namespaced capabilities through the same gateway; this extension slice does not bundle a general file or web-research adapter.
 
 ### Extensions, skills and MCP
 
 Install a reviewed extension without changing the voice bridge or adding another router. Add an extension module under server/app/voice (or in your deployment package), then register it in server/app/voice/installed_extensions.py:
 
-\`\`\`python
+```python
 from app.voice.extensions import Extension, ExtensionManifest, ExtensionTool, SkillManifest
 from app.voice.installed_extensions import EXTENSIONS
 from pydantic import BaseModel, ConfigDict
@@ -162,7 +162,7 @@ EXTENSIONS.register(Extension(
     tools=(ExtensionTool("lookup", "Search the host catalog.", LookupInput, lookup),),
     skills=(SkillManifest("catalog-help", "Catalog terminology", "Use the catalog lookup for product questions."),),
 ))
-\`\`\`
+```
 
 Extension tool names are namespaced and exposed only for a live session. The bridge creates their ADK adapters from the extension manifest, but every call still passes through the same ToolRegistry, schema validation, PolicyEngine and session audit as built-in tools. The host assigns the permission scope; an extension cannot grant itself access. Extension handlers receive only validated Pydantic arguments, never ADK ToolContext or session state. Keep handlers bounded and treat their results as untrusted data. They must return information, not bypass browser/native action checks.
 
