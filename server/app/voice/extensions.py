@@ -14,7 +14,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import entry_points
-from typing import Any, Awaitable, Callable, Literal, Protocol
+from typing import Annotated, Any, Awaitable, Callable, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
@@ -125,7 +125,7 @@ def _schema_field(
         "type", "title", "description", "enum", "minimum", "maximum",
         "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength",
         "minItems", "maxItems", "items", "properties", "required",
-        "additionalProperties", "pattern", "$schema",
+        "additionalProperties", "$schema",
     }
     if set(schema) - allowed:
         raise ExtensionError("MCP input schema uses unsupported JSON Schema features")
@@ -160,16 +160,6 @@ def _schema_field(
                 raise ExtensionError("MCP input schema bound is too large")
             constraints[target] = value
 
-    pattern = schema.get("pattern")
-    if pattern is not None:
-        if not isinstance(pattern, str) or len(pattern) > 128:
-            raise ExtensionError("MCP input schema pattern is invalid")
-        try:
-            re.compile(pattern)
-        except re.error:
-            raise ExtensionError("MCP input schema pattern is invalid") from None
-        constraints["pattern"] = pattern
-
     enum = schema.get("enum")
     if enum is not None:
         if (not isinstance(enum, list) or not 1 <= len(enum) <= 50
@@ -195,11 +185,15 @@ def _schema_field(
             field_count=field_count,
         )
     elif raw_type == "array":
-        item_type, _ = _schema_field(
+        item_type, item_constraints = _schema_field(
             schema.get("items"), depth=depth + 1,
             field_count=field_count, name=f"{name}Item",
         )
-        annotation = list[item_type]  # type: ignore[valid-type]
+        constrained_item = (
+            Annotated[item_type, Field(**item_constraints)]
+            if item_constraints else item_type
+        )
+        annotation = list[constrained_item]  # type: ignore[valid-type]
     else:
         raise ExtensionError("MCP input schema uses an unsupported type")
 
