@@ -167,6 +167,14 @@ def test_extension_tool_must_be_synchronous_and_have_a_typed_context():
     with pytest.raises(ValueError):
         ExtensionRegistry((ExtensionManifest("weather", "1.0.0", (tool,)),))
 
+def test_extension_tool_rejects_untyped_arguments():
+    def ext_weather_current(city, tool_context: object) -> dict:
+        return {"ok": True, "city": city}
+
+    tool = ExtensionTool(make_metadata(), ext_weather_current)
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("weather", "1.0.0", (tool,)),))
+
 
 def test_duplicate_extension_ids_and_tool_names_are_rejected():
     one = ExtensionManifest("weather", "1.0.0", (make_tool(),))
