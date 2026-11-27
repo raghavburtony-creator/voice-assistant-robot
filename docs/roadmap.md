@@ -76,7 +76,7 @@ D-30 answers Q-10. Environmental observations may propose only a bounded `attent
 
 Source brief: [upgrade.md](../upgrade.md), now the AnyModelBot integration brief; the earlier JARVIS brief is in this file's history. How it maps onto the code: [architecture.md](architecture.md#target-the-desktop-personal-assistant-e7). The desktop details are in [desktop.md](desktop.md). One ADK agent stays the only decision-maker (D-22); JARVIS, IRIS, Kaizumi, Muninn and gnomelets are sources of mechanisms, recorded in [source-attribution.md](source-attribution.md).
 
-Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a working desktop companion that moves a window on request ("Move VS Code to the left"), verifies it, and still knows the owner's name after a restart. Every slice has an issue under [#142](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/142); the 0.9 tasks are filed once that milestone exists.
+Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a working desktop companion that moves a window on request ("Move VS Code to the left"), verifies it, and still knows the owner's name after a restart. Every slice has an issue under [#142](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/142).
 
 ### 0.4 Desktop companion shell (no decision needed)
 
@@ -127,11 +127,11 @@ Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a workin
 | Slice | Outcome | Blocked by | Decisions |
 |---|---|---|---|
 | **Q-14** ([#171](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/171)) | Decide what assistant state Otto may keep on disk, and for how long | none | D-17, D-21, D-26 |
-| **TASK-02** | One task engine for the whole server, backed by SQLite, instead of one per voice session; a restart marks live runs interrupted and recovers them, re-delivering only inputs that were never taken; adds pause and resume | Q-14, MEM-02 | D-19, D-22 |
-| **TASK-03** | Work that needs the visitor (approval, input, confirmation, retry) waits as a pending item in the panel and the tray, and resumes from its state when answered | TASK-02, POL-03 | D-06, D-22 |
-| **POL-03** | Approvals and the policy audit survive a restart: approval rows with a lifetime per context, allow-once, bound to the action's arguments; a restart expires blocking rows; model text never approves | Q-14 | D-22, D-25 |
-| **OUT-01** | Task results and pending items that arrive while the window is closed are kept and delivered, in order, when it reconnects | Q-14, TASK-02 | D-02, D-04 |
-| **CTX-01** | Long conversations stay usable: Gemini Live context compression and session resumption first, then a handoff note that carries identity, task, decisions, open questions, tool results and desktop state into the next segment | Q-14, MEM-03 | D-17, D-22 |
+| **TASK-02** ([#172](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/172)) | One task engine for the whole server, backed by SQLite, instead of one per voice session; a restart marks live runs interrupted and recovers them, re-delivering only inputs that were never taken; adds pause and resume | Q-14, MEM-02 | D-19, D-22 |
+| **TASK-03** ([#174](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/174)) | Work that needs the visitor (approval, input, confirmation, retry) waits as a pending item in the panel and the tray, and resumes from its state when answered | TASK-02, POL-03 | D-06, D-22 |
+| **POL-03** ([#173](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/173)) | Approvals and the policy audit survive a restart: approval rows with a lifetime per context, allow-once, bound to the action's arguments; a restart expires blocking rows; model text never approves | Q-14 | D-22, D-25 |
+| **OUT-01** ([#175](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/175)) | Task results and pending items that arrive while the window is closed are kept and delivered, in order, when it reconnects | Q-14, TASK-02 | D-02, D-04 |
+| **CTX-01** ([#176](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/176)) | Long conversations stay usable: Gemini Live context compression and session resumption first, then a handoff note that carries identity, task, decisions, open questions, tool results and desktop state into the next segment | Q-14, MEM-03 | D-17, D-22 |
 
 Deferred on purpose:
 - Otto as an MCP server, Playwright browser computer use, screenshots in the desktop state, and embeddings for memory search.
