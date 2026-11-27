@@ -271,7 +271,7 @@ def _mcp_result(result: object) -> dict[str, Any]:
         raise ExtensionError("MCP tool reported an error")
     structured = _value(result, "structuredContent", "structured_content")
     if isinstance(structured, Mapping):
-        return _bounded_tool_output(structured)
+        return dict(structured)
 
     content = _value(result, "content", default=[])
     if not isinstance(content, Sequence) or isinstance(content, (str, bytes, bytearray)):
@@ -281,7 +281,7 @@ def _mcp_result(result: object) -> dict[str, Any]:
         text = _value(block, "text")
         if isinstance(text, str):
             snippets.append(_clean_text(text, limit=4_000))
-    return _bounded_tool_output({"content": snippets})
+    return {"content": snippets}
 
 
 class MCPServerExtension:
