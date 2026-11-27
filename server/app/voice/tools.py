@@ -13,7 +13,8 @@ from typing import Literal, get_args
 
 from google.adk.tools import ToolContext
 
-from app.voice.tool_registry import ToolRegistry
+from app.voice.tool_registry import TOOL_METADATA, ToolRegistry
+from app.voice.extensions import EXTENSION_REGISTRY
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
@@ -405,6 +406,12 @@ TOOL_FUNCTIONS = (
     get_background_tasks,
     propose_memory,
 )
-REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
+_EXTENSION_TOOLS = EXTENSION_REGISTRY.tools()
+_EXTENSION_FUNCTIONS = tuple(item.function for item in _EXTENSION_TOOLS)
+_EXTENSION_METADATA = tuple(item.metadata for item in _EXTENSION_TOOLS)
+REGISTRY = ToolRegistry(
+    TOOL_FUNCTIONS + _EXTENSION_FUNCTIONS,
+    metadata=TOOL_METADATA + _EXTENSION_METADATA,
+)
 TOOLS = REGISTRY.adk_tools()
 TOOL_NAMES = REGISTRY.names()
