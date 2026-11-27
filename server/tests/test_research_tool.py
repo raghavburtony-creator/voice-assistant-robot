@@ -92,3 +92,24 @@ def test_project_search_tool_reports_no_evidence_without_fabricating_content(tmp
     assert result["data"]["external_data"]["matches"] == []
     assert result["data"]["external_data"]["status"] == "complete"
     assert "untrusted excerpts" in result["data"]["note"]
+
+
+def test_project_search_guidance_never_asks_the_model_to_cite_a_url(tmp_path: Path, monkeypatch):
+    """D-18: cards have no links and speech stays plain, so no instruction may ask for the locator URL."""
+    from app.voice.app_config import system_instruction
+
+    (tmp_path / "README.md").write_text("# Tasks\n\nThe task engine runs beside the voice loop.\n", encoding="utf-8")
+    monkeypatch.setattr(
+        tools,
+        "PROJECT_RESEARCH_SERVICE",
+        ResearchService((ProjectKnowledgeProvider(tmp_path),), timeout_seconds=1.0, max_results=5),
+    )
+    registered = tools.REGISTRY["search_project_knowledge"]
+    gateway = tools.REGISTRY._gateway(registered.function, registered.metadata)
+    note = asyncio.run(gateway("task engine", context()))["data"]["note"].lower()
+
+    assert "cite its locator" not in note
+    assert "never read it aloud" in note and "never put it on a card" in note
+    instruction = system_instruction("Otto demo", "en", "Home").lower()
+    assert "cite its locator" not in instruction
+    assert "never put a url in a card or read one aloud" in instruction
