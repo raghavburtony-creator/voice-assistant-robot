@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, get_type_hints
 
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, ToolContext
 from pydantic import TypeAdapter, ValidationError
 
 from app.voice.policy import POLICY_ENGINE, clear_state_key, supports_state
@@ -263,6 +263,13 @@ class ToolRegistry:
             for name, parameter in signature.parameters.items()
             if name != "tool_context" and parameter.annotation is not inspect.Parameter.empty
         }
+        # ADK injects ToolContext by type, not just by the conventional parameter name.
+        # Extension callbacks never see this object; only this gateway receives it for policy checks.
+        if "tool_context" in signature.parameters and signature.parameters["tool_context"].annotation is object:
+            signature = signature.replace(parameters=[
+                parameter.replace(annotation=ToolContext) if parameter.name == "tool_context" else parameter
+                for parameter in signature.parameters.values()
+            ])
         is_async = inspect.iscoroutinefunction(function)
 
         def prepare(args: tuple[Any, ...], kwargs: dict[str, Any], started_at: str):
@@ -385,6 +392,10 @@ class ToolRegistry:
                 return finish(raw_result, context, decision, started_at)
 
             async_call.__signature__ = signature  # type: ignore[attr-defined]
+            annotations = dict(getattr(async_call, "__annotations__", {}))
+            if "tool_context" in signature.parameters:
+                annotations["tool_context"] = ToolContext
+            async_call.__annotations__ = annotations
             return async_call
 
         @wraps(function)
@@ -404,6 +415,10 @@ class ToolRegistry:
 
         # ADK derives the function declaration from the callable signature.
         call.__signature__ = signature  # type: ignore[attr-defined]
+        annotations = dict(getattr(call, "__annotations__", {}))
+        if "tool_context" in signature.parameters:
+            annotations["tool_context"] = ToolContext
+        call.__annotations__ = annotations
         return call
 
     def adk_tools(self) -> tuple[FunctionTool, ...]:
