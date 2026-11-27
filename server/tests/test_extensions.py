@@ -305,7 +305,7 @@ def test_mcp_array_item_constraints_are_enforced():
 
 
 def test_extension_output_must_be_bounded_json():
-    assert _bounded_tool_output({"value": 3}) == {"value": 3}
+    assert _bounded_tool_output({"value": 3}) == {"external_data": {"value": 3}}
     with pytest.raises(extensions.ExtensionError):
         _bounded_tool_output({"value": "x" * (extensions.MAX_TOOL_OUTPUT_BYTES + 1)})
     with pytest.raises(extensions.ExtensionError):
