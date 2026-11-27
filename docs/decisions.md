@@ -57,7 +57,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | answered by D-28 |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
-| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | open |
+| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | dropped |
 | Q-10 | Environmental observations may propose bounded checked awareness events | awareness, privacy | answered by D-30 |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
@@ -297,7 +297,7 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12 (one WebGL 2 shader, no 3D library)? D-28 answers this by deferring renderer selection until a target device/runtime and concrete rendering and interaction requirements are specified; issue #12 is the place to define them before implementation. | Spatial / AR epic | unassigned | answered by D-28 |
 | Q-07 | What consent, privacy, retention and data-minimisation rules apply to camera frames, screen content and environmental context (multimodal, sign language, environmental intelligence)? D-17 lists what the page snapshot never reads, but a video frame can't be filtered that way, so it needs its own rule. The rule says: when capture is allowed (after which gesture and consent, as with D-05 and D-08); what the visitor is told and how they see that it is on; what is sent to the model, at what size and rate; what may be kept (nothing, by default); when capture stops (end of conversation, tab hidden, consent withdrawn); and how sensitive content is kept out. | Multimodal, sign language, environmental intelligence | unassigned | answered by D-21 |
 | Q-08 | How are pages, commands and targets allowed when they aren't known at build time? D-03 needs static `Literal`s; `show_target` already accepts a list the page reports at runtime (D-14). The answer separates what may be discovered at runtime, what must still be registered explicitly, and what the server and browser check before Otto acts on it, so D-02, D-03 and D-14 still hold. Runtime lists lose the build-time parity test, so the answer says what replaces it. | Cross-application | unassigned | answered by D-23 |
-| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? Confirm the language with Deaf/signing community partners; define whether the first pilot is a small, bounded vocabulary or continuous conversational signing; identify an appropriate consented dataset or a community-governed collection plan; and agree who validates annotations and signer-independent evaluation. Do not infer the language from deployment geography or treat a dictionary as a video training corpus. Note: the adapter slice shipped with no model selected; this stays open. | Sign-language recognition model and pilot scope | unassigned | open |
+| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? Confirm the language with Deaf/signing community partners; define whether the first pilot is a small, bounded vocabulary or continuous conversational signing; identify an appropriate consented dataset or a community-governed collection plan; and agree who validates annotations and signer-independent evaluation. Do not infer the language from deployment geography or treat a dictionary as a video training corpus. Note: the adapter slice shipped with no model selected; E4 was later retired and this question was dropped without a community answer. | Sign-language recognition model and pilot scope | unassigned | dropped |
 | Q-10 | How may visitor-shared environmental observations produce Otto awareness/reaction events without turning model observations or speech into authority, bypassing the checked action chain, or introducing ambient capture? Define the permitted proposer, event vocabulary, checks, consent/session boundary and failure behaviour. | Environmental-intelligence event/reaction path | project owner | answered by D-30 |
 
 
@@ -381,7 +381,7 @@ The code at the time showed why the last two rules are needed (fixed in #61). `l
 | Managed recognition API | Less model-serving infrastructure and potentially simpler scaling. | No verified MSL continuous-recognition support was established. Provider retention, training use, region, subprocessors and contractual terms must be checked before any frames are sent. |
 | Existing Gemini Live visual-context feed | Reuses the current D-21 camera-share path. | At most 1 FPS in this implementation and documented Live API path; not a suitable temporal sign-recognition contract. Rejected for sign recognition. |
 
-No provider is selected. Q-09 must establish the language, pilot task, community validation and lawful dataset before a meaningful model comparison or benchmark can be made.
+At the time D-29 was adopted, no provider was selected; Q-09 was intended to establish the language, pilot task, community validation and lawful dataset before model comparison. E4 was subsequently retired and Q-09 dropped without being answered, so no provider or pilot was selected.
 
 **Evidence reviewed:**
 - [Gemini Live API – send audio and video streams](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/live-api/send-audio-video-streams): documents discrete video frames at 1 FPS. This is provider documentation for the Live API, not a claim that it performs sign-language recognition.
@@ -390,6 +390,8 @@ No provider is selected. Q-09 must establish the language, pilot task, community
 
 
 **Where:** Existing capture limits and lifecycle: `web/src/otto/capture.ts`, `useScreenShare.ts`, `ScreenShare.tsx`, `useVoiceAssistant.ts` and `server/app/voice/bridge.py` (D-21). Existing text/session path: `useVoiceAssistant.ts`, `messages.ts`, `bridge.py` and the panel transcript in `VoiceAssistant.tsx`. The sign adapter and its tests are to be added by the SIG-02 implementation issue. Slice shipped, no model selected: the adapter boundary (`web/src/otto/sign/`) and a lab-only fake recognizer.
+
+**Retirement note (2026-11-27):** E4 and Q-09 were retired from the active roadmap when the project focus shifted to hand-gesture navigation. Q-09 is marked `dropped`, not answered: no community-confirmed language, pilot task or dataset decision was made. D-29 remains in the log as historical safety guidance if sign-language work is proposed again; it is not a commitment to continue implementation.
 
 ## D-30 Environmental observations may propose bounded awareness events through the checked pipeline
 
