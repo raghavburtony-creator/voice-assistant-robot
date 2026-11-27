@@ -274,6 +274,8 @@ def _strict_model_schema(schema: object) -> bool:
     def visit(node: object, depth: int, refs: frozenset[str]) -> bool:
         if depth > MAX_SCHEMA_DEPTH or not isinstance(node, Mapping):
             return False
+        if not any(key in node for key in ("type", "$ref", "anyOf", "oneOf", "allOf", "enum", "const")):
+            return False
         reference = node.get("$ref")
         if reference is not None:
             if not isinstance(reference, str) or not reference.startswith("#/$defs/") or reference in refs:
