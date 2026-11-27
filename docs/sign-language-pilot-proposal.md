@@ -1,7 +1,7 @@
 # Sign-language pilot: a language-agnostic proposal for the community to react to
 
-**Status: proposal only. Q-09 stays open.**
-**Issue:** [#91, Q-09](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91). Background: [sign-language-pilot-research.md](sign-language-pilot-research.md).
+**Status: archived on 2026-11-27. E4 is retired and Q-09 is dropped; this proposal is not active and no community consultation is implied.**
+**Historical issue:** [#91, Q-09](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91). Background: [sign-language-pilot-research.md](sign-language-pilot-research.md).
 
 This page gives Deaf and signing partners something concrete to accept, change or reject. It names no sign language, selects no model or provider, and approves no dataset. Every number marked *starting value* is a figure to negotiate. None is evidence-based. D-29's rules apply throughout: a sign reading is untrusted text, the visitor confirms it, and it never runs a tool or an action by itself.
 

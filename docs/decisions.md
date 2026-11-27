@@ -57,7 +57,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | Q-06 | How does Otto appear in spatial or AR interfaces, given D-12? | robot | answered by D-28 |
 | Q-07 | What consent and privacy rules apply to camera and screen input? | privacy | answered by D-21 |
 | Q-08 | How are pages and commands allowed when they aren't known at build time? | contracts | answered by D-23 |
-| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | open |
+| Q-09 | Which sign language and community-validated task should the first sign-input pilot support? | accessibility, language | dropped |
 | Q-10 | Environmental observations may propose bounded checked awareness events | awareness, privacy | answered by D-30 |
 
 The review of D-01 to D-18 against the target architecture is in [architecture.md](architecture.md#review-of-d-01-to-d-18-november-2026).
@@ -390,6 +390,8 @@ No provider is selected. Q-09 must establish the language, pilot task, community
 
 
 **Where:** Existing capture limits and lifecycle: `web/src/otto/capture.ts`, `useScreenShare.ts`, `ScreenShare.tsx`, `useVoiceAssistant.ts` and `server/app/voice/bridge.py` (D-21). Existing text/session path: `useVoiceAssistant.ts`, `messages.ts`, `bridge.py` and the panel transcript in `VoiceAssistant.tsx`. The sign adapter and its tests are to be added by the SIG-02 implementation issue. Slice shipped, no model selected: the adapter boundary (`web/src/otto/sign/`) and a lab-only fake recognizer.
+
+**Retirement note (2026-11-27):** E4 and Q-09 were retired from the active roadmap when the project focus shifted to hand-gesture navigation. Q-09 is marked `dropped`, not answered: no community-confirmed language, pilot task or dataset decision was made. D-29 remains in the log as historical safety guidance if sign-language work is proposed again; it is not a commitment to continue implementation.
 
 ## D-30 Environmental observations may propose bounded awareness events through the checked pipeline
 

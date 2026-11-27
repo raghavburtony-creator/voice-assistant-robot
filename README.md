@@ -489,52 +489,11 @@ During a conversation, the panel has **Share screen** (in browsers with `getDisp
 
 The rules are core (`capture.ts`: `captureStop`, `frameDue`, `frameSize`, `maskBoxes`); the capture is shell (`useScreenShare.ts`, `ScreenShare.tsx`). `<otto-mascot>` doesn't capture. In the lab, "What the server has of a share" shows the source and a frame count, never the pictures. Whether the live endpoint accepts these frames is unverified until Q-01 is answered.
 
-### Sign input (adapter slice, no recognizer)
+### Retired sign-language prototype (archive)
 
-The panel can take signed input through a **recognizer adapter** the app plugs in (D-29). **The kit still ships no production recognizer**: no model is bundled or connected to the camera, and with no adapter configured the panel shows no sign controls. A separate, offline **personal BSL ML prototype** now lives in `ml/sign/`; it collects consented landmark sequences and provides a training/export pipeline, but does not alter runtime capture or close Q-09's broader community-validation requirements. What ships in the kit is the boundary around a future adapter:
-- **Its own notice, every time.** **Sign to Otto** opens a plain-language notice: what is captured (the camera is turned on and watches you sign), who receives it (the adapter's `recipient`), whether it is processed `local` or `remote`, the limits, that Otto keeps no video, and that the words it reads come back and are sent on to Otto's voice service, as if you had typed them, only after you confirm them. D-21's camera consent does not cover it, and nothing is remembered: each start asks again, and a stopped capture never restarts by itself.
-- **Shown the whole time.** "Signing is on" with **Stop signing**. It stops at Stop, when the tab is hidden, when the conversation ends, on an adapter failure, and after 120 seconds. Video held in memory is bounded (150 frames, 10 seconds, 16 MB, oldest dropped) and emptied at every stop. No frame goes to logs, storage, analytics, the lab or the server.
-- **Uncertain text.** Updates are `partial`, `final` or `unrecognized` (with an optional 0 to 1 `confidence`), and every one passes a `SignRecognitionGate` made for that capture: updates for another session or language, repeated or out-of-order ones, ones after a final for the same utterance, and malformed, control-character or over-long (500 characters) text are dropped. A partial is shown as "not final" and replaced by the next one. A final waits for **Confirm and send**, **Correct** (an editable box) or **Discard**; only a confirmed or corrected result is sent, as ordinary typed text through `sendText` with a prefix: `[Signed, confirmed by visitor] ...` or `[Signed, corrected by visitor] ...`. `unrecognized` never becomes text. There is no new wire message, and the text can start no tool or action (D-02, D-22). Otto's reply stays in the panel's text channel.
+Sign-language support is retired from the active roadmap as of 2026-11-27; it is not a supported or planned Otto capability. The provider-neutral adapter and panel prototype in `web/src/otto/sign/`, lab fake, and offline personal BSL training workspace in `ml/sign/` are retained as historical source only. No production recognizer is bundled or connected, and no further sign capture, model training or integration is planned.
 
-Implement `SignRecognizer` (`processing`, `recipient`, `language`, `start(sessionId, onUpdate)`, optional `push(frame)`, `stop()`; each update carries the `sessionId` it was given, a `sequence`, `capturedAtMs`, `utteranceId` and the `language`) and provide it with `SignRecognizerProvider` (`web/src/otto/sign/useSignRecognizer.ts`; not exported from `otto-mascot`, `otto-mascot/react` or `otto-mascot/gemini`). The adapter owns how frames are captured; a host that captures them can call `pushFrame` from `useSign`. If the app removes or swaps the recognizer while signing, the capture ends as a failure (the reader that was started is stopped and the buffer dropped), so the indicator never disappears while video is captured. The rules are core (`sign/sign.ts`, and the update contract and gate in `signRecognition.ts`); the hook is `sign/useSign.ts`; the panel part is `sign/SignInput.tsx`. In the lab, "Sign reader script" selects a scripted fake (`web/src/lab/fakeSignRecognizer.ts`: no camera, no model) so the flow can be tried. An adapter's provider terms (retention, training use, region) must be checked and disclosed before a remote one is enabled.
-
-### Sign-language ML prototype (BSL)
-
-The offline workspace in `ml/sign/` is the first personal British Sign Language (BSL) prototype. It starts with isolated signs; continuous signing and sentence recognition are later work. It does not run inside Otto, access the production camera path, send frames to a service, or provide a trained model by default.
-
-**Set up the local training environment** (Python 3.11+):
-
-```bash
-cd ml/sign
-python3 -m venv .venv
-. .venv/bin/activate                 # macOS / Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-**Record your own examples.** The collector asks you to press Space to start and stop each take. It displays the live camera locally, extracts MediaPipe Holistic landmarks and saves compressed landmark sequences only; it does not save the camera video. Use a pseudonymous signer ID and a new session ID for each separate recording session:
-
-```bash
-otto-sign-record --label HELLO --gloss HELLO --signer-id owner --session-id day-01 --takes 15 --consent-confirmed
-otto-sign-record --label THANK_YOU --gloss THANK_YOU --signer-id owner --session-id day-01 --takes 15 --consent-confirmed
-```
-
-Run the same labels over several separate sessions (use a new session ID each day). Three sessions is the minimum for a personal session-held-out split; five or more is preferable. The first version uses the owner's explicit consent as its data basis. Do not record another person without their informed permission.
-
-**Train and export** after the local manifest contains enough examples:
-
-```bash
-otto-sign-train --manifest data/manifest.csv --data-root data --output runs/bsl-personal
-pytest -q
-```
-
-The training pipeline normalizes both hands, upper-body pose and selected facial/non-manual landmarks, adds temporal motion features, trains a temporal Conv-Transformer candidate and exports an ONNX file plus a checkpoint and metrics. Artifacts under `data/` and `runs/` are ignored by Git.
-
-**Evaluation limits matter.** With one signer, the tool holds out entire capture sessions and labels the result `personal-session-held-out`; it never calls this signer-independent accuracy. When three or more signers are present, it holds out signers. A held-out signer/session need not demonstrate every label, so per-class metrics report missing support rather than leaking examples across splits. These early measurements are not a claim of general BSL recognition quality.
-
-Use only data you have rights and consent to use. The collector defaults to self-recorded data. Third-party manifest rows require a rights basis and attribution, but that metadata is not legal verification: check the specific source video's permissions before downloading, annotating or training. The BSL SignBank prohibits scraping and bulk downloads without permission; the BOBSL dataset has access restrictions. [Oxford BSLDict](https://www.robots.ox.ac.uk/~vgg/research/bsldict/) documents a CC BY 4.0 dataset, while noting original video copyright remains with original owners, so check the relevant clip/source terms and keep attribution. No third-party data is downloaded automatically.
-
-This is a training foundation, not the finished recognizer. The exported ONNX model is not yet integrated with `SignRecognizerProvider`; a later slice must implement and benchmark browser landmark parity, worker inference, calibrated abstention and visitor-started capture before it can be connected to Otto.
+The old implementation notes and contracts remain available in [D-29](docs/decisions.md), the [architecture archive](docs/architecture.md#retired-sign-language-work-historical-d-29), [SIG-01 #90](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/90), [SIG-02 #92](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/92) and [SIG-03 #123](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/123). The personal BSL workspace is not a production recognizer or evidence of broader signer support. Do not treat the retained code or local datasets as community-approved; any future revival requires a new roadmap proposal and renewed consent, rights and community review.
 
 ### Themes and per-instance config
 
