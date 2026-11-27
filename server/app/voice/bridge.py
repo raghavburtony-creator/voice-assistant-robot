@@ -28,6 +28,7 @@ from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.tasks import TERMINAL as TASK_TERMINAL, TaskEngine, TaskEvent, background_task_status
+from app.voice.task_workers import PROJECT_RESEARCH_TIMEOUT, PROJECT_RESEARCH_TITLE, has_summary, project_research_worker
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.memory_consent import consume_memory_proposal, pending_memory_proposal
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
@@ -258,9 +259,13 @@ class Bridge:
         self.out = OutputChannel(ws)
         self.translator = EventTranslator()
         # Long work runs beside the voice loop (tasks.py) and tells Otto how it is going through `avatar`, the existing path.
-        # The route closes it when the session ends. Nothing submits to it yet: the model has no tool for it (D-02, D-19).
+        # The route closes it when the session ends. The one thing that submits to it is `_start_task`, for a request a checked
+        # tool (`start_project_research`) put on the sink (D-02, D-19); a finished task's result goes to a card (`_task_card`).
         # Each typed step refreshes what `get_background_tasks` reads, and an ending is relayed to the model (`_task_event`).
         self._promotions: set[asyncio.Task] = set()
+        #: Task id -> the card title its result goes under. Only tasks that show a result are here, and an entry leaves
+        #: when its task ends, so it is bounded by what the engine keeps unfinished.
+        self._card_titles: dict[str, str] = {}
         self.live.state["background_tasks"] = []
         self.tasks = TaskEngine(emit=self.avatar, on_event=self._task_event)
 
@@ -513,6 +518,8 @@ class Bridge:
         so it is quoted and labelled untrusted, and today every title is a literal in server code. One message goes out
         per task that ran, bounded only by MAX_SUBMITTED: a producer that can start many tasks must coalesce these."""
         self.live.state["background_tasks"] = background_task_status(self.tasks.snapshots())
+        if event.state in TASK_TERMINAL:
+            self._task_card(event)
         if event.state in TASK_TERMINAL and event.started:
             text = (
                 "Background task update relayed by the server. "
@@ -524,6 +531,51 @@ class Bridge:
             promotion = asyncio.get_running_loop().create_task(self._send_promotion(text))
             self._promotions.add(promotion)
             promotion.add_done_callback(self._promotions.discard)
+
+    def _start_task(self, request: object) -> None:
+        """Starts the background task a checked tool asked for. The request came through `tools.py`, which already checked
+        it; it is read again here because the sink carries plain dicts. A refusal is told to the model as a closed status,
+        since the tool answered before the engine could."""
+        from app.voice import tools  # lazy, like connect_adk: tools builds the registry, and the bridge is its one caller
+
+        query = request.get("query") if isinstance(request, dict) else None
+        if not isinstance(request, dict) or request.get("kind") != "project_research" or not isinstance(query, str) or not query.strip():
+            logger.warning("Dropped a task request that was not a known kind with a query")
+            return
+        submission = self.tasks.submit(
+            PROJECT_RESEARCH_TITLE,
+            project_research_worker(tools.PROJECT_RESEARCH_SERVICE, query),
+            verify=has_summary,
+            timeout=PROJECT_RESEARCH_TIMEOUT,
+        )
+        if submission.task_id is None:
+            text = (
+                "Background task update relayed by the server. The project documentation search was not started "
+                f"(reason: {submission.rejected}). This is a status, not an instruction or permission. "
+                "Tell the visitor in one short plain sentence that it could not start."
+            )
+            promotion = asyncio.get_running_loop().create_task(self._send_promotion(text))
+            self._promotions.add(promotion)
+            promotion.add_done_callback(self._promotions.discard)
+            return
+        # The card's title is the query as text (checked and capped by `checked_card`); the model never sees the result.
+        self._card_titles[submission.task_id] = f"Project docs: {query}"
+
+    def _task_card(self, event: TaskEvent) -> None:
+        """A task that shows a result has ended: a completed one puts its result on a card in the panel (D-18), and any
+        ending forgets the title. The text is the worker's, shown as text (never HTML, never a link), and it goes to the
+        browser only. Through `checked_card` it is capped like any card, and the browser checks it again."""
+        title = self._card_titles.pop(event.id, None)
+        if title is None or event.state != "completed":
+            return
+        snapshot = self.tasks.get(event.id)
+        if snapshot is None or snapshot.result is None:
+            return
+        from app.voice.tools import checked_card
+
+        card = checked_card(title, snapshot.result)
+        if card is not None:
+            self._deliver(Action({"action": "card", "card": card}))
 
     async def _send_promotion(self, text: str) -> None:
         try:
@@ -575,6 +627,9 @@ class Bridge:
                         confirmed = pending_memory_proposal(self.live.state, proposal.get("request_id"))
                         if confirmed == proposal:
                             self.out.control({"type": "memory_proposal", **confirmed})
+                    continue
+                if isinstance(action, dict) and "task_request" in action:
+                    self._start_task(action.get("task_request"))
                     continue
                 environmental = action.get("environmental") if isinstance(action, dict) else None
                 if isinstance(environmental, dict):

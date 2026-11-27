@@ -21,7 +21,8 @@ from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
 from app.voice.context import clear_page_context
 from app.voice.sink import sink
-from app.voice.tasks import clean_task_status
+from app.voice.tasks import MAX_ACTIVE as TASK_MAX_ACTIVE, TERMINAL as TASK_TERMINAL, clean_task_status
+from app.voice.task_workers import MAX_QUERY_CHARS as MAX_RESEARCH_QUERY_CHARS
 from app.voice.memory_consent import discard_memory_proposal, stage_memory_proposal
 from app.voice.environmental import (
     EnvironmentalConfidence,
@@ -312,20 +313,32 @@ def show_card(title: str, body: str, tool_context: ToolContext, code: str = "", 
     title: a few words. body: plain text, at most a short paragraph (no markdown, no links). code: optional text to copy,
     shown as-is. follow_ups: up to 3 short questions the user can tap to ask next. Don't read the card out: say in one
     sentence that it's in the panel."""
+    card = checked_card(title, body, code, follow_ups)
+    if card is None:
+        return {"ok": False, "error": "A card needs a title and a body."}
+    _send(tool_context, {"action": "card", "card": card})
+    return {"ok": True, "shown": "in the voice panel"}
+
+
+def checked_card(title: object, body: object, code: object = "", follow_ups: object = ()) -> dict | None:
+    """The one place a card is checked and capped (D-18): the card's fields, or None when it has no title or no body.
+
+    `show_card` sends it through the sink. The bridge calls it too, for the card a finished background task puts in the
+    panel (`Bridge._task_card`): the same checked card in the same `card` action, which the browser's `toAssistantCard`
+    checks again, so no second path to the panel exists (D-19)."""
     clean_title = _card_text(title, CARD_TITLE_CHARS)
     clean_body = _card_text(body, CARD_BODY_CHARS)
     if not clean_title or not clean_body:
-        return {"ok": False, "error": "A card needs a title and a body."}
+        return None
     card: dict = {"title": clean_title, "body": clean_body}
     clean_code = _card_text(code, CARD_CODE_CHARS, keep_lines=True)
     if clean_code:
         card["code"] = clean_code
-    if isinstance(follow_ups, list):
+    if isinstance(follow_ups, (list, tuple)):
         chips = [c for c in (_card_text(f, CARD_FOLLOW_UP_CHARS) for f in follow_ups) if c][:CARD_FOLLOW_UPS]
         if chips:
             card["follow_ups"] = chips
-    _send(tool_context, {"action": "card", "card": card})
-    return {"ok": True, "shown": "in the voice panel"}
+    return card
 
 
 def propose_memory(content: str, kind: MemoryWriteKind, tool_context: ToolContext) -> dict:
@@ -445,6 +458,31 @@ async def search_project_knowledge(query: str, tool_context: ToolContext) -> dic
     }
 
 
+def start_project_research(query: str, tool_context: ToolContext) -> dict:
+    """Start a search of the project documentation in the background, for a question that may take a moment.
+
+    Use it instead of `search_project_knowledge` when the visitor wants the answer put in the panel and you can keep talking
+    meanwhile. query: a few plain words, at most 200 characters. It returns at once: the answer arrives later on a card, and
+    you are told when the task ends. You never see the card's text, so never claim what it says.
+    """
+    clean = _card_text(query, MAX_RESEARCH_QUERY_CHARS)
+    if not clean:
+        return {"ok": False, "error": f"Use a project documentation query between 1 and {MAX_RESEARCH_QUERY_CHARS} characters."}
+    raw = tool_context.state.get("background_tasks")
+    unfinished = [t for t in map(clean_task_status, raw if isinstance(raw, list) else []) if t is not None and t["state"] not in TASK_TERMINAL]
+    if len(unfinished) >= TASK_MAX_ACTIVE:
+        return {"ok": False, "error": "Too many background tasks are running. Tell the visitor to wait for one to finish."}
+    # The tool never touches the engine: it asks, through the sink, and the bridge (the engine's one owner) starts the task.
+    if not sink.put(tool_context.session.id, {"task_request": {"kind": "project_research", "query": clean}}):
+        return {"ok": False, "error": "The background task could not be started in this session."}
+    return {
+        "ok": True,
+        "started": True,
+        "note": "Searching in the background. Keep talking. The answer will appear on a card in the panel, and the server tells "
+                "you when the task ends. Do not wait, and do not say what the card holds: you cannot see it.",
+    }
+
+
 def get_background_tasks(tool_context: ToolContext) -> dict:
     """Return the status of the server's background tasks: which are queued, running, waiting or finished, and how each ended.
 
@@ -472,6 +510,7 @@ TOOL_FUNCTIONS = (
     show_card,
     notice_environmental_observation,
     get_background_tasks,
+    start_project_research,
     propose_memory,
     search_project_knowledge,
 )

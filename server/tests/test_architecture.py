@@ -221,3 +221,14 @@ def test_project_knowledge_provider_is_a_read_only_adapter_below_research_servic
     assert "PROJECT_DOCUMENTS = (" in source
     assert "candidate.relative_to(root)" in source
     assert "asyncio.to_thread" in source
+
+
+def test_task_workers_are_a_leaf_that_only_the_bridge_starts():
+    # TASK-01 (#49). A worker returns a string and nothing else: it cannot import the tools, the registry, the sink, the
+    # policy gate, the bridge or an SDK, so it cannot start another task, call a tool or reach the browser. Only the bridge
+    # (the engine's one owner) and tools.py (for a shared length cap) import it.
+    tree = _modules()["task_workers"]
+    assert _voice_deps(tree) <= {"research", "tasks"}
+    assert not [i for i in _imports(tree) if i.startswith(SDK_PREFIXES)]
+    importers = sorted(name for name, other in _modules().items() if "task_workers" in _voice_deps(other))
+    assert importers == ["bridge", "tools"]
