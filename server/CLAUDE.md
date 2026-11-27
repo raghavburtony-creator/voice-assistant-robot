@@ -27,6 +27,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && cp -n .env
 | `voice/app_config.py` | **Edit per project:** pages, commands, languages, `system_instruction`. Must match `web/src/otto.config.ts` (D-03) |
 | `voice/runtime.py`, `context.py` | Checks for runtime page ids and labels, and page-scoped context rules (D-23) |
 | `voice/tasks.py` | The task engine: long work beside the live session, never inside it |
+| `voice/task_workers.py` | Worker adapters for the engine (today the project-docs search). A leaf that returns a string; the bridge starts it and shows the result on a card |
 | `voice/avatar.py`, `environmental.py`, `perception.py` | The `avatar` message, camera-awareness proposals (D-30), the perception gateway |
 | `voice/memory_service.py`, `memory_consent.py` | Identity-scoped memory, and visitor-confirmed memory proposals (D-26) |
 | `voice/privacy.py`, `forget.py` | What may be stored, redaction, forgetting one visitor (D-17) |
@@ -59,7 +60,7 @@ When you change this flow, keep every rule in "Session caps" and "Async in the s
 | `test_voice_split.py` | Typed events, the one output writer, interruption |
 | `test_architecture.py`, `test_integration_chain.py`, `test_orchestration_contract.py` | The D-22 authority chain: dependency direction, tool → policy → host receipt → model |
 | `test_tool_registry.py`, `test_adk_state.py` | Registry envelopes; tools working on ADK's `State` |
-| `test_tasks.py` | Task engine lifecycle, bounds, cancellation |
+| `test_tasks.py`, `test_task_start.py` | Task engine lifecycle, bounds, cancellation; starting a task by voice, its worker, its card, and the voice loop turning meanwhile |
 | `test_privacy.py`, `test_memory_*.py`, `test_continuity*.py` | Storage, redaction, consent, forgetting, continuity |
 | `test_extensions.py`, `test_research.py`, `test_perception.py`, `test_environmental.py`, `test_avatar.py` | The capability layers |
 | `test_docs.py` | Decision numbering and index, labels and milestones vs CONTRIBUTING.md, the issue templates |
