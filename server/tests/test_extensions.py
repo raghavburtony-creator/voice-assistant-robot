@@ -71,7 +71,7 @@ async def test_manifest_tool_is_namespaced_schema_checked_and_policy_gated():
     assert result["data"] == {"ok": True, "city": "Port Louis"}
     assert result["policy"]["decision"] == "allow"
     assert registered.metadata.name == "ext_weather_current"
-    assert registered.function.__signature__.parameters["city"].annotation is str
+    assert str(registered.function.__signature__.parameters["city"].annotation) == "str"
     assert calls == ["Port Louis"]
 
 
