@@ -48,6 +48,28 @@ export type Reaction = {
   why: string[]
 }
 
+/**
+ * A permitted attention event has a text counterpart even when its reaction is only a glance.
+ * This is an accessibility announcement, not speech or a new reaction channel.
+ */
+export const MAX_ATTENTION_ANNOUNCEMENT_CHARS = 120
+
+export function attentionAnnouncement(
+  event: Readonly<OttoEvent>,
+  reaction: Pick<Reaction, 'size'>,
+): string | null {
+  if (event.type !== 'attention' || reaction.size === 'none' || typeof event.message !== 'string') return null
+  // eslint-disable-next-line no-control-regex
+  const clean = event.message
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/(?:https?:\/\/|www\.)\S+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_ATTENTION_ANNOUNCEMENT_CHARS)
+    .trim()
+  return clean || null
+}
+
 /** What Otto knows when he decides. The reactor fills `app` and `recent`; the caller fills `self` and `user`. */
 export type Awareness = {
   self: {

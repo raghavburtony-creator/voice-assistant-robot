@@ -10,7 +10,7 @@ import type { StageController } from '../movement/stage'
 import type { GestureChannel } from '../robot/gestures'
 import type { RobotExpression } from '../robot/robot'
 import type { OttoEvent, OttoEvents } from './events'
-import { createReactor, type Awareness, type Reaction } from './reactions'
+import { attentionAnnouncement, createReactor, type Awareness, type Reaction } from './reactions'
 
 export type ReactionListener = (event: OttoEvent, reaction: Reaction) => void
 
@@ -74,6 +74,13 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
   // The reaction, through the systems. Tokens keep a later reaction from being undone by an earlier one's timers.
   const moodToken = useRef(0)
   const walkToken = useRef(0)
+  const announceToken = useRef(0)
+  const announceForReaders = useCallback((message: string) => {
+    const token = ++announceToken.current
+    setAnnounce(message)
+    // Clear the live region so an identical observation can be announced again later.
+    later(() => { if (announceToken.current === token) setAnnounce('') }, 5000)
+  }, [later])
   const carryOut = useCallback((event: OttoEvent, r: Reaction) => {
     live.current.onReaction?.(event, r)
     if (r.size === 'none') return
@@ -83,10 +90,10 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
       setMood(r.face)
       later(() => { if (moodToken.current === token) setMood(null) }, r.faceMs ?? 1500)
     }
-    if (r.say) {
-      setAnnounce(r.say)
-      if (r.size === 'big') { setBubble(r.say); later(() => setBubble(''), 3500) }
-    }
+    const attentionText = attentionAnnouncement(event, r)
+    if (attentionText) announceForReaders(attentionText)
+    else if (r.say) announceForReaders(r.say)
+    if (r.say && r.size === 'big') { setBubble(r.say); later(() => setBubble(''), 3500) }
     const look = () => {
       if (r.look === 'user') stage.lookAt(null)
       else if (r.look !== undefined) {
@@ -107,7 +114,7 @@ export function useAwareness({ events, stage, gestures, robot, idle, talking, ma
         if (walkToken.current === token && stage.goal === there && stage.frame.phase === 'idle') void stage.goHome()
       }, live.current.settings.returnAfterMs)
     })
-  }, [stage, gestures, later])
+  }, [stage, gestures, later, announceForReaders])
 
   // Tasks: shown on his face only once they have run a while; nothing at all for a quick one.
   const taskTimer = useRef<number | undefined>(undefined)
