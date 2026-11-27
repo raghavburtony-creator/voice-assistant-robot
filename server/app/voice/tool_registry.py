@@ -80,12 +80,18 @@ class RegisteredTool:
 class ToolRegistry:
     """Immutable name-to-tool registry plus the validated ADK gateway."""
 
-    def __init__(self, functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]]) -> None:
+    def __init__(
+        self,
+        functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]],
+        *,
+        metadata: tuple[ToolMetadata, ...] | list[ToolMetadata] | None = None,
+    ) -> None:
         by_name = {fn.__name__: fn for fn in functions}
         if len(by_name) != len(functions):
             raise ValueError("Tool function names must be unique")
-        metadata_by_name = {item.name: item for item in TOOL_METADATA}
-        if len(metadata_by_name) != len(TOOL_METADATA):
+        metadata_items = TOOL_METADATA if metadata is None else tuple(metadata)
+        metadata_by_name = {item.name: item for item in metadata_items}
+        if len(metadata_by_name) != len(metadata_items):
             raise ValueError("Tool metadata names must be unique")
         if set(by_name) != set(metadata_by_name):
             missing = sorted(set(by_name) - set(metadata_by_name))
