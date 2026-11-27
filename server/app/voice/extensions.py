@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Annotated, Any, Awaitable, Callable, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from app.voice.tool_registry import ToolMetadata
 
@@ -171,13 +171,13 @@ def _schema_field(
         except TypeError:
             raise ExtensionError("MCP input schema enum is invalid") from None
     elif raw_type == "string":
-        annotation = str
+        annotation = StrictStr
     elif raw_type == "integer":
-        annotation = int
+        annotation = StrictInt
     elif raw_type == "number":
-        annotation = float
+        annotation = StrictFloat | StrictInt
     elif raw_type == "boolean":
-        annotation = bool
+        annotation = StrictBool
     elif raw_type == "object":
         annotation = _model_from_json_schema(
             f"{name.title().replace('_', '')}Object",
