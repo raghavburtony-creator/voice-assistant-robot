@@ -212,15 +212,22 @@ export async function executeDesktopAction(action: DesktopAction, requestId: str
     if (!result.ok || result.status !== 'completed' || result.verification !== 'native_api_completed') return result
 
     // Native API completion is not proof that the window reached its requested position.
-    // Take a fresh observation and only report success when the observed geometry agrees.
-    const context = await runtime.core.invoke<DesktopContext>('desktop_context')
-    if (!verifyDesktopMovement(action, context)) {
+    // Retry only the read-only observation once; never repeat the approved desktop action.
+    let verified = false
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const context = await runtime.core.invoke<DesktopContext>('desktop_context')
+      if (verifyDesktopMovement(action, context)) {
+        verified = true
+        break
+      }
+    }
+    if (!verified) {
       return {
         ...result,
         ok: false,
         status: 'failed',
         verification: 'not_verified',
-        message: "The native move finished, but Otto's observed position did not match the requested destination.",
+        message: "The native move finished, but Otto's position did not match the requested destination after two observations.",
       }
     }
     return { ...result, verification: 'verified', message: `${result.message} The final position was verified.` }
