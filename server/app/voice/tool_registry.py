@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import wraps
@@ -110,11 +111,17 @@ class ToolRegistry:
             if (
                 metadata.family != "extension"
                 or metadata.risk_level != "low"
-                or not metadata.required_permission.startswith("extension:")
+                or not re.fullmatch(r"extension:[a-z][a-z0-9_-]{0,23}", metadata.required_permission)
+                or not re.fullmatch(r"ext_[a-z][a-z0-9_]{0,23}_[a-z][a-z0-9_]{0,31}", name)
+                or not name.startswith(
+                    "ext_" + metadata.required_permission.removeprefix("extension:").replace("-", "_") + "_"
+                )
                 or metadata.side_effects
                 or metadata.verification_required
                 or not metadata.supports_async
                 or not inspect.iscoroutinefunction(function)
+                or isinstance(metadata.timeout_seconds, bool)
+                or not isinstance(metadata.timeout_seconds, int)
                 or not 1 <= metadata.timeout_seconds <= 10
             ):
                 raise ValueError("Extensions may register only bounded, read-only async tools")
