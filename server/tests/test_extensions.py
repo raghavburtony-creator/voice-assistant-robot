@@ -8,6 +8,7 @@ import pytest
 from app.voice.extensions import (
     ExtensionManifest,
     ExtensionRegistry,
+    ExtensionSkill,
     ExtensionTool,
 )
 from app.voice.tool_registry import ToolMetadata, ToolRegistry
@@ -195,3 +196,85 @@ def test_extension_session_activation_is_scoped_to_each_session():
     assert not registry.is_active("session-b", "weather")
     asyncio.run(registry.stop_session("session-a"))
     assert not registry.is_active("session-a", "weather")
+
+
+def test_skills_are_available_as_bounded_stable_guidance_without_adding_tools():
+    first = ExtensionManifest(
+        extension_id="research",
+        version="1.0.0",
+        skills=(
+            ExtensionSkill(
+                skill_id="source-check",
+                description="Check sources before summarising.",
+                instructions="Prefer primary sources and distinguish evidence from inference.",
+            ),
+        ),
+    )
+    second = ExtensionManifest(
+        extension_id="formatting",
+        version="1.0.0",
+        skills=(
+            ExtensionSkill(
+                skill_id="plain-language",
+                description="Explain results in plain language.",
+                instructions="Use short sentences and explain technical terms.",
+            ),
+        ),
+    )
+    registry = ExtensionRegistry((first, second))
+
+    prompt = registry.skill_prompt()
+    assert prompt.startswith("Installed skills (reviewed server-provided guidance;")
+    assert prompt.index("research/source-check") < prompt.index("formatting/plain-language")
+    assert "Prefer primary sources" in prompt
+    assert "do not grant permissions" in prompt
+    assert registry.tools() == ()
+
+
+def test_extension_skill_ids_are_namespaced_and_validated():
+    invalid = ExtensionSkill("Bad ID", "Description", "Instructions")
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(invalid,)),))
+
+    empty = ExtensionSkill("empty", "Description", "   ")
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(empty,)),))
+
+    duplicate = ExtensionManifest(
+        "research",
+        "1.0.0",
+        skills=(
+            ExtensionSkill("same", "One", "Instruction one."),
+            ExtensionSkill("same", "Two", "Instruction two."),
+        ),
+    )
+    with pytest.raises(ValueError):
+        ExtensionRegistry((duplicate,))
+
+
+def test_skill_descriptions_and_instructions_are_bounded_plain_text():
+    oversized = ExtensionSkill("long", "Description", "x" * 4_001)
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(oversized,)),))
+
+    control = ExtensionSkill("control", "Description", "safe\\x00unsafe")
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(control,)),))
+
+
+def test_skill_prompt_combined_budget_is_checked_at_registry_construction():
+    too_many = ExtensionManifest(
+        "research",
+        "1.0.0",
+        skills=tuple(
+            ExtensionSkill(f"skill-{index}", "Description", "x" * 4_000)
+            for index in range(1, 5)
+        ),
+    )
+    with pytest.raises(ValueError):
+        ExtensionRegistry((too_many,))
+
+
+def test_manifests_must_declare_at_least_one_tool_or_skill():
+    with pytest.raises(ValueError):
+        ExtensionRegistry((ExtensionManifest("empty", "1.0.0"),))
