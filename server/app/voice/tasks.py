@@ -99,9 +99,11 @@ class TaskSnapshot:
 
 @dataclass(frozen=True)
 class TaskEvent:
-    """One typed step in a task's life, for whoever owns the engine (the bridge). Nothing a worker wrote (its result or
-    note) travels in an event. The state, reason and priority are closed values; the title is server-set text and is the
-    one free-text field, so whoever shows it to the model must label it untrusted."""
+    """One typed step in a task's life, for whoever owns the engine (the bridge).
+
+    Only a completed task carries its bounded result. The result and server-set title are
+    untrusted text; notes and exception details never travel in an event.
+    """
     id: str
     title: str
     state: State
@@ -109,6 +111,7 @@ class TaskEvent:
     progress: float
     priority: Priority
     started: bool  # it held a slot at some point, so an ending is news
+    result: str | None = None
 
 
 @dataclass(frozen=True)
@@ -448,7 +451,11 @@ class TaskEngine:
         if self._closed or self._on_event is None:
             return
         try:
-            self._on_event(TaskEvent(record.id, record.title, record.state, record.reason, record.progress, record.priority, record.started))
+            self._on_event(TaskEvent(
+                record.id, record.title, record.state, record.reason, record.progress,
+                record.priority, record.started,
+                _clip(record.result, RESULT_CHARS) if record.state == "completed" else None,
+            ))
         except Exception:  # noqa: BLE001
             pass
 
