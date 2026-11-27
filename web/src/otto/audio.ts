@@ -1,5 +1,6 @@
 // Browser audio for the voice assistant: microphone -> 16 kHz PCM16 frames, and
 // 24 kHz PCM16 speech -> speakers. Gemini Live uses these rates in each direction.
+import { MIC_REQUEST } from './micDiagnostic';
 import { analyserMouth, type MouthSource } from './mouth';
 
 export const INPUT_RATE = 16_000;
@@ -69,7 +70,7 @@ export async function startRecorder(onFrame: (pcm: ArrayBuffer) => void): Promis
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: { ...MIC_REQUEST },
     });
   } catch (cause) {
     void context.close();

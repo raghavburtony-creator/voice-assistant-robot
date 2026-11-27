@@ -24,6 +24,7 @@ const CORE = [
   'guidance/help.ts',
   'guidance/task.ts',
   'idle.ts',
+  'micDiagnostic.ts',
   'mouth.ts',
   'movement/stage.ts',
   'robot/gestures.ts',
