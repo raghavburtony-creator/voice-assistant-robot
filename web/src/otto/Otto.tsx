@@ -44,6 +44,7 @@ import { createGestureChannel, type GestureChannel } from './robot/gestures'
 import { useGestureSounds } from './useGestureSounds'
 import { useGestureTriggers } from './useGestureTriggers'
 import type { AssistantAction } from './messages'
+import type { GestureNavigation } from './gesture-control/gesture'
 import { loadAssistantAudio, useVoiceAssistant } from './useVoiceAssistant'
 import { useWakeWord, type WakeState } from './useWakeWord'
 import VoiceAssistant from './VoiceAssistant'
@@ -69,6 +70,8 @@ type Props = {
   guide?: OttoGuide
   /** For tests and the lab: a stand-in for the server's WebSocket. */
   createSocket?: (url: string) => WebSocket
+  /** Ordered host-owned destinations for local hand-swipe navigation (D-31). */
+  gestureNavigation?: GestureNavigation
   /** For the lab: set to the idle lifecycle's controls. */
   idleControls?: { current: IdleControls | null }
 }
@@ -86,7 +89,7 @@ export default function Otto({ config = OTTO_CONFIG, ...props }: Props) {
   return <OttoConfigProvider config={config}><OttoInner {...props} /></OttoConfigProvider>
 }
 
-function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, guide, createSocket, idleControls }: Omit<Props, 'config'>) {
+function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, guide, createSocket, gestureNavigation, idleControls }: Omit<Props, 'config'>) {
   const ownChannel = useMemo(createGestureChannel, [])
   const channel = gestures ?? ownChannel
   const ownEvents = useMemo(createOttoEvents, [])
@@ -372,6 +375,6 @@ function OttoInner({ page, onAction, showRobot = true, gestures, stage, events, 
       ? <OttoDock status={status} voiceOpen={open} line={line} mouth={mouth} speech={speech} gestures={channel} stage={ottoStage}
           events={otto} idleControls={idleControls} face={guideFace} onIdleState={state => { idleRef.current = state }} onTalk={open ? () => {} : openPanel} />
       : !open && <button type="button" className="otto-btn otto-btn--filled otto-open" onClick={openPanel}>Talk to {ASSISTANT_NAME}</button>}
-    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} desktopAwarenessEnabled={desktopAwarenessEnabled} onDesktopAwarenessChange={setDesktopAwareness} />}
+    {open && <VoiceAssistant assistant={assistant} onClose={closePanel} desktopAwarenessEnabled={desktopAwarenessEnabled} onDesktopAwarenessChange={setDesktopAwareness} currentPage={page} gestureNavigation={gestureNavigation} />}
   </>
 }

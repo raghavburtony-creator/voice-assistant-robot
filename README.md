@@ -497,6 +497,22 @@ During a conversation, the panel has **Share screen** (in browsers with `getDisp
 
 The rules are core (`capture.ts`: `captureStop`, `frameDue`, `frameSize`, `maskBoxes`); the capture is shell (`useScreenShare.ts`, `ScreenShare.tsx`). `<otto-mascot>` doesn't capture. In the lab, "What the server has of a share" shows the source and a frame count, never the pictures. Whether the live endpoint accepts these frames is unverified until Q-01 is answered.
 
+### Hand gesture navigation
+
+Otto can navigate registered views with a webcam without starting a voice conversation. Open the panel and press **Start hand control**. After the browser camera prompt, the panel shows a local preview and tracked hand. Point with your index finger (fold the other fingers), hold still briefly, then swipe left for the previous registered view or right for the next. The first slice navigates only between host-supplied destinations; it does not click page elements, scroll, inject keystrokes or switch arbitrary desktop applications.
+
+The host supplies an ordered list of safe destination ids and retains route ownership:
+
+```tsx
+const gestureNavigation = {
+  destinations: PAGES.map(({ id, title }) => ({ id, label: title })),
+  onNavigate: (id: string) => { if (isPage(id)) window.location.hash = id }, // this app owns the route
+}
+<Otto page={page} onAction={onAction} gestureNavigation={gestureNavigation} />
+```
+
+Camera frames and hand landmarks are processed in the browser and are not sent to Otto's server or Gemini, and no camera/gesture data is stored. Camera access is independent of microphone consent and the voice session. Stop hand control, close the panel or hide the tab to release the camera; it never restarts by itself. MediaPipe's WASM/runtime and hand model are downloaded from jsDelivr and Google when started. MediaPipe's [privacy notice](https://developers.google.com/edge/mediapipe/solutions/privacy) says input images are processed on-device and not sent to Google, but the SDK sends performance/utilization metrics to Google; the panel links to that notice. This feature is defined by D-31 and is the narrow local-only exception to D-21.
+
 ### Retired sign-language prototype (archive)
 
 Sign-language support is retired from the active roadmap as of 2026-11-27; it is not a supported or planned Otto capability. The provider-neutral adapter and panel prototype in `web/src/otto/sign/`, lab fake, and offline personal BSL training workspace in `ml/sign/` are retained as historical source only. No production recognizer is bundled or connected, and no further sign capture, model training or integration is planned.
