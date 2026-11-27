@@ -29,6 +29,7 @@ MAX_EXTENSION_TOOLS = 24
 MAX_SCHEMA_DEPTH = 5
 MAX_SCHEMA_FIELDS = 40
 MAX_TOOL_OUTPUT_BYTES = 16 * 1024
+MAX_TOOL_INPUT_SCHEMA_BYTES = 8 * 1024
 MAX_SKILL_PROMPT_CHARS = 4_000
 EXTENSION_START_TIMEOUT_SECONDS = 3.0
 EXTENSION_CLOSE_TIMEOUT_SECONDS = 1.0
@@ -253,6 +254,61 @@ def _model_from_json_schema(
     return model
 
 
+def _strict_model_schema(schema: object) -> bool:
+    """Allow only small, closed Pydantic input schemas with bounded nesting."""
+    if not isinstance(schema, Mapping) or schema.get("type") != "object":
+        return False
+    if schema.get("additionalProperties") is not False:
+        return False
+    try:
+        if len(json.dumps(schema, ensure_ascii=False, allow_nan=False).encode("utf-8")) > MAX_TOOL_INPUT_SCHEMA_BYTES:
+            return False
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+    definitions = schema.get("$defs", {})
+    if not isinstance(definitions, Mapping):
+        return False
+    field_count = [0]
+
+    def visit(node: object, depth: int, refs: frozenset[str]) -> bool:
+        if depth > MAX_SCHEMA_DEPTH or not isinstance(node, Mapping):
+            return False
+        reference = node.get("$ref")
+        if reference is not None:
+            if not isinstance(reference, str) or not reference.startswith("#/$defs/") or reference in refs:
+                return False
+            target = definitions.get(reference.removeprefix("#/$defs/"))
+            return visit(target, depth + 1, refs | {reference})
+
+        if node.get("type") == "object" or "properties" in node:
+            if node.get("additionalProperties") is not False:
+                return False
+            properties = node.get("properties", {})
+            if not isinstance(properties, Mapping):
+                return False
+            field_count[0] += len(properties)
+            if field_count[0] > MAX_SCHEMA_FIELDS:
+                return False
+            if not all(visit(value, depth + 1, refs) for value in properties.values()):
+                return False
+
+        if node.get("type") == "array":
+            if "items" not in node or not visit(node.get("items"), depth + 1, refs):
+                return False
+
+        for key in ("anyOf", "oneOf", "allOf"):
+            variants = node.get(key)
+            if variants is not None:
+                if not isinstance(variants, list) or not all(
+                    visit(variant, depth + 1, refs) for variant in variants
+                ):
+                    return False
+        return True
+
+    return visit(schema, 0, frozenset())
+
+
 def _bounded_tool_output(value: object) -> dict[str, Any]:
     # Keep external fields under one namespace so they cannot impersonate the gateway's
     # evidence, provenance, verification, error or execution-status fields.
@@ -430,7 +486,7 @@ class ExtensionManager:
             if not isinstance(spec.input_model, type) or not issubclass(spec.input_model, BaseModel):
                 continue
             schema = spec.input_model.model_json_schema()
-            if schema.get("type") != "object" or schema.get("additionalProperties") is not False:
+            if not _strict_model_schema(schema):
                 continue
             description = _clean_text(spec.description, limit=200)
             if not description:
