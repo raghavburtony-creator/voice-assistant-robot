@@ -141,6 +141,19 @@ def test_empty_registry_reports_unavailable_instead_of_fabricating_evidence():
     assert result.providers == ()
 
 
+
+def test_oversized_provider_confidence_is_rejected_without_discarding_healthy_results():
+    malformed = Provider(items=(evidence(confidence=10**1000),))
+    healthy = Provider("web-good", "web", (evidence("web-good"),))
+
+    result = run(ResearchService((malformed, healthy)).search(ResearchRequest("Otto")))
+
+    assert result.status == "partial"
+    assert result.providers[0].accepted == 0
+    assert result.providers[0].rejected == 1
+    assert result.providers[1].accepted == 1
+    assert [item.evidence.provider_id for item in result.evidence] == ["web-good"]
+
 def test_provider_confidence_is_preserved_as_unverified_metadata():
     provider = Provider(items=(evidence(confidence=0.75),))
     result = run(ResearchService((provider,)).search(ResearchRequest("Otto")))
