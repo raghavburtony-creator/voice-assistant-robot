@@ -373,6 +373,8 @@ def test_async_extension_tool_uses_the_existing_policy_gateway_and_session_allow
     lookup.__name__ = "ext_demo_lookup"
     meta = metadata()
     registry = ToolRegistry(TOOL_FUNCTIONS, additional_tools=((meta, lookup),))
+    adk_tools = registry.adk_tools()
+    assert any(item.name == "ext_demo_lookup" for item in adk_tools)
     gateway = registry._gateway(lookup, meta)
     assert inspect.signature(gateway).parameters["tool_context"].annotation is ToolContext
 
