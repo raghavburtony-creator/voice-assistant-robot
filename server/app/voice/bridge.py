@@ -32,6 +32,7 @@ from app.voice.memory_service import SQLiteMemoryService
 from app.voice.memory_consent import consume_memory_proposal, pending_memory_proposal
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
 from app.voice.policy import POLICY_ENGINE
+from app.voice.extensions import EXTENSION_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -495,13 +496,20 @@ class Bridge:
         except Exception:  # noqa: BLE001 - the session is ending; a status the model cannot receive is not worth failing for
             pass
 
+    async def start_extensions(self) -> None:
+        """Start the reviewed server extensions for this voice session."""
+        await EXTENSION_REGISTRY.start_session(self.live.session_id)
+
     async def close(self) -> None:
-        """Ends the session's background work and drops any status still waiting to be told to the model."""
-        await self.tasks.close()
-        for promotion in list(self._promotions):
-            promotion.cancel()
-        if self._promotions:
-            await asyncio.wait(set(self._promotions), timeout=1.0)
+        """Ends session work and gives active extensions their isolated shutdown hooks."""
+        try:
+            await self.tasks.close()
+            for promotion in list(self._promotions):
+                promotion.cancel()
+            if self._promotions:
+                await asyncio.wait(set(self._promotions), timeout=1.0)
+        finally:
+            await EXTENSION_REGISTRY.stop_session(self.live.session_id)
 
     # ---- model to browser ----
 
