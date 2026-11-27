@@ -151,9 +151,9 @@ Only install extension packages and connect MCP servers you trust: extension pac
 
 ## Researching project documentation
 
-Otto can search a small, reviewed set of public repository documents when asked about the project's documented architecture, decisions, roadmap or capabilities. The voice tool `search_project_knowledge` calls the provider-neutral `ResearchService` and returns bounded excerpts with stable GitHub source locators, relevance and applicability labels. The only files read are `README.md`, `docs/architecture.md`, `docs/decisions.md`, `docs/roadmap.md` and `docs/extensions.md`. No visitor files, arbitrary filesystem paths, websites or connected services are searched by this tool.
+Otto can search a small, reviewed set of public repository documents when asked about the project's documented architecture, decisions, roadmap or capabilities. This searches the Otto kit's own repository documentation, not documentation for the host application that embeds it. The voice tool `search_project_knowledge` calls the provider-neutral `ResearchService` and returns bounded excerpts with stable GitHub source locators, relevance and applicability labels. The only files read are `README.md`, `docs/architecture.md`, `docs/decisions.md` and `docs/roadmap.md`. No visitor files, arbitrary filesystem paths, websites or connected services are searched by this tool.
 
-Retrieved excerpts are untrusted data, not instructions or policy. The tool keeps them under `external_data`, separate from the ToolRegistry's evidence, provenance and verification fields. Otto should cite the source title and locator when using a result and say when the curated docs do not establish an answer. This is the first RESEARCH-01 runtime slice; other source adapters and visitor-facing citation presentation remain future work.
+Retrieved excerpts are untrusted data, not instructions or policy. The tool keeps them under `external_data`, separate from the ToolRegistry's evidence, provenance and verification fields. Otto should identify the document title and section in speech when using a result and say when the curated docs do not establish an answer. If a card is useful, it should contain only the document title and repository-relative path, never a URL. This is the first RESEARCH-01 runtime slice; other source adapters and visitor-facing citation presentation remain future work.
 
 ## Memory
 
@@ -502,6 +502,22 @@ During a conversation, the panel has **Share screen** (in browsers with `getDisp
 - **When it stops.** At Stop sharing (or Turn camera off), at the end of the conversation (the time limit too), when the tab is hidden, at the browser's own Stop sharing, or when the panel closes. It never restarts by itself.
 
 The rules are core (`capture.ts`: `captureStop`, `frameDue`, `frameSize`, `maskBoxes`); the capture is shell (`useScreenShare.ts`, `ScreenShare.tsx`). `<otto-mascot>` doesn't capture. In the lab, "What the server has of a share" shows the source and a frame count, never the pictures. Whether the live endpoint accepts these frames is unverified until Q-01 is answered.
+
+### Hand gesture navigation
+
+Otto can navigate registered views with a webcam without starting a voice conversation. Open the panel and press **Start hand control**. After the browser camera prompt, the panel shows a local preview and tracked hand. Point with your index finger (fold the other fingers), hold still briefly, then swipe left for the previous registered view or right for the next. The first slice navigates only between host-supplied destinations; it does not click page elements, scroll, inject keystrokes or switch arbitrary desktop applications.
+
+The host supplies an ordered list of safe destination ids and retains route ownership:
+
+```tsx
+const gestureNavigation = {
+  destinations: PAGES.map(({ id, title }) => ({ id, label: title })),
+  onNavigate: (id: string) => { if (isPage(id)) window.location.hash = id }, // this app owns the route
+}
+<Otto page={page} onAction={onAction} gestureNavigation={gestureNavigation} />
+```
+
+Camera frames and hand landmarks are processed in the browser and are not sent to Otto's server or Gemini, and no camera/gesture data is stored. Camera access is independent of microphone consent and the voice session. Stop hand control, close the panel or hide the tab to release the camera; it never restarts by itself. MediaPipe's WASM/runtime and hand model are downloaded from jsDelivr and Google when started. MediaPipe's [privacy notice](https://developers.google.com/edge/mediapipe/solutions/privacy) says input images are processed on-device and not sent to Google, but the SDK sends performance/utilization metrics to Google; the panel links to that notice. This feature is defined by D-31 and is the narrow local-only exception to D-21.
 
 ### Retired sign-language prototype (archive)
 

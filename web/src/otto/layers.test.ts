@@ -18,6 +18,7 @@ const CORE = [
   'contextBudget.ts',
   'gemini/channels.ts',
   'gemini/prompt.ts',
+  'gesture-control/gesture.ts',
   'guidance/friction.ts',
   'guidance/guide.ts',
   'guidance/help.ts',

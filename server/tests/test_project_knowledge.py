@@ -87,4 +87,5 @@ def test_project_provider_rejects_unbounded_queries_and_invalid_limits(tmp_path:
 def test_provider_reads_only_known_project_paths():
     assert "README.md" in PROJECT_DOCUMENTS
     assert "docs/architecture.md" in PROJECT_DOCUMENTS
+    assert "docs/extensions.md" not in PROJECT_DOCUMENTS
     assert "private.txt" not in PROJECT_DOCUMENTS

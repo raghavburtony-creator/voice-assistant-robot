@@ -22,7 +22,6 @@ PROJECT_DOCUMENTS = (
     "docs/architecture.md",
     "docs/decisions.md",
     "docs/roadmap.md",
-    "docs/extensions.md",
 )
 MAX_DOCUMENT_BYTES = 256 * 1024
 MAX_CANDIDATE_CHARS = 1_600
