@@ -226,12 +226,18 @@ class ResearchService:
             return None
         if item.published_at is not None and (isinstance(item.published_at, bool) or not isinstance(item.published_at, int) or item.published_at < 0):
             return None
-        if item.confidence is not None and (
-            isinstance(item.confidence, bool) or not isinstance(item.confidence, (int, float))
-            or not math.isfinite(item.confidence) or not 0 <= item.confidence <= 1
-        ):
-            return None
-        return replace(item, retrieved_at=retrieved, confidence=float(item.confidence) if item.confidence is not None else None)
+        confidence = item.confidence
+        normalized_confidence: float | None = None
+        if confidence is not None:
+            if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+                return None
+            try:
+                normalized_confidence = float(confidence)
+            except (OverflowError, ValueError):
+                return None
+            if not math.isfinite(normalized_confidence) or not 0 <= normalized_confidence <= 1:
+                return None
+        return replace(item, retrieved_at=retrieved, confidence=normalized_confidence)
 
     @staticmethod
     def _dedupe_locator(item: Evidence) -> str:
