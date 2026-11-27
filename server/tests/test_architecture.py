@@ -185,6 +185,25 @@ def test_only_the_bridge_builds_the_task_engine_so_there_is_one_per_session_and_
     ]
     assert builders == ["bridge"]
 
+def test_task_worker_adapter_is_below_the_bridge_and_cannot_create_another_engine():
+    # The adapter only maps a bridge-owned, server-supplied allow-list to the existing per-session engine.
+    tree = _modules()["task_workers"]
+    assert _voice_deps(tree) == {"tasks"}
+    importers = [
+        name for name, module in _modules().items()
+        if any(item.startswith("app.voice.task_workers") for item in _imports(module))
+    ]
+    builders = [
+        name for name, module in _modules().items()
+        for node in ast.walk(module)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "TaskWorkerAdapter"
+    ]
+    assert importers == ["bridge"]
+    assert builders == ["bridge"]
+
+
 def test_extension_contract_is_a_leaf_below_the_tool_registry():
     # Extensions can declare tools but cannot import the tools list, bridge, route, or ADK/Gemini SDKs.
     tree = _modules()["extensions"]
