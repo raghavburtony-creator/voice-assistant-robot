@@ -144,6 +144,7 @@ async def connect_adk(language: str, page: str, page_title: str, detail: str) ->
     service = InMemorySessionService()
     session = None
     live = None
+    queue = None
     sink_opened = False
     session_id = uuid.uuid4().hex
     try:
@@ -190,16 +191,24 @@ async def connect_adk(language: str, page: str, page_title: str, detail: str) ->
         live = _AdkLiveSession(runner, session, queue, run_config)
         yield live
     finally:
-        if live is not None:
-            live.close()
-        if sink_opened and session is not None:
-            sink.close(session.id)
-        if session is not None:
+        try:
+            if live is not None:
+                live.close()
+            elif queue is not None:
+                queue.close()
+        finally:
             try:
-                await service.delete_session(app_name=APP_ID, user_id=USER_ID, session_id=session.id)
-            except Exception:  # in memory; goes away with the connection anyway
-                pass
-        await extension_manager.close()
+                if sink_opened and session is not None:
+                    sink.close(session.id)
+            finally:
+                try:
+                    if session is not None:
+                        try:
+                            await service.delete_session(app_name=APP_ID, user_id=USER_ID, session_id=session.id)
+                        except Exception:  # in memory; goes away with the connection anyway
+                            pass
+                finally:
+                    await extension_manager.close()
 
 
 def _set_page(state: dict, page: object, title: object = None) -> None:
