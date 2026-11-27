@@ -7,7 +7,7 @@ The first EXT-01 slice provides a static, server-side manifest registry. It is d
 - An extension has a lowercase kebab-case id, a `MAJOR.MINOR.PATCH` version and 1–20 declared tools.
 - Every tool name is namespaced as `ext_<extension_id>_<tool_name>`.
 - Tool functions must be synchronous, typed and named. They must end with a `tool_context` parameter.
-- Tool metadata must declare a recognised family, `low` risk, the existing `voice_session` permission, a 1–10 second timeout, no verification requirement and no side effects.
+- Tool metadata must declare a recognised family, `low` risk, the existing `voice_session` permission, a descriptive timeout value between 1 and 10 seconds, no verification requirement and no side effects.
 - Optional `on_session_start(session_id: str)` and `on_session_end(session_id: str)` hooks must be async. Each hook is bounded to two seconds. Failure is isolated to that extension and session.
 - The extension registry is below the existing `ToolRegistry`; calls still receive schema validation and the existing server policy decision. The model cannot install, enable or load extensions.
 
@@ -28,7 +28,12 @@ def ext_catalog_lookup(query: str, tool_context: object) -> dict:
 Declare it in `server/app/voice/extensions.py`:
 
 ```python
+from app.voice.extensions import ExtensionManifest, ExtensionRegistry, ExtensionTool
 from app.voice.tool_registry import ToolMetadata
+
+def ext_catalog_lookup(query: str, tool_context: object) -> dict:
+    """Look up catalog entries without changing data."""
+    return {"ok": True, "matches": []}
 
 catalog = ExtensionManifest(
     extension_id="catalog",
@@ -50,6 +55,7 @@ catalog = ExtensionManifest(
         ),
     ),
 )
+# Replace the empty tuple at the bottom of extensions.py with this reviewed manifest.
 EXTENSION_MANIFESTS = (catalog,)
 EXTENSION_REGISTRY = ExtensionRegistry(EXTENSION_MANIFESTS)
 ```
