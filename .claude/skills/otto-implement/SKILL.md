@@ -19,7 +19,7 @@ Implement `$ARGUMENTS` for the Otto voice kit. Run the whole pipeline without as
 3. **Review and fix.** Unless `--no-review` was passed, launch `otto-code-reviewer` with "review the current diff and fix confirmed issues (--fix)". In parallel with it:
    - if the change touches the voice panel, the robot, gestures, movement, sound or `<otto-mascot>`: `otto-design-reviewer --fix`
    - if `.tsx` files or hooks changed: `react-reviewer` (report only)
-   - if `server/` changed: `fastapi-reviewer` (report only)
+   - if `server/` changed: `python-reviewer` (report only)
 
    Apply the confirmed findings from the report-only reviewers yourself, then rerun the checks.
 

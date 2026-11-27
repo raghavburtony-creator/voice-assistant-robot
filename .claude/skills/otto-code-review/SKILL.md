@@ -12,7 +12,7 @@ Review `$ARGUMENTS` (default: the uncommitted diff plus untracked files). Don't 
 2. Launch `otto-code-reviewer` on it. Pass `--fix` through if the user gave it.
 3. With `--deep`, also run these in parallel (all in `.claude/agents/`):
    - if `web/` changed: `typescript-reviewer`, plus `react-reviewer` when `.tsx` files or hooks changed
-   - if `server/` changed: `python-reviewer` and `fastapi-reviewer`
+   - if `server/` changed: `python-reviewer` (Python and FastAPI)
    - `security-reviewer`: the key and CORS (D-01, D-09), tool argument checks (D-02), WebSocket input handling
    - `performance-optimizer`: per-frame and per-chunk allocation, audio node and WebGL disposal, bundle size of `dist-lib/`
    - `a11y-architect`: only if UI files changed

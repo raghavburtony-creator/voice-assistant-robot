@@ -311,4 +311,4 @@ Project agents: `otto-implementer`, `otto-worker` (one scoped unit, for `/otto-o
 
 The orchestrator is a skill, not an agent: a sub-agent can't start other sub-agents, so orchestration has to run in the main session.
 
-**Imported from ECC 2.2.3 (MIT, with a project note added):** `typescript-reviewer`, `react-reviewer`, `python-reviewer`, `fastapi-reviewer`, `security-reviewer`, `performance-optimizer`, `a11y-architect`. They ship in this repo, so they work without the ECC plugin. License: `.claude/THIRD_PARTY_LICENSES/ecc.txt`. To update one, copy the new upstream file and put the project note back under its frontmatter.
+**Imported from ECC 2.2.3 (MIT, with a project note added):** `typescript-reviewer`, `react-reviewer`, `python-reviewer` (which absorbed the former `fastapi-reviewer`), `security-reviewer`, `performance-optimizer`, `a11y-architect`. They ship in this repo, so they work without the ECC plugin. License: `.claude/THIRD_PARTY_LICENSES/ecc.txt`. To update one, copy the new upstream file and put the project note back under its frontmatter.
