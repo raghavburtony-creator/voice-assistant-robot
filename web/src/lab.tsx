@@ -676,9 +676,17 @@ function MicCheckLab() {
     ]
     setLines([...report, `measuring the level for ${MIC_CHECK_MS / 1000} s: talk normally, then stay quiet...`])
     const context = new AudioContext()
-    const analyser = context.createAnalyser()
-    analyser.fftSize = 1024
-    context.createMediaStreamSource(stream).connect(analyser)
+    const release = () => { stream.getTracks().forEach(t => t.stop()); void context.close() }
+    let analyser: AnalyserNode
+    try {
+      analyser = context.createAnalyser()
+      analyser.fftSize = 1024
+      context.createMediaStreamSource(stream).connect(analyser)
+      // Made after an await, so a webview may leave it suspended: a suspended context reads zeros, which is not a silent microphone.
+      if (context.state === 'suspended') await context.resume()
+    } catch { release(); setLines([...report, 'level: the audio could not be opened, so the level was not measured']); return }
+    if (mine !== token.current) { release(); return }
+    if (context.state !== 'running') { release(); setLines([...report, 'level: the audio context did not start, so the level was not measured (that is not a silent microphone)']); return }
     const buffer = new Float32Array(analyser.fftSize)
     const rms: number[] = []
     const timer = window.setInterval(() => {
@@ -689,7 +697,7 @@ function MicCheckLab() {
     }, 50)
     const end = (done: boolean) => {
       window.clearInterval(timer); window.clearTimeout(finish)
-      stream.getTracks().forEach(t => t.stop()); void context.close(); stop.current = null
+      release(); stop.current = null
       if (done && mine === token.current) setLines([...report, describeLevels(summariseLevels(rms))])
     }
     const finish = window.setTimeout(() => end(true), MIC_CHECK_MS)
@@ -700,7 +708,7 @@ function MicCheckLab() {
       <p className="lab-hint">Asks for the microphone the way the voice panel does and reports which processing the browser really applied (echo cancellation, noise suppression, auto gain) and the level. Use it first in the desktop app on Zorin, before changing any threshold.</p>
       <button type="button" className={btn} onClick={() => void run()}>Check my microphone</button>
       <button type="button" className={btn} onClick={() => { token.current++; stop.current?.(); setLines([]) }}>Stop</button>
-      <ul role="status" aria-label="Microphone check result" className="lab-hint">{lines.map(line => <li key={line}>{line}</li>)}</ul>
+      <div role="status" aria-label="Microphone check result" className="lab-hint"><ul>{lines.map(line => <li key={line}>{line}</li>)}</ul></div>
     </fieldset>
   )
 }

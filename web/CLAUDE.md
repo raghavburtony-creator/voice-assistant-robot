@@ -32,7 +32,7 @@ The files are split into **core** (pure rules and data: no React, no packages, n
 
 | Area | Files |
 |---|---|
-| Voice session and wire protocol | `useVoiceAssistant.ts` (the WebSocket, mic upload, the start, page and context messages), `messages.ts` (**`messageSchema` and `toAssistantAction`: every server message is checked here, D-02**), `audio.ts` (16 kHz up, 24 kHz playback clock, barge-in), `speechGate.ts` |
+| Voice session and wire protocol | `useVoiceAssistant.ts` (the WebSocket, mic upload, the start, page and context messages), `messages.ts` (**`messageSchema` and `toAssistantAction`: every server message is checked here, D-02**), `micDiagnostic.ts` (core: `MIC_REQUEST`, and what the lab's microphone check reports), `audio.ts` (16 kHz up, 24 kHz playback clock, barge-in), `speechGate.ts` |
 | Panel and consent | `VoiceAssistant.tsx`, `ui.tsx`, `consent.ts`, `wakeWord.ts` / `useWakeWord.ts` (off by default, D-08), `voice.css` |
 | The robot | `Otto.tsx`, `OttoStage.tsx`, `OttoDock.tsx`, `robot/` (`OttoRobot.tsx`, `ClayScene.tsx`, `robot.ts` faces, `gestures.ts`), `mouth.ts` (lip-sync), `movement/` (`stage.ts`, `useStage.ts`), `idle.ts` |
 | Sound | `sound.ts`, `soundCues.ts`, `useGestureSounds.ts`. Synthesised with Web Audio, no files, nothing before a gesture (D-11) |
