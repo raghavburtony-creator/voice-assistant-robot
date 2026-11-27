@@ -16,7 +16,7 @@ def test_project_provider_searches_only_the_reviewed_document_allow_list(tmp_pat
     )
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "architecture.md").write_text(
-        "# Architecture\n\nD-22 keeps tool authority in a checked chain.\n",
+        "# Architecture\n\nD-22 keeps ToolRegistry authority in a checked chain with a policy gate.\n",
         encoding="utf-8",
     )
     (tmp_path / "private.txt").write_text(
