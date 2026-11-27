@@ -28,6 +28,7 @@ from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
 from app.voice.tasks import TERMINAL as TASK_TERMINAL, TaskEngine, TaskEvent, background_task_status
+from app.voice.task_workers import TaskWorkerAdapter
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.memory_consent import consume_memory_proposal, pending_memory_proposal
 from app.voice.perception import JPEG_MAGIC, PerceptionGateway, PerceptionRejected, decode_frame
@@ -263,6 +264,9 @@ class Bridge:
         self._promotions: set[asyncio.Task] = set()
         self.live.state["background_tasks"] = []
         self.tasks = TaskEngine(emit=self.avatar, on_event=self._task_event)
+        # Trusted server adapters may register workers during session setup; seal before any work is submitted.
+        self.task_workers = TaskWorkerAdapter(self.tasks)
+        self.task_workers.seal()
 
     # ---- browser to model ----
 
