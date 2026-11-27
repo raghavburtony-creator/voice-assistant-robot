@@ -241,7 +241,8 @@ def test_every_registered_tool_returns_a_schema_valid_audited_envelope_with_no_g
         for attempt, arguments in enumerate(({}, _sample_arguments(tools.REGISTRY[metadata.name].input_schema))):
             session = live(f"sweep-{metadata.name}-{attempt}")
             before = len(session.state.get(AUDIT_STATE_KEY, []))
-            envelope = adk_tool(metadata.name)(**arguments, tool_context=context_for(session))
+            pending = adk_tool(metadata.name)(**arguments, tool_context=context_for(session))
+            envelope = asyncio.run(pending) if asyncio.iscoroutine(pending) else pending
             jsonschema.validate(envelope, tools.REGISTRY[metadata.name].output_schema)
             rows = session.state[AUDIT_STATE_KEY]
             assert len(rows) == before + 1, f"{metadata.name} left no audit row"
