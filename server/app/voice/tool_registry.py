@@ -272,7 +272,7 @@ class ToolRegistry:
         }
         # ADK injects ToolContext by type, not just by the conventional parameter name.
         # Extension callbacks never see this object; only this gateway receives it for policy checks.
-        if "tool_context" in signature.parameters and signature.parameters["tool_context"].annotation is object:
+        if "tool_context" in signature.parameters and hints.get("tool_context") is object:
             signature = signature.replace(parameters=[
                 parameter.replace(annotation=ToolContext) if parameter.name == "tool_context" else parameter
                 for parameter in signature.parameters.values()
