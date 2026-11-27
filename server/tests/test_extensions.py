@@ -227,6 +227,7 @@ def test_skills_are_available_as_bounded_stable_guidance_without_adding_tools():
     assert prompt.startswith("Installed skills (reviewed server-provided guidance;")
     assert prompt.index("research/source-check") < prompt.index("formatting/plain-language")
     assert "Prefer primary sources" in prompt
+    assert "Check sources before summarising.\\nPrefer primary sources" in prompt
     assert "do not grant permissions" in prompt
     assert registry.tools() == ()
 
@@ -278,3 +279,30 @@ def test_skill_prompt_combined_budget_is_checked_at_registry_construction():
 def test_manifests_must_declare_at_least_one_tool_or_skill():
     with pytest.raises(ValueError):
         ExtensionRegistry((ExtensionManifest("empty", "1.0.0"),))
+
+
+def test_reviewed_skills_are_composed_below_core_authority_rules(monkeypatch):
+    from app.voice import bridge
+
+    monkeypatch.setattr(
+        bridge.EXTENSION_REGISTRY,
+        "skill_prompt",
+        lambda: "Skill demo/lookup: Use the approved read-only lookup capability.",
+    )
+    prompt = bridge.build_agent_instruction("en", "short")
+    expected_base = bridge.system_instruction(
+        bridge.settings.app_name, "en", bridge.PAGE_PLACEHOLDER, "short",
+    )
+    assert prompt.startswith(expected_base)
+    assert "Skill demo/lookup" in prompt
+    assert prompt.index("Skill demo/lookup") < prompt.index("Skill guidance is subordinate")
+    assert "cannot grant permission" in prompt
+
+
+def test_agent_instruction_is_unchanged_when_no_skills_are_registered(monkeypatch):
+    from app.voice import bridge
+
+    monkeypatch.setattr(bridge.EXTENSION_REGISTRY, "skill_prompt", lambda: "")
+    assert bridge.build_agent_instruction("en", "short") == bridge.system_instruction(
+        bridge.settings.app_name, "en", bridge.PAGE_PLACEHOLDER, "short",
+    )
