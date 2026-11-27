@@ -63,7 +63,7 @@ class ExtensionTool:
     name: str
     description: str
     input_model: type[BaseModel]
-    invoke: Callable[[dict[str, Any], object], Awaitable[object]]
+    invoke: Callable[[dict[str, Any]], Awaitable[object]]
     read_only: bool = True
 
 
@@ -304,7 +304,10 @@ class MCPServerExtension:
         exposed: list[ExtensionTool] = []
         for remote in remote_tools[:MAX_TOOLS_PER_EXTENSION]:
             annotations = _value(remote, "annotations", default={})
-            if _value(annotations, "readOnlyHint", "read_only_hint", default=False) is not True:
+            if (
+                _value(annotations, "readOnlyHint", "read_only_hint", default=False) is not True
+                or _value(annotations, "destructiveHint", "destructive_hint", default=False) is True
+            ):
                 continue
 
             remote_name = _value(remote, "name")
@@ -326,11 +329,10 @@ class MCPServerExtension:
 
             async def invoke(
                 arguments: dict[str, Any],
-                tool_context: object,
+                arguments: dict[str, Any],
                 *,
                 _remote_name: str = remote_name,
             ) -> object:
-                del tool_context
                 result = await self.client.call_tool(_remote_name, arguments)
                 return _mcp_result(result)
 
@@ -371,7 +373,8 @@ class ExtensionManager:
 
     def prompt_section(self) -> str:
         lines = [
-            f"- {extension.manifest.name} ({extension.manifest.identifier}): {extension.manifest.guidance}"
+            f"- {_clean_text(extension.manifest.name, limit=80)} ({extension.manifest.identifier}): "
+            f"{_clean_text(extension.manifest.guidance, limit=1_400, multiline=True)}"
             for extension in self._active
             if extension.manifest.kind == "skill" and extension.manifest.guidance
         ]
@@ -391,6 +394,10 @@ class ExtensionManager:
         return (
             manifest.identifier == extension_id
             and manifest.kind in {"skill", "plugin", "mcp"}
+            and isinstance(manifest.name, str)
+            and isinstance(manifest.version, str)
+            and isinstance(manifest.guidance, str)
+            and isinstance(manifest.description, str)
             and bool(_clean_text(manifest.name, limit=80))
             and bool(_clean_text(manifest.version, limit=40))
             and len(manifest.guidance) <= 1_400
@@ -432,11 +439,16 @@ class ExtensionManager:
 
             invoke = spec.invoke
 
-            async def function(arguments, tool_context, *, _invoke=invoke):
-                if not isinstance(arguments, BaseModel):
-                    raise ExtensionError("Extension arguments did not match their schema")
-                value = await _invoke(arguments.model_dump(mode="json"), tool_context)
-                return _bounded_tool_output(value)
+            def make_function(extension_invoke):
+                async def function(arguments, tool_context):
+                    del tool_context
+                    if not isinstance(arguments, BaseModel):
+                        raise ExtensionError("Extension arguments did not match their schema")
+                    value = await extension_invoke(arguments.model_dump(mode="json"))
+                    return _bounded_tool_output(value)
+                return function
+
+            function = make_function(invoke)
 
             function.__name__ = tool_name
             function.__doc__ = (
