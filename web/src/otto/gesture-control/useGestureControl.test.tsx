@@ -60,6 +60,13 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', cancelRaf)
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+  const originalSrcObject = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'srcObject')
+  Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+    configurable: true,
+    get() { return (this as HTMLMediaElement & { __srcObject?: MediaStream | null }).__srcObject ?? null },
+    set(value: MediaStream | null) { (this as HTMLMediaElement & { __srcObject?: MediaStream | null }).__srcObject = value },
+  })
+  vi.stubGlobal('__originalSrcObjectDescriptor', originalSrcObject)
 })
 
 afterEach(async () => {
@@ -71,6 +78,10 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   Reflect.deleteProperty(navigator, 'mediaDevices')
+  const original = (globalThis as typeof globalThis & { __originalSrcObjectDescriptor?: PropertyDescriptor }).__originalSrcObjectDescriptor
+  if (original) Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', original)
+  else Reflect.deleteProperty(HTMLMediaElement.prototype, 'srcObject')
+  Reflect.deleteProperty(globalThis, '__originalSrcObjectDescriptor')
 })
 
 describe('useGestureControl camera lifecycle', () => {
@@ -81,6 +92,7 @@ describe('useGestureControl camera lifecycle', () => {
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
 
     await act(async () => { await controller?.start() })
+    expect(controller?.error).toBeNull()
     expect(controller?.phase).toBe('on')
     expect(controller?.videoRef.current?.srcObject).toBe(stream)
     expect(raf).toHaveBeenCalledTimes(1)
