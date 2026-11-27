@@ -210,3 +210,14 @@ def test_only_the_bridge_discovers_and_registers_extensions():
     assert importers == ["bridge"]
     assert builders == ["bridge"]
 
+
+
+def test_project_knowledge_provider_is_a_read_only_adapter_below_research_service():
+    tree = _modules()["project_knowledge"]
+    assert _voice_deps(tree) == {"research"}
+    imports = _imports(tree)
+    assert not any(item.startswith(("app.voice.tools", "app.voice.bridge", "app.voice.route", "app.voice.sink")) for item in imports)
+    source = (VOICE / "project_knowledge.py").read_text(encoding="utf-8")
+    assert "PROJECT_DOCUMENTS = (" in source
+    assert "candidate.relative_to(root)" in source
+    assert "asyncio.to_thread" in source
