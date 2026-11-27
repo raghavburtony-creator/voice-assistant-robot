@@ -11,10 +11,10 @@ from pathlib import Path, PurePosixPath
 from typing import Sequence
 from urllib.parse import quote
 
-from app.voice.research import Evidence, MAX_PROVIDER_RESULTS
+from app.voice.research import Evidence, MAX_PROVIDER_RESULTS, SourceKind
 
 PROVIDER_ID = "otto-project-docs"
-SOURCE_KIND = "project"
+SOURCE_KIND: SourceKind = "project"
 REPOSITORY_URL = "https://github.com/raghavburtony-creator/voice-assistant-robot"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_DOCUMENTS = (
@@ -28,7 +28,7 @@ MAX_DOCUMENT_BYTES = 256 * 1024
 MAX_CANDIDATE_CHARS = 1_600
 MAX_QUERY_CHARS = 500
 _TOKEN = re.compile(r"[a-z0-9]{2,}", re.IGNORECASE)
-_HEADING = re.compile(r"^#{1,6}\\s+(.+?)\\s*#*\\s*$")
+_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 
 
 class ProjectKnowledgeProvider:
@@ -69,7 +69,7 @@ class ProjectKnowledgeProvider:
                 locator = f"{REPOSITORY_URL}/blob/main/{quote(relative_path, safe='/')}"
                 evidence = Evidence(
                     provider_id=self.provider_id,
-                    source=self.source_kind,  # type: ignore[arg-type]
+                    source=self.source_kind,
                     source_id=f"{relative_path}#section-{index}",
                     title=title,
                     locator=locator,
