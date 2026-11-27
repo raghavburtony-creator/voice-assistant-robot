@@ -15,6 +15,10 @@ AUDIT_STATE_KEY = "tool_policy_audit"
 PENDING_STATE_KEY = "tool_policy_pending"
 MAX_AUDIT_RECORDS = 50
 KNOWN_RISKS = frozenset({"low", "medium", "high"})
+KNOWN_PERMISSIONS = frozenset({
+    "voice_session", "memory_opt_in", "active_capture",
+    "active_camera_share", "desktop_awareness", "desktop_action_approval",
+})
 
 
 @dataclass(frozen=True)
