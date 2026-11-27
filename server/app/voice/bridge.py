@@ -13,7 +13,7 @@ import logging
 import uuid
 import warnings
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Protocol
+from typing import Any, AsyncIterator, Mapping, Protocol
 
 from fastapi import WebSocket
 
@@ -27,7 +27,7 @@ from app.voice.context import clear_page_context
 from app.voice.avatar import clean_avatar_event
 from app.voice.runtime import is_runtime_id, runtime_title
 from app.voice.sink import sink
-from app.voice.tasks import TERMINAL as TASK_TERMINAL, TaskEngine, TaskEvent, background_task_status
+from app.voice.tasks import TERMINAL as TASK_TERMINAL, TaskEngine, TaskEvent, Worker, background_task_status
 from app.voice.task_workers import TaskWorkerAdapter
 from app.voice.memory_service import SQLiteMemoryService
 from app.voice.memory_consent import consume_memory_proposal, pending_memory_proposal
@@ -224,7 +224,14 @@ def _set_page(state: dict, page: object, title: object = None) -> None:
 
 
 class Bridge:
-    def __init__(self, ws: WebSocket, live: LiveSession, store: ContinuityStore | None = None) -> None:
+    def __init__(
+        self,
+        ws: WebSocket,
+        live: LiveSession,
+        store: ContinuityStore | None = None,
+        *,
+        task_workers: Mapping[str, Worker] | None = None,
+    ) -> None:
         self.ws = ws
         self.live = live
         self.continuity_store = store or continuity_store
@@ -264,8 +271,10 @@ class Bridge:
         self._promotions: set[asyncio.Task] = set()
         self.live.state["background_tasks"] = []
         self.tasks = TaskEngine(emit=self.avatar, on_event=self._task_event)
-        # Trusted server adapters may register workers during session setup; seal before any work is submitted.
+        # Only trusted server composition may provide workers; the per-session allow-list is immutable afterwards.
         self.task_workers = TaskWorkerAdapter(self.tasks)
+        for name, worker in (task_workers or {}).items():
+            self.task_workers.register(name, worker)
         self.task_workers.seal()
 
     # ---- browser to model ----
