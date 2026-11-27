@@ -119,7 +119,7 @@ def test_extensions_are_disabled_by_default_and_only_enabled_ids_are_loaded(monk
     settings = Settings(_env_file=None)
     assert settings.enabled_extension_ids == ()
 
-    loaded = FakeExtension()
+    loaded = FakeExtension(specs=(make_tool(),))
     unlisted = EntryPoint("not-enabled", lambda: pytest.fail("unlisted entry point was loaded"))
     enabled = EntryPoint("demo", lambda: loaded)
     install(monkeypatch, unlisted, enabled)
@@ -233,7 +233,7 @@ def test_extension_models_cannot_hide_open_nested_object_schemas():
         invoke=make_tool().invoke,
         read_only=True,
     )
-    assert manager._register_tools("demo", (unsafe,)) == ()
+    assert manager._register_tools("demo", (unsafe,)) == []
 
 
 def test_mcp_adapter_exposes_only_explicitly_read_only_non_destructive_tools():
