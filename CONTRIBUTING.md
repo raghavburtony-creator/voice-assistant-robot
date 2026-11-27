@@ -52,5 +52,10 @@ A milestone is a release: a set of issues that ship together and that a visitor 
 |---|---|
 | 0.2 Task-aware Otto, in page | The model knows which guided task is running, where the visitor is in it, and what the app is busy with, within one page session. Nothing new is stored. |
 | 0.3 Task continuity | A guided task survives a reload in the same tab, as D-20 decides. |
+| 0.4 Desktop companion shell | Otto runs as a normal desktop application: a taskbar entry, minimise, maximise, restore and close, no permanent always-on-top, and a compact mode beside the full window. |
+| 0.5 Window management | Otto lists, focuses, moves, resizes, minimises, maximises, restores and closes other windows and switches workspaces by voice, and checks every result against a fresh observation. |
+| 0.6 Personal memory | Otto remembers what the desktop owner tells him across restarts, recalls it when asked, and shows and forgets it on request. |
+| 0.7 Extensions and MCP | Skills and MCP servers add tools to Otto through the existing tool gateway and policy, without changing the orchestrator. |
+| 0.8 Hand pointer and roaming | Hand control moves a pointer and drags windows through the checked desktop actions, and Otto walks along window edges. |
 
 Unscheduled work has no milestone. Give it one when it is planned, not when it is filed.

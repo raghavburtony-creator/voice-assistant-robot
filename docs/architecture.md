@@ -115,6 +115,36 @@ Otto is moving from a voice guide on one page to an assistant that knows what th
 | **Multimodal input** (camera, screen) | The consent flow (`consent.ts`), the privacy rules of the page snapshot (D-17), the existing session (`send_realtime`) | A capture path that skips the visitor's press, keeps a frame, or opens a second channel (D-21) | none (Q-07 answered by D-21) |
 | **Environmental intelligence** | Visitor-shared camera input; a narrow, checked proposal mapped to `attention` on the existing `createOttoEvents` path (D-30) | A second event bus; direct model/speech reactions; arbitrary actions or location targets | Q-10 answered by D-30; Q-07 answered by D-21 |
 | **Spatial / AR presence** | The robot's state (`robot/robot.ts`, gestures, movement rules), which is already pure | A second robot model with its own states | Specify a target device/runtime and user-facing rendering and interaction requirements in issue #12 before choosing a renderer (D-28) |
+| **Desktop personal assistant** (E7): a normal desktop app that arranges the owner's windows by voice and remembers the owner | The Tauri host and its consent receipts (D-24, D-25), the gateway and policy (`tool_registry.py`, `policy.py`), the shipped move verification (`verifyDesktopMovement` in `desktop.ts`), `SQLiteMemoryService` and `memory_consent.py`, `ExtensionManager` | A second agent, router or "desktop agent"; an action path past `tools.py` and `toAssistantAction`; blind input injection as the main control; a second memory store | Q-11 (window management), Q-12 (personal memory), Q-13 (hand pointer) |
+
+### Target: the desktop personal assistant (E7)
+
+Source brief: [upgrade.md](../upgrade.md). It asks for JARVIS, IRIS, Kaizumi, Muninn and gnomelets to be used as *sources of mechanisms* while the one ADK agent in `bridge.py` stays the only decision-maker. Mapped onto the modules that exist:
+
+```
+                         ONE ADK LlmAgent  (bridge.py, "voice_guide"; no sub-agents: test_architecture.py)
+                                  │ proposes tool calls
+                         TOOL GATEWAY  tool_registry._gateway  → schema check → policy.py (allow / confirmation_required / deny) → audit
+          ┌───────────────────────┼────────────────────────────┬───────────────────────────┐
+     memory tools            desktop tools                 research / tasks            extension tools
+  memory_service.py      desktop_observe, desktop_window     research.py, tasks.py      extensions.py (skills, MCP)
+  (planned: kinds,        (planned, Q-11)                                               (planned: SKILL.md loader,
+   recall/search)                 │                                                      MCP stdio client)
+                     sink → browser toAssistantAction (second check) → desktop.ts
+                                  │
+                     Tauri host (web/src-tauri): native ask for ASK-tier actions, consent receipt
+                                  │ zbus, session D-Bus
+                     Otto GNOME Shell extension (planned): Meta.Window list / activate / move_resize / minimize / ...
+                                  │
+                     OBSERVE → ACT → re-OBSERVE → VERIFY (one bounded re-observation) → DesktopState diff
+                                  │
+                     result envelope back to the model; Otto's avatar shows it (awareness, movement)
+```
+
+- **Why a GNOME Shell extension.** On GNOME Wayland (the owner's Zorin OS 18.1, GNOME 46) no client API lists or moves other applications' windows: X11 tools only see XWayland clients, `org.gnome.Shell.Eval` is disabled, and `Introspect` is read-only and allow-listed. Code inside the shell (`Meta.Window`) sees and moves every window, on Wayland and on Xorg, so one backend covers both sessions.
+- **Structured state, not pixels.** The host returns `DesktopState` (monitors, workspaces, windows with id, app, title, rect, workspace, focused, state, and Otto's own window) plus what changed since the previous observation. Screenshots stay out of the first milestone.
+- **Policy.** Desktop actions get tiers inside the existing `PolicyEngine`, not a second engine. Ideas taken from JARVIS's `policy_engine.py`: fail closed for an unregistered tool, a pending approval bound to a hash of its arguments with a short expiry.
+- **Memory.** `SQLiteMemoryService` already has remember/recall/update/forget/resurface; what is missing is an identity on the desktop, typed kinds, read tools for the model and a panel to see and forget. JARVIS's memory (a JSON keyword store) is weaker and is not adopted.
 
 **CI-2/CI-3 task continuity:** the host-scoped SQLite adapter (`server/app/voice/continuity_store.py`) keeps one record per opaque host identity, containing only scope, task, step and savedAt. The bridge saves only a task/step pair present in the current interface's `guide_tasks` report and expires it after seven days. Completion, cancellation and visitor withdrawal delete it. When the model requests navigation to a runtime destination, `tools.py` first checks the id against the current interface's reported destinations; if a valid task is active, it marks a one-session handoff without recording the destination. The old interface's target, task and destination registries are then cleared in the server and browser. A source-interface unmount consumes that one-shot marker instead of deleting the saved task. The destination interface must report its own task registry; the server validates the saved task and step there, and the browser validates them again before `ottoGuide.startTask(spec, step)`. Missing tasks/steps are discarded. The host maps destination ids to routes; no URL, path, page snapshot or global identity crosses the boundary. The ADK live session remains ephemeral and unchanged.
 
