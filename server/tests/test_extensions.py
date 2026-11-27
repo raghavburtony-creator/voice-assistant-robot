@@ -28,6 +28,15 @@ class LookupInput(BaseModel):
     query: str
 
 
+class OpenNested(BaseModel):
+    value: str
+
+
+class InputWithOpenNested(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nested: OpenNested
+
+
 class FakeExtension:
     def __init__(self, identifier="demo", *, kind="plugin", guidance="", specs=(), error=None):
         self.manifest = ExtensionManifest(
@@ -213,6 +222,18 @@ def test_extension_tools_reject_mutating_and_non_async_capabilities(monkeypatch)
     assert "_invoke" not in parameters
     run(function(LookupInput(query="public input"), tool_context=SimpleNamespace(state={"private": "secret"})))
     assert observed == [{"query": "public input"}]
+
+
+def test_extension_models_cannot_hide_open_nested_object_schemas():
+    manager = ExtensionManager(("demo",))
+    unsafe = ExtensionTool(
+        name="nested",
+        description="Read a nested object.",
+        input_model=InputWithOpenNested,
+        invoke=make_tool().invoke,
+        read_only=True,
+    )
+    assert manager._register_tools("demo", (unsafe,)) == ()
 
 
 def test_mcp_adapter_exposes_only_explicitly_read_only_non_destructive_tools():
