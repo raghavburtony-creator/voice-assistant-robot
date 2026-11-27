@@ -7,14 +7,16 @@ Tool functions remain the enforcement points for runtime authority (D-22).
 """
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, get_type_hints
 
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, ToolContext
 from pydantic import TypeAdapter, ValidationError
 
 from app.voice.policy import POLICY_ENGINE, clear_state_key, supports_state
@@ -43,7 +45,7 @@ class ToolMetadata:
 # browser validation and visitor approval remain authoritative.
 TOOL_FAMILIES = frozenset({
     "browser", "computer", "files", "screen", "camera",
-    "web_research", "memory", "tasks",
+    "web_research", "memory", "tasks", "extension",
 })
 
 
@@ -80,7 +82,12 @@ class RegisteredTool:
 class ToolRegistry:
     """Immutable name-to-tool registry plus the validated ADK gateway."""
 
-    def __init__(self, functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]]) -> None:
+    def __init__(
+        self,
+        functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]],
+        *,
+        additional_tools: tuple[tuple[ToolMetadata, Callable[..., Any]], ...] | list[tuple[ToolMetadata, Callable[..., Any]]] = (),
+    ) -> None:
         by_name = {fn.__name__: fn for fn in functions}
         if len(by_name) != len(functions):
             raise ValueError("Tool function names must be unique")
@@ -91,6 +98,35 @@ class ToolRegistry:
             missing = sorted(set(by_name) - set(metadata_by_name))
             stale = sorted(set(metadata_by_name) - set(by_name))
             raise ValueError(f"Tool registry mismatch; missing metadata={missing}, missing functions={stale}")
+
+        # The built-in function/metadata parity remains exact. Runtime extensions are
+        # appended only by the bridge and are individually constrained to low-risk,
+        # read-only, async tools with a namespaced host allow-list permission.
+        for metadata, function in additional_tools:
+            if not isinstance(metadata, ToolMetadata) or not callable(function):
+                raise ValueError("Additional tools need valid metadata and a callable")
+            name = metadata.name
+            if name != getattr(function, "__name__", None) or name in by_name:
+                raise ValueError("Additional tool names must be unique and match their function")
+            if (
+                metadata.family != "extension"
+                or metadata.risk_level != "low"
+                or not re.fullmatch(r"extension:[a-z][a-z0-9_-]{0,23}", metadata.required_permission)
+                or not re.fullmatch(r"ext_[a-z][a-z0-9_]{0,23}_[a-z][a-z0-9_]{0,31}", name)
+                or not name.startswith(
+                    "ext_" + metadata.required_permission.removeprefix("extension:").replace("-", "_") + "_"
+                )
+                or metadata.side_effects
+                or metadata.verification_required
+                or not metadata.supports_async
+                or not inspect.iscoroutinefunction(function)
+                or isinstance(metadata.timeout_seconds, bool)
+                or not isinstance(metadata.timeout_seconds, int)
+                or not 1 <= metadata.timeout_seconds <= 10
+            ):
+                raise ValueError("Extensions may register only bounded, read-only async tools")
+            by_name[name] = function
+            metadata_by_name[name] = metadata
 
         self._tools = {
             name: RegisteredTool(
@@ -226,7 +262,7 @@ class ToolRegistry:
         }
 
     @classmethod
-    def _gateway(cls, function: Callable[..., Any], metadata: ToolMetadata) -> Callable[..., dict[str, Any]]:
+    def _gateway(cls, function: Callable[..., Any], metadata: ToolMetadata) -> Callable[..., Any]:
         signature = inspect.signature(function)
         hints = get_type_hints(function)
         validators = {
@@ -234,10 +270,16 @@ class ToolRegistry:
             for name, parameter in signature.parameters.items()
             if name != "tool_context" and parameter.annotation is not inspect.Parameter.empty
         }
+        # ADK injects ToolContext by type, not just by the conventional parameter name.
+        # Extension callbacks never see this object; only this gateway receives it for policy checks.
+        if "tool_context" in signature.parameters and hints.get("tool_context") is object:
+            signature = signature.replace(parameters=[
+                parameter.replace(annotation=ToolContext) if parameter.name == "tool_context" else parameter
+                for parameter in signature.parameters.values()
+            ])
+        is_async = inspect.iscoroutinefunction(function)
 
-        @wraps(function)
-        def call(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            started_at = cls._timestamp()
+        def prepare(args: tuple[Any, ...], kwargs: dict[str, Any], started_at: str):
             context = None
             try:
                 bound = signature.bind(*args, **kwargs)
@@ -269,31 +311,32 @@ class ToolRegistry:
                     error={"code": "permission_denied", "message": "The tool request was not permitted by session policy."},
                     policy=decision.as_dict(),
                 )
-
             state = getattr(context, "state", None)
             previous_policy = state.get("_active_policy_decision") if supports_state(state) else None
             if supports_state(state):
                 state["_active_policy_decision"] = decision.as_dict()
-            try:
-                raw_result = function(*bound.args, **bound.kwargs)
-            except Exception as exc:
-                # Log only the tool name and exception class; never exception text or arguments.
-                logger.error("Registered tool %s raised %s", metadata.name, type(exc).__name__)
-                POLICY_ENGINE.audit(context, metadata, decision, "failed")
-                return cls._envelope(
-                    metadata=metadata, status="error", data={}, started_at=started_at,
-                    error={"code": "tool_execution_error", "message": "The tool could not complete its operation."},
-                    policy=decision.as_dict(),
-                )
-            finally:
-                if supports_state(state):
-                    if previous_policy is None:
-                        clear_state_key(state, "_active_policy_decision")
-                    else:
-                        state["_active_policy_decision"] = previous_policy
+            return bound, context, decision, state, previous_policy
 
+        def restore(state: Any, previous_policy: Any) -> None:
+            if supports_state(state):
+                if previous_policy is None:
+                    clear_state_key(state, "_active_policy_decision")
+                else:
+                    state["_active_policy_decision"] = previous_policy
+
+        def failed(context: Any, decision: Any, started_at: str, exc: BaseException) -> dict[str, Any]:
+            # Log only the tool name and exception class; never exception text or arguments.
+            logger.error("Registered tool %s raised %s", metadata.name, type(exc).__name__)
+            POLICY_ENGINE.audit(context, metadata, decision, "failed")
+            return cls._envelope(
+                metadata=metadata, status="error", data={}, started_at=started_at,
+                error={"code": "tool_execution_error", "message": "The tool could not complete its operation."},
+                policy=decision.as_dict(),
+            )
+
+        def finish(raw_result: Any, context: Any, decision: Any, started_at: str) -> dict[str, Any]:
             result = raw_result if isinstance(raw_result, dict) else {"value": raw_result}
-            failed = (
+            failed_result = (
                 result.get("ok") is False
                 or result.get("accepted") is False
                 or "error" in result
@@ -312,29 +355,77 @@ class ToolRegistry:
             evidence = result.get("evidence") if isinstance(result.get("evidence"), list) else []
             provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else None
             execution_status = (
-                "failed" if failed else
+                "failed" if failed_result else
                 "awaiting_confirmation" if decision.decision == "confirmation_required" else
                 "returned"
             )
             POLICY_ENGINE.audit(context, metadata, decision, execution_status)
             return cls._envelope(
                 metadata=metadata,
-                status="error" if failed else "success",
-                # An unreviewed tool's error text may be internal detail; the envelope's `error` carries a safe code instead.
-                data={k: v for k, v in result.items() if k != "error"} if failed and not metadata.model_visible_errors else result,
+                status="error" if failed_result else "success",
+                # An unreviewed tool's error text may be internal detail; the envelope carries a safe code instead.
+                data={k: v for k, v in result.items() if k != "error"} if failed_result and not metadata.model_visible_errors else result,
                 started_at=started_at,
                 evidence=evidence,
                 provenance=provenance,
                 verification=verification,
                 error=(
                     {"code": "tool_execution_failed", "message": "The tool reported that its operation was not completed."}
-                    if failed else None
+                    if failed_result else None
                 ),
                 policy=decision.as_dict(),
             )
 
+        if is_async:
+            @wraps(function)
+            async def async_call(*args: Any, **kwargs: Any) -> dict[str, Any]:
+                started_at = cls._timestamp()
+                prepared = prepare(args, kwargs, started_at)
+                if isinstance(prepared, dict):
+                    return prepared
+                bound, context, decision, state, previous_policy = prepared
+                try:
+                    raw_result = await asyncio.wait_for(
+                        function(*bound.args, **bound.kwargs),
+                        timeout=metadata.timeout_seconds,
+                    )
+                except asyncio.CancelledError:
+                    POLICY_ENGINE.audit(context, metadata, decision, "cancelled")
+                    raise
+                except Exception as exc:
+                    return failed(context, decision, started_at, exc)
+                finally:
+                    restore(state, previous_policy)
+                return finish(raw_result, context, decision, started_at)
+
+            async_call.__signature__ = signature  # type: ignore[attr-defined]
+            annotations = dict(getattr(async_call, "__annotations__", {}))
+            if "tool_context" in signature.parameters:
+                annotations["tool_context"] = ToolContext
+            async_call.__annotations__ = annotations
+            return async_call
+
+        @wraps(function)
+        def call(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            started_at = cls._timestamp()
+            prepared = prepare(args, kwargs, started_at)
+            if isinstance(prepared, dict):
+                return prepared
+            bound, context, decision, state, previous_policy = prepared
+            try:
+                raw_result = function(*bound.args, **bound.kwargs)
+            except Exception as exc:
+                return failed(context, decision, started_at, exc)
+            finally:
+                restore(state, previous_policy)
+            return finish(raw_result, context, decision, started_at)
+
         # ADK derives the function declaration from the callable signature.
         call.__signature__ = signature  # type: ignore[attr-defined]
+        annotations = dict(getattr(call, "__annotations__", {}))
+        if "tool_context" in signature.parameters:
+            annotations["tool_context"] = ToolContext
+        call.__annotations__ = annotations
         return call
 
     def adk_tools(self) -> tuple[FunctionTool, ...]:

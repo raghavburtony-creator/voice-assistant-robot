@@ -1,5 +1,7 @@
 # Otto BSL sign-recognition prototype
 
+**Archived on 2026-11-27:** E4 has been retired from Otto's active roadmap and Q-09 is dropped. This workspace is retained as historical personal-prototype code only; no further dataset collection, training or production integration is planned. Do not treat its artifacts or measurements as a supported recognizer or community-validated BSL capability. Any revival requires a new project proposal and renewed data-consent/rights review.
+
 This is an **offline, personal British Sign Language (BSL) training workspace**. It begins with isolated signs and uses explicit consented examples. It does not yet provide continuous sentence recognition or connect a live model to Otto's production sign adapter.
 
 ## Setup

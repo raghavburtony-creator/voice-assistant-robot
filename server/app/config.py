@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, field_validator
@@ -32,6 +33,8 @@ class Settings(BaseSettings):
     continuity_store_path: str = str(SERVER_DIR / "data" / "continuity.sqlite3")
     # Explicitly opted-in, host-identity-scoped memory; no browser-supplied identity is trusted.
     memory_store_path: str = str(SERVER_DIR / "data" / "memory.sqlite3")
+    # Explicitly installed extension packages are enabled per deployment; empty means none.
+    otto_enabled_extensions: str = ""
 
     @field_validator("cors_origins")
     @classmethod
@@ -40,9 +43,27 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ORIGINS must list explicit origins; a wildcard is not allowed")
         return value
 
+    @field_validator("otto_enabled_extensions")
+    @classmethod
+    def _valid_enabled_extensions(cls, value: str) -> str:
+        raw_items = [item.strip() for item in value.split(",")]
+        if value.strip() and any(not item for item in raw_items):
+            raise ValueError("OTTO_ENABLED_EXTENSIONS cannot contain empty ids")
+        identifiers = [item for item in raw_items if item]
+        if len(identifiers) > 8 or len(set(identifiers)) != len(identifiers):
+            raise ValueError("OTTO_ENABLED_EXTENSIONS may contain at most eight unique ids")
+        if any(not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", item) for item in identifiers):
+            raise ValueError("OTTO_ENABLED_EXTENSIONS must use lowercase extension ids")
+        return ",".join(identifiers)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def enabled_extension_ids(self) -> tuple[str, ...]:
+        """Deployment-approved extension entry-point ids; no extension is enabled by default."""
+        return tuple(item for item in self.otto_enabled_extensions.split(",") if item)
 
     @property
     def origin_required(self) -> bool:

@@ -1,7 +1,7 @@
 # Sign-language pilot: Q-09 research and decision readiness
 
-**Status: research completed; community decision still required.**  
-**Issue:** [#91 — Q-09](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91)  
+**Status: archived on 2026-11-27. E4 is retired and Q-09 is dropped; this research remains historical evidence only, not an active request for consultation or model selection.**  
+**Historical issue:** [#91 — Q-09](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/91)  
 **Scope:** Publicly documented MSL resources, dataset suitability questions, and a community-led path to a bounded pilot. This document does not select a language, approve data use, or claim endorsement.
 
 ## Findings

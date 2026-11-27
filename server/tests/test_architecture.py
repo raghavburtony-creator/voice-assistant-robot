@@ -184,3 +184,29 @@ def test_only_the_bridge_builds_the_task_engine_so_there_is_one_per_session_and_
         for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "TaskEngine"
     ]
     assert builders == ["bridge"]
+
+def test_extension_contract_is_a_leaf_below_the_tool_registry():
+    # Extensions can declare tools but cannot import the tools list, bridge, route, or ADK/Gemini SDKs.
+    tree = _modules()["extensions"]
+    assert _voice_deps(tree) == {"tool_registry"}
+    imports = _imports(tree)
+    assert not any(item.startswith(SDK_PREFIXES) for item in imports)
+    assert not any(item.startswith(("app.voice.tools", "app.voice.bridge", "app.voice.route")) for item in imports)
+
+
+def test_only_the_bridge_discovers_and_registers_extensions():
+    # The existing voice bridge remains the sole ADK entry point and owns the per-session extension lifecycle.
+    importers = [
+        name for name, tree in _modules().items()
+        if any(item.startswith("app.voice.extensions") for item in _imports(tree))
+    ]
+    builders = [
+        name for name, tree in _modules().items()
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "ExtensionManager"
+    ]
+    assert importers == ["bridge"]
+    assert builders == ["bridge"]
+
