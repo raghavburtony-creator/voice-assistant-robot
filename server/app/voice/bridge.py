@@ -586,6 +586,7 @@ class Bridge:
     async def close(self) -> None:
         """Ends the session's background work and drops any status still waiting to be told to the model."""
         await self.tasks.close()
+        self._card_titles.clear()  # the engine is quiet once closed, so no ending will pop these
         for promotion in list(self._promotions):
             promotion.cancel()
         if self._promotions:

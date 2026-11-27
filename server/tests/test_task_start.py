@@ -254,3 +254,64 @@ def test_a_hostile_query_reaches_the_card_title_as_capped_text_and_the_task_titl
     title, cards = run(go())
     assert title == PROJECT_RESEARCH_TITLE  # a title reaches the model; the query never does
     assert len(cards) == 1 and len(cards[0]["card"]["title"]) <= tools.CARD_TITLE_CHARS
+
+
+def test_a_web_address_in_a_doc_excerpt_never_reaches_the_card(tmp_path):
+    (tmp_path / "README.md").write_text(
+        "# Task engine\n\nThe task engine runs long work. See https://example.com/a?b=1 and www.example.org/x or ftp://h/f "
+        "for more about the voice loop.\n",
+        encoding="utf-8",
+    )
+    service = ResearchService((ProjectKnowledgeProvider(tmp_path),), timeout_seconds=1.0, max_results=5)
+    snapshot = run(finished(project_research_worker(service, "task engine voice loop"), verify=has_summary))
+    assert snapshot.state == "completed"
+    assert "http" not in snapshot.result and "www." not in snapshot.result and "://" not in snapshot.result
+    assert "The task engine runs long work. See and or for more about the voice loop." in snapshot.result
+
+
+def test_closing_the_bridge_while_the_search_runs_shows_no_card_tells_nobody_and_forgets_the_title(monkeypatch):
+    async def go():
+        monkeypatch.setattr(tools, "PROJECT_RESEARCH_SERVICE", SlowSearch(asyncio.Event()))  # never opened
+        ws, live = _Socket(), FakeLive()
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        pump = asyncio.create_task(bridge.output_pump())
+        bridge._start_task({"kind": "project_research", "query": "anything"})
+        await settle(10)
+        running = bridge.tasks.get("task-1").state
+        before = len(bridge._card_titles)
+        await bridge.close()
+        await settle(10)
+        await bridge.out.flush()
+        pump.cancel()
+        return running, before, bridge.tasks.get("task-1").state, ws.sent, live.sent_text, bridge._card_titles
+
+    running, before, after, sent, sent_text, titles = run(go())
+    assert (running, before, after) == ("running", 1, "cancelled")
+    assert not [m for m in sent if isinstance(m, dict) and m.get("action") == "card"]
+    assert sent_text == [] and titles == {}
+
+
+def test_a_search_pushed_out_by_a_high_priority_task_shows_no_card_and_the_model_hears_it_was_preempted(monkeypatch):
+    async def go():
+        monkeypatch.setattr(tools, "PROJECT_RESEARCH_SERVICE", SlowSearch(asyncio.Event()))  # never opened
+        ws, live = _Socket(), FakeLive()
+        bridge = Bridge(ws, live)  # type: ignore[arg-type]
+        pump = asyncio.create_task(bridge.output_pump())
+        bridge.tasks.submit("older", Gate())  # the newest of equal priority is the one pushed out, so the search goes second
+        bridge._start_task({"kind": "project_research", "query": "anything"})
+        await settle(10)
+        bridge.tasks.submit("urgent", Gate(), priority="high")
+        await settle(10)
+        await bridge.out.flush()
+        pump.cancel()
+        snapshot = bridge.tasks.get("task-2")
+        sent_text, titles = list(live.sent_text), dict(bridge._card_titles)
+        sent = list(ws.sent)
+        await bridge.close()
+        return snapshot, sent, sent_text, titles
+
+    snapshot, sent, sent_text, titles = run(go())
+    assert (snapshot.title, snapshot.state, snapshot.reason) == (PROJECT_RESEARCH_TITLE, "cancelled", "preempted")
+    assert not [m for m in sent if isinstance(m, dict) and m.get("action") == "card"]
+    assert len(sent_text) == 1 and "State: cancelled" in sent_text[0] and "Reason: preempted" in sent_text[0]
+    assert titles == {}
