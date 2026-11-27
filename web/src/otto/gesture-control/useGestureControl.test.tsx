@@ -22,6 +22,8 @@ let controller: ReturnType<typeof useGestureControl> | null = null
 let track: MediaStreamTrack & { stop: ReturnType<typeof vi.fn> }
 let raf: ReturnType<typeof vi.fn>
 let cancelRaf: ReturnType<typeof vi.fn>
+let rafCallback: FrameRequestCallback | null = null
+let originalVisibilityState: PropertyDescriptor | undefined
 
 function Harness() {
   controller = useGestureControl({ onSwipe: vi.fn() })
@@ -54,7 +56,9 @@ beforeEach(() => {
   mocks.detectForVideo.mockReset().mockReturnValue({ landmarks: [] })
   mocks.createFromOptions.mockReset().mockImplementation(async () => ({ close: mocks.close, detectForVideo: mocks.detectForVideo }))
   mocks.forVisionTasks.mockReset().mockResolvedValue({})
-  raf = vi.fn(() => 41)
+  rafCallback = null
+  originalVisibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+  raf = vi.fn((callback: FrameRequestCallback) => { rafCallback = callback; return 41 })
   cancelRaf = vi.fn()
   vi.stubGlobal('requestAnimationFrame', raf)
   vi.stubGlobal('cancelAnimationFrame', cancelRaf)
@@ -82,6 +86,10 @@ afterEach(async () => {
   if (original) Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', original)
   else Reflect.deleteProperty(HTMLMediaElement.prototype, 'srcObject')
   Reflect.deleteProperty(globalThis, '__originalSrcObjectDescriptor')
+  if (originalVisibilityState) Object.defineProperty(document, 'visibilityState', originalVisibilityState)
+  else Reflect.deleteProperty(document, 'visibilityState')
+  originalVisibilityState = undefined
+  rafCallback = null
 })
 
 describe('useGestureControl camera lifecycle', () => {
@@ -114,6 +122,40 @@ describe('useGestureControl camera lifecycle', () => {
     expect(track.stop).toHaveBeenCalledTimes(1)
     expect(mocks.close).toHaveBeenCalledTimes(1)
     expect(cancelRaf).toHaveBeenCalledWith(41)
+  })
+
+  it('stops and releases resources when the tab becomes hidden', async () => {
+    installCamera()
+    await mount()
+    await act(async () => { await controller?.start() })
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.close).toHaveBeenCalledTimes(1)
+    expect(cancelRaf).toHaveBeenCalledWith(41)
+    expect(controller?.phase).toBe('off')
+  })
+
+  it('releases camera and tracker resources when frame processing fails', async () => {
+    installCamera()
+    await mount()
+    const video = controller?.videoRef.current
+    if (!video) throw new Error('video preview was not mounted')
+    Object.defineProperty(video, 'readyState', { configurable: true, value: 2 })
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 1 })
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 })
+    mocks.detectForVideo.mockImplementation(() => { throw new Error('frame processing failed') })
+
+    await act(async () => { await controller?.start() })
+    expect(rafCallback).toBeTypeOf('function')
+    await act(async () => { rafCallback?.(16) })
+
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.close).toHaveBeenCalledTimes(1)
+    expect(cancelRaf).toHaveBeenCalledWith(41)
+    expect(controller?.phase).toBe('error')
+    expect(controller?.error).toContain('could not process')
   })
 
   it('stops when the browser ends the camera track', async () => {

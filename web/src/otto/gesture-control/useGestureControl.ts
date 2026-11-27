@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HandLandmarker } from '@mediapipe/tasks-vision'
-import { describeSingleHand, SwipeRecognizer, type SwipeDirection } from './gesture'
+import { describeSingleHand, mirrorSwipeDirection, SwipeRecognizer, type SwipeDirection } from './gesture'
 
 const MEDIAPIPE_VERSION = '1.2.3'
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION + '/wasm'
@@ -187,7 +187,7 @@ export function useGestureControl({ onSwipe }: Options) {
                 updateHandStatus(direction
                   ? 'Swipe recognised.'
                   : 'Index finger tracked. Hold still briefly, then swipe horizontally.')
-                if (direction) onSwipeRef.current(direction)
+                if (direction) onSwipeRef.current(mirrorSwipeDirection(direction))
               }
             }
           } catch {

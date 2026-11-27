@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adjacentGestureDestination, describeHand, describeSingleHand, SwipeRecognizer, type HandFrame } from './gesture'
+import { adjacentGestureDestination, describeHand, describeSingleHand, mirrorSwipeDirection, SwipeRecognizer, type HandFrame } from './gesture'
 
 const frame = (x: number, y = 0.5, pointing = true, palmWidth = 0.1): HandFrame => ({
   center: { x, y }, indexTip: { x, y: y - 0.1 }, palmWidth, pointing,
@@ -110,6 +110,13 @@ describe('deliberate swipe recognition', () => {
     settle(recognizer)
     expect(swipe(recognizer, 0.3, 1)).toBe('right')
     for (let time = 760; time < 1600; time += 40) expect(recognizer.update(frame(0.46), time)).toBeNull()
+  })
+})
+
+describe('mirrored swipe direction', () => {
+  it('matches the visible left/right direction in the mirrored camera preview', () => {
+    expect(mirrorSwipeDirection('left')).toBe('right')
+    expect(mirrorSwipeDirection('right')).toBe('left')
   })
 })
 

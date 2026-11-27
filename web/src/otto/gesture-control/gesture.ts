@@ -4,6 +4,11 @@ export type GesturePoint = Readonly<{ x: number; y: number }>
 export type HandLandmark = Readonly<{ x: number; y: number }>
 export type HandFrame = Readonly<{ center: GesturePoint; indexTip: GesturePoint; palmWidth: number; pointing: boolean }>
 export type SwipeDirection = 'left' | 'right'
+
+/** Convert camera-axis movement to the mirrored direction the visitor sees in the preview. */
+export function mirrorSwipeDirection(direction: SwipeDirection): SwipeDirection {
+  return direction === 'left' ? 'right' : 'left'
+}
 export type GestureDestination = Readonly<{ id: string; label: string }>
 export type GestureNavigation = Readonly<{ destinations: readonly GestureDestination[]; onNavigate: (destinationId: string) => void }>
 
