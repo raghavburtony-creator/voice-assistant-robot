@@ -921,7 +921,7 @@ def test_tool_registry_is_authoritative_and_covers_every_adk_tool():
     assert {item.name for item in registry.metadata()} == registry.names()
     assert {tool.name for tool in tools.TOOLS} == registry.names()
     assert len(TOOL_METADATA) == len(registry.names())
-    assert TOOL_FAMILIES == {"browser", "computer", "files", "screen", "camera", "web_research", "memory", "tasks"}
+    assert TOOL_FAMILIES == {"browser", "computer", "files", "screen", "camera", "web_research", "memory", "tasks", "extension"}
     for name in registry.names():
         entry = registry[name]
         assert entry.input_schema["type"] == "object"

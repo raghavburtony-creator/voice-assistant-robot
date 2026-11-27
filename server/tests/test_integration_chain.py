@@ -4,8 +4,7 @@ Each module already has unit tests. These start where a real call starts (an ADK
 and follow it through the registry, the policy engine, the sink, the bridge and the stores, so a change that disconnects two
 parts fails here even when both parts still pass their own tests. They are deterministic: no sleeps, no network, no model.
 
-What this file does not cover, because it does not exist in this repository: an orchestrator (D-22 keeps a chain), a task
-engine (#49) and a plugin/MCP loader (#55) are proposals. test_architecture.py makes sure none of them appears by accident.
+What this file does not cover: an orchestrator (D-22 keeps a chain), a worker adapter, a task-start tool or delivery of worker results to the visitor. The first read-only extension/MCP slice is covered by test_extensions.py and test_architecture.py; mutating extension capabilities remain out of scope.
 """
 from __future__ import annotations
 
