@@ -329,7 +329,6 @@ class MCPServerExtension:
 
             async def invoke(
                 arguments: dict[str, Any],
-                arguments: dict[str, Any],
                 *,
                 _remote_name: str = remote_name,
             ) -> object:
