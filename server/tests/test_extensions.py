@@ -273,6 +273,35 @@ def test_mcp_schema_converter_rejects_open_or_unbounded_schemas():
             "properties": {"query": {"type": "string", "format": "uri"}},
             "additionalProperties": False,
         })
+    with pytest.raises(extensions.ExtensionError):
+        _model_from_json_schema("PatternInput", {
+            "type": "object",
+            "properties": {"query": {"type": "string", "pattern": ".*"}},
+            "additionalProperties": False,
+        })
+
+
+def test_mcp_array_item_constraints_are_enforced():
+    model = _model_from_json_schema("ItemsInput", {
+        "type": "object",
+        "properties": {
+            "queries": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1, "maxLength": 4},
+                "minItems": 1,
+                "maxItems": 2,
+            },
+        },
+        "required": ["queries"],
+        "additionalProperties": False,
+    })
+    assert model.model_validate({"queries": ["one", "four"]}).queries == ["one", "four"]
+    with pytest.raises(ValidationError):
+        model.model_validate({"queries": ["toolong"]})
+    with pytest.raises(ValidationError):
+        model.model_validate({"queries": []})
+    with pytest.raises(ValidationError):
+        model.model_validate({"queries": ["one", "two", "three"]})
 
 
 def test_extension_output_must_be_bounded_json():
