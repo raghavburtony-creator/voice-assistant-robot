@@ -141,6 +141,36 @@ A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
 `ToolRegistry` is the single source for the ADK tool adapters. Its gateway validates arguments against the registered annotations before calling the existing checked function and returns a stable envelope: `status` (`success` or `error`), the original structured `data`, `evidence` (an empty list when none is supplied), `provenance`, `verification` (`required`, `status` and optional `details`), a safe `error` object or `null`, UTC `timestamps` (`started_at`, `completed_at`) and declared `side_effects`. Execution status is separate from verification: a queued or approval-requested action can be successful with verification `pending`; it is not proof that the effect happened. Execution failures use `not_run` when verification was required. Evidence is never inferred, and side-effect labels are declarations, not proof. The `policy` field records the request id, risk, required permission, decision and verification state. Denied requests never reach the checked function; high-risk desktop requests are dispatched only after desktop awareness is enabled and still require exact host approval. Exception diagnostics log only the tool name and exception class, while model-visible errors remain generic. The metadata records policy and execution requirements; it does not grant permissions or replace the server/browser/native checks (D-02, D-22). Current registered tools cover browser, computer, screen, camera and tasks. Files, web/research and memory remain unregistered until those capabilities have real implementations and explicit safety boundaries.
 
+### Extensions, skills and MCP
+
+Install a reviewed extension without changing the voice bridge or adding another router. Add an extension module under server/app/voice (or in your deployment package), then register it in server/app/voice/installed_extensions.py:
+
+\`\`\`python
+from app.voice.extensions import Extension, ExtensionManifest, ExtensionTool, SkillManifest
+from app.voice.installed_extensions import EXTENSIONS
+from pydantic import BaseModel, ConfigDict
+
+class LookupInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str
+
+def lookup(arguments: LookupInput) -> dict:
+    return {"matches": []}  # Replace with a bounded, read-only host capability.
+
+EXTENSIONS.register(Extension(
+    manifest=ExtensionManifest("catalog", "Product catalog", "1.0", "Read-only catalog lookup"),
+    tools=(ExtensionTool("lookup", "Search the host catalog.", LookupInput, lookup),),
+    skills=(SkillManifest("catalog-help", "Catalog terminology", "Use the catalog lookup for product questions."),),
+))
+\`\`\`
+
+Extension tool names are namespaced and exposed only for a live session. The bridge creates their ADK adapters from the extension manifest, but every call still passes through the same ToolRegistry, schema validation, PolicyEngine and session audit as built-in tools. The host assigns the permission scope; an extension cannot grant itself access. Extension handlers receive only validated Pydantic arguments, never ADK ToolContext or session state. Keep handlers bounded and treat their results as untrusted data. They must return information, not bypass browser/native action checks.
+
+Skills are supplemental, bounded reference text and cannot override Otto's system rules or authorization. MCP support is a host adapter contract: implement MCPServerAdapter with an MCPClient that lists normalized MCPToolManifest entries, calls a named tool and closes its session. Each MCP tool is namespaced and registered through the same gateway; MCP results are reduced to bounded JSON and marked untrusted. The kit does not bundle a particular MCP transport. The deployment adapter must enforce network/process timeouts and its own server allow-list.
+
+Each extension can provide on_load, on_session_start and on_session_end hooks. MCP clients are opened per voice session and closed at teardown. A failing extension hook, MCP server or tool call is isolated and cannot terminate the voice session; a failed tool call returns the gateway's safe error envelope.
+
+
 ## Memory
 
 The server includes an explicit, identity-scoped memory store (`server/app/voice/memory_service.py`). It is enabled for a session only when a trusted deployment proxy supplies the existing opt-in continuity identity. The raw identity is hashed and never placed in ADK state. When the visitor explicitly asks Otto to remember one fact or preference, Otto may propose a bounded, redacted entry in the panel. Nothing is written until the visitor presses Save; Not now discards it. Proposals expire after two minutes, are limited to three pending requests per session and can be confirmed only once. A confirmation for a proposal that has expired (and so was already dropped), or that never existed in the session, is answered `expired`, so the panel never waits for an answer that does not come. A repeat of one of the last 16 answered proposals stays silent, and the panel applies an answer only to a proposal that is still open, so a late answer cannot change a saved one. Confirmed writes carry visitor-approval provenance; redacted entries are marked sensitive and excluded from recall and model context by default. Working records are deleted from SQLite on service startup and before memory operations once they are older than 24 hours. Retrieved memory is bounded JSON treated as untrusted data. The service cannot trigger tools or user-facing actions.

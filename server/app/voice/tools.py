@@ -7,13 +7,14 @@ sends an action) accept that action in `toAssistantAction` (web/src/otto/message
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from typing import Literal, get_args
 
 from google.adk.tools import ToolContext
 
-from app.voice.tool_registry import ToolRegistry
+from app.voice.tool_registry import TOOL_METADATA, ToolMetadata, ToolRegistry
 
 from app.voice.app_config import COMMANDS, PAGE_IDS, PAGES
 from app.voice.runtime import RUNTIME_ID, is_runtime_id, runtime_title
@@ -405,6 +406,55 @@ TOOL_FUNCTIONS = (
     get_background_tasks,
     propose_memory,
 )
+
 REGISTRY = ToolRegistry(TOOL_FUNCTIONS)
 TOOLS = REGISTRY.adk_tools()
 TOOL_NAMES = REGISTRY.names()
+
+
+def registry_for_session(extension_session: object) -> ToolRegistry:
+    """Merge active host-installed extension tools into the same registry and policy gateway."""
+    bindings = tuple(getattr(extension_session, "tool_bindings", ()))
+    if not bindings:
+        return REGISTRY
+
+    functions = []
+    metadata = []
+    for binding in bindings:
+        original = binding.function
+        original_signature = inspect.signature(original)
+        context_parameter = inspect.Parameter(
+            "tool_context", kind=inspect.Parameter.KEYWORD_ONLY, annotation=ToolContext,
+        )
+        signature = original_signature.replace(
+            parameters=(*original_signature.parameters.values(), context_parameter),
+            return_annotation=dict,
+        )
+
+        def invoke(*args, _tool=original, **kwargs):
+            # ToolContext is used only by the gateway policy check; extension code never receives session state.
+            kwargs.pop("tool_context", None)
+            return _tool(*args, **kwargs)
+
+        invoke.__name__ = binding.name
+        invoke.__doc__ = binding.description
+        invoke.__signature__ = signature  # type: ignore[attr-defined]
+        invoke.__annotations__ = dict(getattr(original, "__annotations__", {})) | {
+            "tool_context": ToolContext, "return": dict,
+        }
+        functions.append(invoke)
+        metadata.append(ToolMetadata(
+            name=binding.name,
+            family="extension",
+            description=binding.description,
+            risk_level="medium",
+            required_permission=f"extension:{binding.extension_id}",
+            timeout_seconds=5,
+            supports_async=False,
+            verification_required=False,
+            side_effects=("extension_tool_call",),
+            model_visible_errors=False,
+            extension_id=binding.extension_id,
+        ))
+
+    return ToolRegistry((*TOOL_FUNCTIONS, *functions), metadata=(*TOOL_METADATA, *metadata))

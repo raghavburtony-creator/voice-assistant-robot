@@ -82,6 +82,13 @@ class PermissionPolicy:
         if permission == "voice_session":
             return "allow", "The tool is scoped to the active voice session."
 
+        if permission.startswith("extension:"):
+            extension_id = permission.removeprefix("extension:")
+            installed = state.get("_installed_extensions")
+            if isinstance(installed, (list, tuple, set)) and extension_id in installed:
+                return "allow", "The host installed this extension for the current voice session."
+            return "deny", "This extension is not installed for the current voice session."
+
         if permission == "memory_opt_in":
             if state.get("memory_enabled") is True:
                 return "allow", "The trusted host identity has enabled identity-scoped memory for this session."

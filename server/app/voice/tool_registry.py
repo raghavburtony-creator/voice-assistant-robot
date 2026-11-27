@@ -37,13 +37,14 @@ class ToolMetadata:
     #: The tool's own `error` text is reviewed to be safe for the model to read (it says how to correct the call). Off by
     #: default: an unreviewed tool's error text is dropped from `data`, and the envelope's `error` carries a code instead.
     model_visible_errors: bool = False
+    extension_id: str | None = None
 
 
 # These are descriptive labels, not a permission system. Existing tool functions,
 # browser validation and visitor approval remain authoritative.
 TOOL_FAMILIES = frozenset({
     "browser", "computer", "files", "screen", "camera",
-    "web_research", "memory", "tasks",
+    "web_research", "memory", "tasks", "extension",
 })
 
 
@@ -80,12 +81,17 @@ class RegisteredTool:
 class ToolRegistry:
     """Immutable name-to-tool registry plus the validated ADK gateway."""
 
-    def __init__(self, functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]]) -> None:
+    def __init__(
+        self,
+        functions: tuple[Callable[..., Any], ...] | list[Callable[..., Any]],
+        metadata: tuple[ToolMetadata, ...] | list[ToolMetadata] | None = None,
+    ) -> None:
         by_name = {fn.__name__: fn for fn in functions}
         if len(by_name) != len(functions):
             raise ValueError("Tool function names must be unique")
-        metadata_by_name = {item.name: item for item in TOOL_METADATA}
-        if len(metadata_by_name) != len(TOOL_METADATA):
+        metadata_items = tuple(TOOL_METADATA if metadata is None else metadata)
+        metadata_by_name = {item.name: item for item in metadata_items}
+        if len(metadata_by_name) != len(metadata_items):
             raise ValueError("Tool metadata names must be unique")
         if set(by_name) != set(metadata_by_name):
             missing = sorted(set(by_name) - set(metadata_by_name))

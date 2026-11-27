@@ -127,7 +127,7 @@ class _AdkLiveSession:
 
 @asynccontextmanager
 async def connect_adk(language: str, page: str, page_title: str, detail: str) -> AsyncIterator[LiveSession]:
-    """One ADK live session for one browser connection. ADK is imported here, so a server that never opens one never loads it."""
+    """One ADK live session for one browser connection; host extensions join its existing checked tool registry."""
     from google.adk.agents import LlmAgent
     from google.adk.agents.live_request_queue import LiveRequestQueue
     from google.adk.agents.run_config import RunConfig, StreamingMode
@@ -135,44 +135,66 @@ async def connect_adk(language: str, page: str, page_title: str, detail: str) ->
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
 
+    from app.voice.installed_extensions import EXTENSIONS
     from app.voice.model import keyed_model
-    from app.voice.tools import TOOLS
+    from app.voice.tools import registry_for_session
 
-    # D-22: keep the existing ADK agent in the voice bridge; do not introduce
-    # a separate runtime orchestrator or a parallel tool-routing authority.
-    agent = LlmAgent(
-        name="voice_guide",
-        model=keyed_model(settings.gemini_live_model),
-        instruction=system_instruction(settings.app_name, language, PAGE_PLACEHOLDER, detail),
-        tools=list(TOOLS),
-    )
+    # D-22: one agent, one tool registry, one policy gate and the existing bridge output path.
     service = InMemorySessionService()
-    runner = Runner(app_name=APP_ID, agent=agent, session_service=service)
-    session = await service.create_session(
-        app_name=APP_ID, user_id=USER_ID, session_id=uuid.uuid4().hex,
-        state={"page": page, "page_title": PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page),
-               "language": language, "screens": {}},
-    )
-    run_config = RunConfig(
-        streaming_mode=StreamingMode.BIDI,
-        response_modalities=[types.Modality.AUDIO],
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        # D-21: nothing the visitor shares is kept, so live audio and frames are never saved as artifacts.
-        save_live_blob=False,
-    )
-    queue = LiveRequestQueue()
-    sink.open(session.id)
-    live = _AdkLiveSession(runner, session, queue, run_config)
+    session = None
+    extension_session = None
+    queue = None
+    live = None
+    sink_opened = False
     try:
+        session = await service.create_session(
+            app_name=APP_ID, user_id=USER_ID, session_id=uuid.uuid4().hex,
+            state={"page": page, "page_title": PAGES[page]["title"] if page in PAGES else runtime_title(page_title, page),
+                   "language": language, "screens": {}},
+        )
+        # Extension load, MCP discovery and session hooks are isolated per extension. A failing extension is omitted.
+        extension_session = EXTENSIONS.open_session(session.id)
+        session.state["_installed_extensions"] = list(extension_session.enabled_ids)
+        registry = registry_for_session(extension_session)
+        instruction = system_instruction(settings.app_name, language, PAGE_PLACEHOLDER, detail)
+        skill_context = extension_session.skill_context()
+        if skill_context:
+            instruction += "\n\n" + skill_context
+
+        agent = LlmAgent(
+            name="voice_guide",
+            model=keyed_model(settings.gemini_live_model),
+            instruction=instruction,
+            tools=list(registry.adk_tools()),
+        )
+        runner = Runner(app_name=APP_ID, agent=agent, session_service=service)
+        run_config = RunConfig(
+            streaming_mode=StreamingMode.BIDI,
+            response_modalities=[types.Modality.AUDIO],
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            # D-21: nothing the visitor shares is kept, so live audio and frames are never saved as artifacts.
+            save_live_blob=False,
+        )
+        queue = LiveRequestQueue()
+        sink.open(session.id)
+        sink_opened = True
+        live = _AdkLiveSession(runner, session, queue, run_config)
         yield live
     finally:
-        live.close()
-        sink.close(session.id)
-        try:
-            await service.delete_session(app_name=APP_ID, user_id=USER_ID, session_id=session.id)
-        except Exception:  # in memory; goes away with the connection anyway
-            pass
+        if live is not None:
+            live.close()
+        elif queue is not None:
+            queue.close()
+        if extension_session is not None:
+            extension_session.close()
+        if session is not None:
+            if sink_opened:
+                sink.close(session.id)
+            try:
+                await service.delete_session(app_name=APP_ID, user_id=USER_ID, session_id=session.id)
+            except Exception:  # in memory; goes away with the connection anyway
+                pass
 
 
 def _set_page(state: dict, page: object, title: object = None) -> None:
