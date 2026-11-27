@@ -155,6 +155,43 @@ describe('desktop action bridge', () => {
     delete window.__TAURI__
   })
 
+  it('retries one stale post-action observation without repeating the desktop action', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1500, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+      .mockResolvedValueOnce({
+        action: 'move_left', ok: true, status: 'completed',
+        verification: 'native_api_completed', message: 'Native movement completed.',
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1200, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1900, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
+    window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
+
+    await expect(executeDesktopAction('move_left', 'c'.repeat(32))).resolves.toMatchObject({
+      ok: true, status: 'completed', verification: 'verified',
+    })
+    expect(invoke).toHaveBeenCalledTimes(4)
+    expect(invoke.mock.calls.filter(([command]) => command === 'desktop_action')).toHaveLength(1)
+    delete window.__TAURI__
+  })
+
   it('reports failure when native movement completes but observation disagrees', async () => {
     const invoke = vi.fn()
       .mockResolvedValueOnce({
@@ -175,11 +212,20 @@ describe('desktop action bridge', () => {
         cursor: { x: -1500, y: 400 },
         activeWindow: null,
       })
+      .mockResolvedValueOnce({
+        platform: 'linux',
+        monitor: { x: -1920, y: 0, width: 1920, height: 1080 },
+        otto: { x: -1200, y: 220, width: 420, height: 640, visible: true },
+        cursor: { x: -1500, y: 400 },
+        activeWindow: null,
+      })
     window.__TAURI__ = { core: { invoke }, event: { listen: vi.fn() } } as never
 
     await expect(executeDesktopAction('move_left', 'd'.repeat(32))).resolves.toMatchObject({
       ok: false, status: 'failed', verification: 'not_verified',
     })
+    expect(invoke).toHaveBeenCalledTimes(4)
+    expect(invoke.mock.calls.filter(([command]) => command === 'desktop_action')).toHaveLength(1)
     delete window.__TAURI__
   })
 
