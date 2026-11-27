@@ -127,7 +127,7 @@ class ExtensionRegistry:
             raise ValueError(f"Skill descriptions must be plain text up to {MAX_SKILL_DESCRIPTION_CHARS} characters.")
         if (not isinstance(skill.instructions, str) or not skill.instructions.strip()
                 or len(skill.instructions) > MAX_SKILL_INSTRUCTION_CHARS
-                or any((ord(char) < 0x20 and char not in "\\n\\t") or ord(char) == 0x7F
+                or any((ord(char) < 0x20 and char not in "\n\t") or ord(char) == 0x7F
                        for char in skill.instructions)):
             raise ValueError(f"Skill instructions must be plain text up to {MAX_SKILL_INSTRUCTION_CHARS} characters.")
 
