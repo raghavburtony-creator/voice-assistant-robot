@@ -141,6 +141,13 @@ export function useGestureControl({ onSwipe }: Options) {
         document.removeEventListener('visibilitychange', onVisibility)
       }
 
+      // The tab may have been hidden while the browser's camera permission prompt was open.
+      // Its visibilitychange event can precede listener registration, so check the current state too.
+      if (document.visibilityState === 'hidden') {
+        stop('Hand control stopped because this tab was hidden.')
+        return
+      }
+
       const video = videoRef.current
       if (!video) throw new Error('preview unavailable')
       video.srcObject = stream
