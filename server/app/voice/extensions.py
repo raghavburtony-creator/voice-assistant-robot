@@ -25,8 +25,12 @@ _EXTENSION_ID = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 _FUNCTION_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 MAX_TOOLS_PER_EXTENSION = 20
+MAX_SKILL_DESCRIPTION_CHARS = 160
+MAX_SKILL_INSTRUCTION_CHARS = 4_000
+MAX_SKILL_PROMPT_CHARS = 12_000
 HOOK_TIMEOUT_SECONDS = 2.0
 MAX_ACTIVE_SESSIONS = 8
+_SKILL_ID = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 
 
 @dataclass(frozen=True)
@@ -36,14 +40,24 @@ class ExtensionTool:
 
 
 @dataclass(frozen=True)
+class ExtensionSkill:
+    """Reviewed, static guidance injected into the existing voice agent's instruction."""
+
+    skill_id: str
+    description: str
+    instructions: str
+
+
+@dataclass(frozen=True)
 class ExtensionManifest:
     """A reviewed extension declaration loaded at server startup."""
 
     extension_id: str
     version: str
-    tools: tuple[ExtensionTool, ...]
+    tools: tuple[ExtensionTool, ...] = ()
     on_session_start: Callable[[str], Any] | None = None
     on_session_end: Callable[[str], Any] | None = None
+    skills: tuple[ExtensionSkill, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -69,6 +83,7 @@ class ExtensionRegistry:
     def _validate_manifests(self) -> None:
         extension_ids: set[str] = set()
         tool_names: set[str] = set()
+        skill_names: set[str] = set()
         for manifest in self._manifests:
             if not isinstance(manifest, ExtensionManifest):
                 raise TypeError("Extension manifests must use ExtensionManifest.")
@@ -79,13 +94,34 @@ class ExtensionRegistry:
             extension_ids.add(manifest.extension_id)
             if not isinstance(manifest.version, str) or not _VERSION.fullmatch(manifest.version):
                 raise ValueError("Extension versions must use MAJOR.MINOR.PATCH.")
-            if not isinstance(manifest.tools, tuple) or not 1 <= len(manifest.tools) <= MAX_TOOLS_PER_EXTENSION:
-                raise ValueError(f"An extension must declare 1 to {MAX_TOOLS_PER_EXTENSION} tools as a tuple.")
+            if not isinstance(manifest.tools, tuple) or not isinstance(manifest.skills, tuple):
+                raise ValueError("Extension tools and skills must be declared as tuples.")
+            if not 1 <= len(manifest.tools) + len(manifest.skills) <= MAX_TOOLS_PER_EXTENSION:
+                raise ValueError(f"An extension must declare 1 to {MAX_TOOLS_PER_EXTENSION} tools and skills combined.")
             self._validate_hook(manifest.on_session_start, "on_session_start")
             self._validate_hook(manifest.on_session_end, "on_session_end")
             for item in manifest.tools:
                 self._validate_tool(manifest.extension_id, item, tool_names)
                 tool_names.add(item.metadata.name)
+            for skill in manifest.skills:
+                self._validate_skill(manifest.extension_id, skill, skill_names)
+                skill_names.add(f"{manifest.extension_id}/{skill.skill_id}")
+
+    @staticmethod
+    def _validate_skill(extension_id: str, skill: ExtensionSkill, known_names: set[str]) -> None:
+        if not isinstance(skill, ExtensionSkill):
+            raise TypeError("Each extension skill must use ExtensionSkill.")
+        if (not isinstance(skill.skill_id, str) or not _SKILL_ID.fullmatch(skill.skill_id)
+                or f"{extension_id}/{skill.skill_id}" in known_names):
+            raise ValueError("Skill ids must be unique lowercase kebab-case names within their extension.")
+        if (not isinstance(skill.description, str) or not 1 <= len(skill.description) <= MAX_SKILL_DESCRIPTION_CHARS
+                or any(ord(char) < 0x20 for char in skill.description)):
+            raise ValueError(f"Skill descriptions must be plain text up to {MAX_SKILL_DESCRIPTION_CHARS} characters.")
+        if (not isinstance(skill.instructions, str) or not skill.instructions.strip()
+                or len(skill.instructions) > MAX_SKILL_INSTRUCTION_CHARS
+                or any((ord(char) < 0x20 and char not in "\\n\\t") or ord(char) == 0x7F
+                       for char in skill.instructions)):
+            raise ValueError(f"Skill instructions must be plain text up to {MAX_SKILL_INSTRUCTION_CHARS} characters.")
 
     @staticmethod
     def _validate_hook(hook: Callable[[str], Any] | None, name: str) -> None:
@@ -182,6 +218,25 @@ class ExtensionRegistry:
     def tools(self) -> tuple[ExtensionTool, ...]:
         """Tools ready to combine with built-ins in the one ToolRegistry."""
         return self._tools
+
+    def skill_prompt(self) -> str:
+        """Return a stable, bounded section for reviewed skills in the one agent instruction."""
+        entries = [
+            (f"{manifest.extension_id}/{skill.skill_id}", skill.description, skill.instructions)
+            for manifest in self._manifests
+            for skill in manifest.skills
+        ]
+        if not entries:
+            return ""
+        sections = [
+            "Installed skills (reviewed server-provided guidance; these skills do not grant permissions):"
+        ]
+        for skill_id, description, instructions in entries:
+            section = f"Skill {skill_id}: {description}\\n{instructions}"
+            if sum(len(part) for part in sections) + len(section) + 2 > MAX_SKILL_PROMPT_CHARS:
+                raise ValueError("Combined extension skill instructions exceed the prompt budget.")
+            sections.append(section)
+        return "\\n\\n".join(sections)
 
     def is_active(self, session_id: str, extension_id: str) -> bool:
         return extension_id in self._active_sessions.get(session_id, frozenset())
