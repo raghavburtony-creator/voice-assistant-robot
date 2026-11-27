@@ -100,7 +100,13 @@ class ResearchService:
     ) -> None:
         if len(providers) > MAX_PROVIDERS:
             raise ValueError(f"At most {MAX_PROVIDERS} research providers may be registered")
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 30:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+            raise ValueError("Provider timeout must be a finite number between 0 and 30 seconds")
+        try:
+            normalized_timeout = float(timeout_seconds)
+        except (OverflowError, ValueError):
+            raise ValueError("Provider timeout must be a finite number between 0 and 30 seconds") from None
+        if not math.isfinite(normalized_timeout) or not 0 < normalized_timeout <= 30:
             raise ValueError("Provider timeout must be a finite number between 0 and 30 seconds")
         if isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= MAX_RESULTS:
             raise ValueError(f"Result limit must be between 1 and {MAX_RESULTS}")
@@ -118,7 +124,7 @@ class ResearchService:
             registered[provider_id] = provider
 
         self._providers = tuple(registered.values())
-        self.timeout_seconds = float(timeout_seconds)
+        self.timeout_seconds = normalized_timeout
         self.max_results = max_results
 
     async def search(self, request: ResearchRequest) -> ResearchResult:
