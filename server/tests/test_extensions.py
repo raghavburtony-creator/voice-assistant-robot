@@ -257,7 +257,7 @@ def test_skill_descriptions_and_instructions_are_bounded_plain_text():
     with pytest.raises(ValueError):
         ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(oversized,)),))
 
-    control = ExtensionSkill("control", "Description", "safe\\x00unsafe")
+    control = ExtensionSkill("control", "Description", "safe" + chr(0) + "unsafe")
     with pytest.raises(ValueError):
         ExtensionRegistry((ExtensionManifest("research", "1.0.0", skills=(control,)),))
 
