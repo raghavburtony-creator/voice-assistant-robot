@@ -38,8 +38,11 @@ def test_voice_bridge_owns_adk_agent_setup_inside_the_existing_session():
             and isinstance(keyword.value.func, ast.Name)
             and keyword.value.func.id == "list"
             and keyword.value.args
-            and isinstance(keyword.value.args[0], ast.Name)
-            and keyword.value.args[0].id == "TOOLS"
+            and isinstance(keyword.value.args[0], ast.Call)
+            and isinstance(keyword.value.args[0].func, ast.Attribute)
+            and keyword.value.args[0].func.attr == "adk_tools"
+            and isinstance(keyword.value.args[0].func.value, ast.Name)
+            and keyword.value.args[0].func.value.id == "registry"
             for keyword in node.keywords
         )
         for node in ast.walk(connect)
