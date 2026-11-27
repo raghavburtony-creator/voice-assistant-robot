@@ -2,7 +2,7 @@ Agents imported from ECC 2.2.3 (https://github.com/affaan-m/ECC):
   .claude/agents/typescript-reviewer.md
   .claude/agents/react-reviewer.md
   .claude/agents/python-reviewer.md
-  .claude/agents/fastapi-reviewer.md
+  .claude/agents/fastapi-reviewer.md (removed: merged into python-reviewer)
   .claude/agents/security-reviewer.md
   .claude/agents/performance-optimizer.md
   .claude/agents/a11y-architect.md

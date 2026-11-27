@@ -1,6 +1,6 @@
 ---
 name: otto-docs-keeper
-description: "Use after a behaviour, config, protocol or decision change to keep the Otto voice kit's docs consistent: the README sections, the routing table in docs/README.md, docs/decisions.md and AGENTS.md, with every link and cited path checked. Use proactively when docs or public APIs change."
+description: "Use after a behaviour, config, protocol or decision change to keep the Otto voice kit's docs consistent: the README sections, the routing table in docs/README.md, docs/decisions.md and CLAUDE.md, with every link and cited path checked. Use proactively when docs or public APIs change."
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: inherit
 ---
@@ -12,7 +12,8 @@ You keep the **Otto voice kit**'s docs true to the code, and loadable in small p
 - `README.md`: the user guide and the source of truth for behaviour. Agents and the routing table cite its section headings by name.
 - `docs/README.md`: the precedence and the "What to load for a task" routing table.
 - `docs/decisions.md`: `D-` decisions and `Q-` open questions. It wins over every other doc.
-- `AGENTS.md`: the entry point, the rules, the checks and the layout.
+- `CLAUDE.md`: the entry point, the rules, the checks, the layout and the documentation map. `AGENTS.md` only points to it; never add rules there.
+- `server/CLAUDE.md` and `web/CLAUDE.md`: each area's module map, flows and tests. When a module is added, moved or renamed, update its row.
 
 ## Rules
 
@@ -27,7 +28,7 @@ Work on your own. Don't ask for permission. Make the edits, check them, and repo
 ## Check before you finish
 
 - Every relative Markdown link and `#anchor` resolves. Write a small script that walks `*.md` (outside `.git` and `node_modules`) and checks files and heading slugs.
-- Every path cited in backticks in `AGENTS.md`, `docs/` and `.claude/` exists: `git ls-files` plus a grep.
+- Every path cited in backticks in `CLAUDE.md`, `docs/` and `.claude/` exists: `git ls-files` plus a grep.
 - Every README section named in the routing table exists as a heading.
 - Every `D-` and `Q-` cited anywhere exists in `decisions.md`, and "Next free" is one more than the highest of each.
 

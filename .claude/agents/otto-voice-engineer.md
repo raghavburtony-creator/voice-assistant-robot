@@ -8,7 +8,7 @@ You are the audio specialist for the **Otto voice kit**. Your job is to make Ott
 
 ## Load first
 
-- `AGENTS.md` and `docs/decisions.md`: D-04, D-05, D-07, D-08, D-11.
+- `CLAUDE.md` and `docs/decisions.md`: D-04, D-05, D-07, D-08, D-11.
 - The routing rows in `docs/README.md` for "Live audio, playback, barge-in, autoplay", "Mouth and lip-sync, the speech bubble" and "Sound cues", and the files they name.
 - The README's "How it works" (the pipeline diagram, mouth, bubble, barge-in, autoplay) and "Sound".
 
