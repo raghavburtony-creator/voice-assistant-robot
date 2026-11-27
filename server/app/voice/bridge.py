@@ -266,7 +266,7 @@ class Bridge:
         self.out = OutputChannel(ws)
         self.translator = EventTranslator()
         # Long work runs beside the voice loop (tasks.py) and tells Otto how it is going through `avatar`, the existing path.
-        # The route closes it when the session ends. Nothing submits to it yet: the model has no tool for it (D-02, D-19).
+        # The route closes it when the session ends. The default route registers no concrete workers; the model has no start/cancel tool (D-02, D-19).
         # Each typed step refreshes what `get_background_tasks` reads, and an ending is relayed to the model (`_task_event`).
         self._promotions: set[asyncio.Task] = set()
         self.live.state["background_tasks"] = []
