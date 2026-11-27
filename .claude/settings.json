@@ -1,5 +1,25 @@
 {
+  "enabledMcpjsonServers": ["jcodemunch"],
   "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -m pytest:*)",
+      "Bash(cd server && .venv/bin/python -m pytest:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run build:lib:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run check:dist:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "mcp__jcodemunch__order",
+      "mcp__jcodemunch__menu",
+      "mcp__jcodemunch__route",
+      "mcp__jcodemunch__jcodemunch_guide",
+      "mcp__jcodemunch__announce_model"
+    ],
     "deny": [
       "Bash(git push origin main:*)",
       "Bash(git push -u origin main:*)",

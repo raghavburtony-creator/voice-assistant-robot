@@ -14,7 +14,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 
 | Task | Decisions | README sections | Files |
 |---|---|---|---|
-| Get oriented | all (the index in decisions.md) | "How it works", "Using it in a new project" | `AGENTS.md`, [architecture.md](architecture.md) |
+| Get oriented | all (the index in decisions.md) | "How it works", "Using it in a new project" | `CLAUDE.md` ("Documentation map", "Architecture at a glance"), [architecture.md](architecture.md), then `server/CLAUDE.md` or `web/CLAUDE.md` for the area |
 | Run or change the desktop companion (Tauri host, movement, awareness, permissioned actions, desktop bridge, packaging) | D-24, D-25 | "Run Otto as a desktop companion" | `web/src-tauri/`, `web/src/otto/desktop.ts` and its test (native consent receipt and result verification), `web/src/otto/VoiceAssistant.tsx`, `web/src/otto/Otto.tsx`, `server/app/voice/tools.py`, `server/app/voice/app_config.py`, `server/tests/test_voice.py`, `web/package.json` |
 | Add a page or a command | D-02, D-03, D-23 | "Using it in a new project" | `web/src/otto.config.ts`, `server/app/voice/app_config.py`, `server/app/voice/tools.py`, `server/tests/test_voice.py` |
 | Runtime navigation destinations (`navigate_to`) | D-02, D-03, D-17, D-22, D-23 | "Using it in a new project", "Adding a tool" | `web/src/otto/context.ts`, `contextBudget.ts`, `runtimeId.ts`, `messages.ts`, `useVoiceAssistant.ts` (`currentPageInfo`, start/page messages), `Otto.tsx` (`page`), `App.tsx` `onAction`, and their tests; `server/app/voice/runtime.py`, `tools.py`, `route.py` (start), `bridge.py` (page changes), `app_config.py` (`system_instruction`), `server/tests/test_voice.py` |
@@ -47,7 +47,7 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Local hand tracking and swipe navigation | D-02, D-13, D-19, D-21, D-22, D-23, D-31 | "Hand gesture navigation" | `web/src/otto/gesture-control/` (`gesture.ts` and tests, `useGestureControl.ts`, `GestureControl.tsx`), `Otto.tsx`, `VoiceAssistant.tsx`, host callback in `App.tsx`, `web/package.json` |
 | Embodied assistance: cards and the two channels (`show_card`, the bubble, `onVisual`) | D-02, D-18 | "Embodied assistance: page context, cards, friction", "Adding a tool" | `server/app/voice/tools.py`, `app_config.py` (`system_instruction`), `web/src/otto/messages.ts`, `VoiceAssistant.tsx`, `useVoiceAssistant.ts`, `web/src/otto/gemini/channels.ts`, `prompt.ts`, `bridge.ts`, `web/src/lab/fakeServer.ts` |
 | Embodied assistance: friction, the spotlight, missing and hidden targets | D-07, D-11, D-14, D-16 | "Interactive guidance", "Embodied assistance: page context, cards, friction" | `web/src/otto/guidance/friction.ts`, `frictionObserver.ts`, `spotlight.ts`, `runner.ts` and their tests, `web/e2e/embodied.spec.ts`, `web/src/lab/EmbodiedSandbox.tsx` |
-| Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `AGENTS.md` ("Rules for code") |
+| Add a module, or move code between files (layers) | D-13 | | `web/src/otto/layers.test.ts`, `CLAUDE.md` ("Rules for code") |
 | `<otto-mascot>`, `createOtto`, the library build | D-12 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/element/`, `vite.lib.config.ts`, `tsconfig.lib.json`, `web/preview/` |
 | React adapter (`otto-mascot/react`) | D-15 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/react/` |
 | Gemini voice bridge (`otto-mascot/gemini`) | D-01, D-05, D-15, Q-01 | "`<otto-mascot>`: Otto in any page" | `web/src/otto/gemini/` |
@@ -58,8 +58,11 @@ Find the task's row. Read the decisions it names, then the README sections and f
 | Browser tests (Playwright) | | "Run it" (checks) | `web/e2e/`, `web/playwright.config.ts` |
 | Record or change a decision, or add an open question | the one concerned | | [decisions.md](decisions.md) ("Rules for entries", "Index"), `server/tests/test_docs.py` |
 | Plan a new capability, or check how one fits | D-19, D-22, D-23, and the Q-xx it touches | | [architecture.md](architecture.md), [roadmap.md](roadmap.md) |
-| Architecture contracts, service boundaries, or source/licence attribution | D-13, D-19, D-22, and the decisions named by the capability | | [architecture.md](architecture.md), [source-attribution.md](source-attribution.md), [decisions.md](decisions.md), [roadmap.md](roadmap.md), the relevant issue(s) |
-| File or triage an issue: templates, labels, milestones, the issue-to-PR workflow | D-19 | | [CONTRIBUTING.md](../CONTRIBUTING.md), `.github/ISSUE_TEMPLATE/`, `.github/labels.json`, `.github/milestones.json`, `.github/workflows/sync-labels.yml`, `server/tests/test_docs.py` |
+| Architecture contracts, service boundaries, or source/licence attribution | D-13, D-19, D-22, and the decisions named by the capability | "Where it came from" | [architecture.md](architecture.md), [source-attribution.md](source-attribution.md), [decisions.md](decisions.md), [roadmap.md](roadmap.md), the relevant issue(s) |
+| File or triage an issue: templates, labels, milestones, the issue-to-PR workflow | D-19 | | `/otto-ticket` (`.claude/skills/otto-ticket/SKILL.md`), `CLAUDE.md` ("Tickets"), [CONTRIBUTING.md](../CONTRIBUTING.md), `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md`, `.github/labels.json`, `.github/milestones.json`, `.github/workflows/sync-labels.yml`, `server/tests/test_docs.py` |
+| Implement an issue in ChatGPT (the brief out, the diff back) | D-19 | | `/otto-handoff` (`.claude/skills/otto-handoff/SKILL.md`), `CLAUDE.md` ("Working with ChatGPT"), `.github/pull_request_template.md` |
+| Find code, callers or what a change breaks (the code index) | | | `CLAUDE.md` ("Navigating the code"), `.mcp.json` |
+| Change the agent setup: CLAUDE.md files, agents, skills, MCP servers, permissions | D-19 | | `CLAUDE.md`, `AGENTS.md` (pointer only), `server/CLAUDE.md`, `web/CLAUDE.md`, `.claude/agents/`, `.claude/skills/`, `.claude/settings.json`, `.mcp.json` |
 
 ## Editing rules
 

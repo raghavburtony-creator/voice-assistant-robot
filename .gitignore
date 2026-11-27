@@ -16,7 +16,7 @@ dist-lib/
 
 web/test-results/
 
-# Claude Code worktrees (one per task, see AGENTS.md)
+# Claude Code worktrees (one per task, see CLAUDE.md)
 .claude/worktrees/
 
 # Tauri build output

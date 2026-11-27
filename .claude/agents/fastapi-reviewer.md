@@ -6,7 +6,7 @@ model: sonnet
 ---
 
 > **Otto voice kit project note (added on import; overrides anything below).**
-> - Read `AGENTS.md` and `docs/decisions.md` first, then the routing row in `docs/README.md` for the files you review. Project rules and decisions win over generic advice.
+> - Read `CLAUDE.md` and `docs/decisions.md` first, then the routing row in `docs/README.md` for the files you review. Project rules and decisions win over generic advice.
 > - Focus on `server/app/`: the WebSocket route and its session caps (D-04), CORS with explicit origins only (D-09), and settings in `config.py`.
 > - Report findings only. Edit files only when the caller passes `--fix`.
 > - References below to ECC `rules/`, `skills/` or slash commands work only when the ECC plugin is installed; otherwise skip them.

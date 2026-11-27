@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Grep, Glob
 ---
 
 > **Otto voice kit project note (added on import; overrides anything below).**
-> - Read `AGENTS.md` and `docs/decisions.md` first, then the routing row in `docs/README.md` for the files you review. Project rules and decisions win over generic advice.
+> - Read `CLAUDE.md` and `docs/decisions.md` first, then the routing row in `docs/README.md` for the files you review. Project rules and decisions win over generic advice.
 > - Focus on the voice panel, consent and wake-word UI, live regions, keyboard access and the hotkey, contrast in every theme preset, and reduced motion (D-06, D-07, D-08).
 > - Report findings only. Edit files only when the caller passes `--fix`.
 > - References below to ECC `rules/`, `skills/` or slash commands work only when the ECC plugin is installed; otherwise skip them.

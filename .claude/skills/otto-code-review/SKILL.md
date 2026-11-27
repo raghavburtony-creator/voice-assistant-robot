@@ -17,6 +17,6 @@ Review `$ARGUMENTS` (default: the uncommitted diff plus untracked files). Don't 
    - `performance-optimizer`: per-frame and per-chunk allocation, audio node and WebGL disposal, bundle size of `dist-lib/`
    - `a11y-architect`: only if UI files changed
 4. Merge the results. Remove duplicates and rank by severity.
-5. If fixes were applied, run the checks in `AGENTS.md` and report the results.
+5. If fixes were applied, run the checks in `CLAUDE.md` and report the results.
 
 **Output:** a ranked list of findings, each with `file:line`, the defect, its failure scenario and the rule or decision. Then what was fixed and what is left. End with "No blocking issues" when that's true.
