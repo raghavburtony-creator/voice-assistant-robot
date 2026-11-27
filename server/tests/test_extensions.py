@@ -312,6 +312,31 @@ def test_mcp_array_item_constraints_are_enforced():
         model.model_validate({"queries": ["one", "two", "three"]})
 
 
+def test_mcp_schema_types_are_strict_and_do_not_coerce_strings_or_booleans():
+    model = _model_from_json_schema("StrictTypesInput", {
+        "type": "object",
+        "properties": {
+            "count": {"type": "integer"},
+            "ratio": {"type": "number"},
+            "enabled": {"type": "boolean"},
+            "name": {"type": "string"},
+        },
+        "required": ["count", "ratio", "enabled", "name"],
+        "additionalProperties": False,
+    })
+    assert model.model_validate({
+        "count": 3, "ratio": 2, "enabled": True, "name": "otto",
+    }).name == "otto"
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "count": True, "ratio": 2, "enabled": True, "name": "otto",
+        })
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "count": "3", "ratio": 2, "enabled": True, "name": "otto",
+        })
+
+
 def test_extension_output_must_be_bounded_json():
     assert _bounded_tool_output({"value": 3}) == {"external_data": {"value": 3}}
     with pytest.raises(extensions.ExtensionError):
