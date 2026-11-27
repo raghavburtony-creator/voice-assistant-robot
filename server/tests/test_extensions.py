@@ -29,7 +29,7 @@ def make_metadata(name: str = "ext_weather_current", **overrides) -> ToolMetadat
     return ToolMetadata(**values)
 
 
-def make_tool(name: str = "ext_weather_current", calls: list | None = None) -> ExtensionTool:
+def make_tool(name: str = "ext_weather_current", calls: list | None = None, **metadata_overrides) -> ExtensionTool:
     calls = calls if calls is not None else []
 
     def ext_weather_current(city: str, tool_context: object) -> dict:
@@ -38,7 +38,7 @@ def make_tool(name: str = "ext_weather_current", calls: list | None = None) -> E
 
     if name != "ext_weather_current":
         ext_weather_current.__name__ = name
-    return ExtensionTool(make_metadata(name), ext_weather_current)
+    return ExtensionTool(make_metadata(name, **metadata_overrides), ext_weather_current)
 
 
 def context(session_id: str = "session-1"):
@@ -174,9 +174,12 @@ def test_duplicate_extension_ids_and_tool_names_are_rejected():
     with pytest.raises(ValueError):
         ExtensionRegistry((one, two))
 
-    other = ExtensionManifest("forecast", "1.0.0", (make_tool(),))
+    duplicate_tools = ExtensionManifest("weather-extra", "1.0.0", (
+        make_tool("ext_weather_extra_lookup"),
+        make_tool("ext_weather_extra_lookup"),
+    ))
     with pytest.raises(ValueError):
-        ExtensionRegistry((one, other))
+        ExtensionRegistry((duplicate_tools,))
 
 
 @pytest.mark.asyncio
