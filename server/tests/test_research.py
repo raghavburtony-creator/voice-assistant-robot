@@ -127,6 +127,8 @@ def test_request_and_service_limits_are_validated():
     with pytest.raises(ValueError):
         ResearchService((Provider(),), timeout_seconds=float("nan"))
     with pytest.raises(ValueError):
+        ResearchService((Provider(),), timeout_seconds=10**1000)
+    with pytest.raises(ValueError):
         run(ResearchService().search(ResearchRequest("   ")))
     with pytest.raises(ValueError):
         run(ResearchService().search(ResearchRequest("ok", limit=21)))
