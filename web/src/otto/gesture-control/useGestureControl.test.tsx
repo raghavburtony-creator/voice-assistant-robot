@@ -50,6 +50,14 @@ function installCamera() {
   return { listeners, stream }
 }
 
+function installPendingCamera() {
+  const { stream } = installCamera()
+  let resolveCamera!: (value: MediaStream) => void
+  const getUserMedia = vi.fn(() => new Promise<MediaStream>(resolve => { resolveCamera = resolve }))
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } })
+  return { stream, resolveCamera: () => resolveCamera(stream) }
+}
+
 beforeEach(() => {
   controller = null
   mocks.close.mockReset()
@@ -111,6 +119,27 @@ describe('useGestureControl camera lifecycle', () => {
     expect(cancelRaf).toHaveBeenCalledWith(41)
     expect(controller?.videoRef.current?.srcObject).toBeNull()
     expect(controller?.phase).toBe('off')
+  })
+
+  it('releases the camera when permission resolves after the tab has already become hidden', async () => {
+    const { resolveCamera } = installPendingCamera()
+    await mount()
+    let startPromise!: Promise<void>
+    await act(async () => { startPromise = controller!.start() })
+    expect(controller?.phase).toBe('starting')
+
+    // The visibility event can fire before getUserMedia resolves and before the listener exists.
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      resolveCamera()
+      await startPromise
+    })
+
+    expect(track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.createFromOptions).not.toHaveBeenCalled()
+    expect(raf).not.toHaveBeenCalled()
+    expect(controller?.phase).toBe('off')
+    expect(controller?.handStatus).toContain('hidden')
   })
 
   it('releases camera resources when its panel unmounts', async () => {
