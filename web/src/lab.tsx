@@ -28,6 +28,7 @@ import { createSpotlight } from './otto/guidance/spotlight'
 import { EmbodiedSandbox } from './lab/EmbodiedSandbox'
 import { VAD } from './otto.config'
 import { VoiceActivityDetector } from './otto/gemini/vad'
+import { compareConstraints, describeConstraint, describeLevels, MIC_REQUEST, summariseLevels, type MicSettings } from './otto/micDiagnostic'
 import { FakeVoiceServer } from './lab/fakeServer'
 import { FAKE_SIGN_SCRIPTS, FakeSignRecognizer, type FakeSignScriptName } from './lab/fakeSignRecognizer'
 import { SignRecognizerProvider } from './otto/sign/useSignRecognizer'
@@ -519,6 +520,7 @@ function LabInner({ theme, setTheme, proactive, setProactive }: LabProps) {
         </fieldset>
 
         <VadLab />
+        <MicCheckLab />
 
         <fieldset><legend>Sound</legend>
           <p className="lab-hint">Gestures chirp as they start (SOUND_SETTINGS.gestureCues). Sound starts after your first click.</p>
@@ -644,6 +646,61 @@ function VadLab() {
       <button type="button" className={btn} onClick={() => void run(false)}>Meter my microphone</button>
       <button type="button" className={btn} onClick={() => { token.current++; stop.current?.() }}>Stop</button>
       <p role="status" className="lab-hint">{lines.join(' | ')}</p>
+    </fieldset>
+  )
+}
+
+/** Measures first (#145): what the recorder asks the microphone for, what the browser actually applied, and the input level
+ *  over a few seconds. Levels and settings only: no audio is kept or sent. */
+const MIC_CHECK_MS = 3000
+function MicCheckLab() {
+  const btn = 'otto-btn otto-btn--tonal'
+  const stop = useRef<(() => void) | null>(null)
+  const token = useRef(0) // a new run, Stop or unmount bumps it; a getUserMedia that resolves late checks it
+  const [lines, setLines] = useState<string[]>([])
+  useEffect(() => () => { token.current++; stop.current?.() }, [])
+  const run = async () => {
+    stop.current?.()
+    const mine = ++token.current
+    setLines(['asking for the microphone with the same request as the voice panel...'])
+    let stream: MediaStream
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { ...MIC_REQUEST } }) } catch { setLines(['microphone refused or not available']); return }
+    if (mine !== token.current) { stream.getTracks().forEach(t => t.stop()); return }
+    const track = stream.getAudioTracks()[0]
+    const settings = (track?.getSettings?.() ?? null) as MicSettings | null
+    const supported = navigator.mediaDevices.getSupportedConstraints?.() ?? null
+    const report = [
+      `device: ${track?.label || 'unnamed'}`,
+      ...compareConstraints(settings, supported).map(describeConstraint),
+      `channels: ${String(settings?.channelCount ?? 'not reported')}, sample rate: ${String(settings?.sampleRate ?? 'not reported')}`,
+    ]
+    setLines([...report, `measuring the level for ${MIC_CHECK_MS / 1000} s: talk normally, then stay quiet...`])
+    const context = new AudioContext()
+    const analyser = context.createAnalyser()
+    analyser.fftSize = 1024
+    context.createMediaStreamSource(stream).connect(analyser)
+    const buffer = new Float32Array(analyser.fftSize)
+    const rms: number[] = []
+    const timer = window.setInterval(() => {
+      analyser.getFloatTimeDomainData(buffer)
+      let sum = 0
+      for (const sample of buffer) sum += sample * sample
+      rms.push(Math.sqrt(sum / buffer.length))
+    }, 50)
+    const end = (done: boolean) => {
+      window.clearInterval(timer); window.clearTimeout(finish)
+      stream.getTracks().forEach(t => t.stop()); void context.close(); stop.current = null
+      if (done && mine === token.current) setLines([...report, describeLevels(summariseLevels(rms))])
+    }
+    const finish = window.setTimeout(() => end(true), MIC_CHECK_MS)
+    stop.current = () => end(false)
+  }
+  return (
+    <fieldset><legend>Microphone check</legend>
+      <p className="lab-hint">Asks for the microphone the way the voice panel does and reports which processing the browser really applied (echo cancellation, noise suppression, auto gain) and the level. Use it first in the desktop app on Zorin, before changing any threshold.</p>
+      <button type="button" className={btn} onClick={() => void run()}>Check my microphone</button>
+      <button type="button" className={btn} onClick={() => { token.current++; stop.current?.(); setLines([]) }}>Stop</button>
+      <ul role="status" aria-label="Microphone check result" className="lab-hint">{lines.map(line => <li key={line}>{line}</li>)}</ul>
     </fieldset>
   )
 }

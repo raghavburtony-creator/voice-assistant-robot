@@ -128,3 +128,29 @@ test('the visitor can stop a task the server is running, and only that task goes
   await expect(page.getByRole('region', { name: 'Simulated server' })).toContainText('cancelled lab-job')
   await expect(page.getByRole('region', { name: 'Simulated server' })).toContainText('"message":"Cancelled."')
 })
+
+test('the microphone check reports which processing the browser applied and the input level (#145)', async ({ page }) => {
+  // A stand-in microphone: a steady tone whose track says echo cancellation was not applied, as a webview may.
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const context = new AudioContext()
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      const destination = context.createMediaStreamDestination()
+      gain.gain.value = 0.3
+      oscillator.connect(gain).connect(destination)
+      oscillator.start()
+      const track = destination.stream.getAudioTracks()[0]
+      track.getSettings = () => ({ echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 })
+      return destination.stream
+    }
+  })
+  await page.goto('/lab.html')
+  await page.getByRole('button', { name: 'Check my microphone' }).click()
+  const result = page.getByRole('status', { name: 'Microphone check result' })
+  await expect(result).toContainText('echoCancellation: NOT applied')
+  await expect(result).toContainText('noiseSuppression: on, as asked')
+  await expect(result).toContainText('channels: 1, sample rate: 48000')
+  await expect(result).toContainText(/level over \d+ frames: average [\d.]+, peak [\d.]+/, { timeout: 8000 })
+  await expect(result).not.toContainText('No signal')
+})
