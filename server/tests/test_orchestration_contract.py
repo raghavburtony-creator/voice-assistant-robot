@@ -28,6 +28,18 @@ def test_voice_bridge_owns_adk_agent_setup_inside_the_existing_session():
         and node.func.id == "LlmAgent"
         for node in ast.walk(connect)
     )
+    loads_host_extensions = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "open_session"
+        for node in ast.walk(connect)
+    )
+    builds_session_registry = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "registry_for_session"
+        for node in ast.walk(connect)
+    )
     passes_registered_tools = any(
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
@@ -38,15 +50,21 @@ def test_voice_bridge_owns_adk_agent_setup_inside_the_existing_session():
             and isinstance(keyword.value.func, ast.Name)
             and keyword.value.func.id == "list"
             and keyword.value.args
-            and isinstance(keyword.value.args[0], ast.Name)
-            and keyword.value.args[0].id == "TOOLS"
+            and isinstance(keyword.value.args[0], ast.Call)
+            and isinstance(keyword.value.args[0].func, ast.Attribute)
+            and keyword.value.args[0].func.attr == "adk_tools"
+            and isinstance(keyword.value.args[0].func.value, ast.Name)
+            and keyword.value.args[0].func.value.id == "registry"
             for keyword in node.keywords
         )
         for node in ast.walk(connect)
     )
     assert imports_agent
     assert constructs_agent
+    assert loads_host_extensions
+    assert builds_session_registry
     assert passes_registered_tools
+    assert sum(1 for node in ast.walk(connect) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "LlmAgent") == 1
     assert not (VOICE_DIR / "orchestrator.py").exists()
 
 
