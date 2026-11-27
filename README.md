@@ -143,12 +143,11 @@ A tool that only reads (a lookup, a calculation) needs only step 1 and step 5.
 
 ### Extensions, skills and MCP
 
-Install a reviewed extension without changing the voice bridge or adding another router. Add an extension module under server/app/voice (or in your deployment package), then register it in server/app/voice/installed_extensions.py:
+Install a reviewed extension without changing the voice bridge or adding another router. Define the extension in its own module, for example `server/app/voice/plugins/catalog.py`:
 
 ```python
-from app.voice.extensions import Extension, ExtensionManifest, ExtensionTool, SkillManifest
-from app.voice.installed_extensions import EXTENSIONS
 from pydantic import BaseModel, ConfigDict
+from app.voice.extensions import Extension, ExtensionManifest, ExtensionTool, SkillManifest
 
 class LookupInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -157,11 +156,20 @@ class LookupInput(BaseModel):
 def lookup(arguments: LookupInput) -> dict:
     return {"matches": []}  # Replace with a bounded, read-only host capability.
 
-EXTENSIONS.register(Extension(
+CATALOG = Extension(
     manifest=ExtensionManifest("catalog", "Product catalog", "1.0", "Read-only catalog lookup"),
     tools=(ExtensionTool("lookup", "Search the host catalog.", LookupInput, lookup),),
     skills=(SkillManifest("catalog-help", "Catalog terminology", "Use the catalog lookup for product questions."),),
-))
+)
+```
+
+Then install it from the deployment registration point, `server/app/voice/installed_extensions.py`:
+
+```python
+from app.voice.extensions import ExtensionRegistry
+from app.voice.plugins.catalog import CATALOG
+
+EXTENSIONS = ExtensionRegistry([CATALOG])
 ```
 
 Extension tool names are namespaced and exposed only for a live session. The bridge creates their ADK adapters from the extension manifest, but every call still passes through the same ToolRegistry, schema validation, PolicyEngine and session audit as built-in tools. The host assigns the permission scope; an extension cannot grant itself access. Extension handlers receive only validated Pydantic arguments, never ADK ToolContext or session state. Keep handlers bounded and treat their results as untrusted data. They must return information, not bypass browser/native action checks.
