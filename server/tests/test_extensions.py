@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
+from google.adk.tools import ToolContext
 
 from app.config import Settings
 from app.voice import extensions
@@ -200,8 +202,9 @@ def test_extension_tools_reject_mutating_and_non_async_capabilities(monkeypatch)
     )
     assert [metadata.name for metadata, _ in registered] == ["ext_demo_valid"]
     function = registered[0][1]
-    assert "tool_context" in function.__signature__.parameters
-    assert "_invoke" not in function.__signature__.parameters
+    parameters = inspect.signature(function).parameters
+    assert "tool_context" in parameters
+    assert "_invoke" not in parameters
 
 
 def test_mcp_adapter_exposes_only_explicitly_read_only_non_destructive_tools():
@@ -288,6 +291,7 @@ def test_async_extension_tool_uses_the_existing_policy_gateway_and_session_allow
     meta = metadata()
     registry = ToolRegistry(TOOL_FUNCTIONS, additional_tools=((meta, lookup),))
     gateway = registry._gateway(lookup, meta)
+    assert inspect.signature(gateway).parameters["tool_context"].annotation is ToolContext
 
     denied = run(gateway(arguments=LookupInput(query="hello"), tool_context=context(enabled=())))
     assert denied["status"] == "error"
