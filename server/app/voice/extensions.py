@@ -153,7 +153,7 @@ class ExtensionRegistry:
         except (NameError, TypeError) as exc:
             raise ValueError("Extension tool argument annotations must produce JSON schemas.") from exc
 
-    def _guarded_function(self, extension_id: str, function: Callable[..., Any]) -> Callable[..., Any]:
+    def _guarded_function(self, extension_id: str, function: Callable[..., Any], description: str) -> Callable[..., Any]:
         signature = inspect.signature(function)
 
         @wraps(function)
@@ -168,13 +168,14 @@ class ExtensionRegistry:
             return function(*args, **kwargs)
 
         call.__signature__ = signature  # type: ignore[attr-defined]
+        call.__doc__ = description
         return call
 
     def _tools_for_registry(self) -> tuple[ExtensionTool, ...]:
         result: list[ExtensionTool] = []
         for manifest in self._manifests:
             for item in manifest.tools:
-                guarded = self._guarded_function(manifest.extension_id, item.function)
+                guarded = self._guarded_function(manifest.extension_id, item.function, item.metadata.description)
                 result.append(ExtensionTool(item.metadata, guarded))
         return tuple(result)
 
