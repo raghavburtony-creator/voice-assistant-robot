@@ -60,11 +60,7 @@ class ExtensionRegistry:
         self._manifests = tuple(manifests)
         self._active_sessions: dict[str, frozenset[str]] = {}
         self._validate_manifests()
-        self._tools = tuple(
-            ExtensionTool(item.metadata, self._guarded_function(manifest.extension_id, item.function))
-            for manifest in self._manifests
-            for item in manifest.tools
-        )
+        self._tools = self._tools_for_registry()
 
     @property
     def manifests(self) -> tuple[ExtensionManifest, ...]:
@@ -162,7 +158,7 @@ class ExtensionRegistry:
                 context = args[-1]
             session = getattr(context, "session", None)
             session_id = getattr(session, "id", None)
-            # Replaced by the owning registry below; the closed-over check is assigned by _tools_for_registry.
+            # The registry check is attached by _tools_for_registry, below.
             if not isinstance(session_id, str) or not call._extension_registry.is_active(session_id, extension_id):  # type: ignore[attr-defined]
                 return {"ok": False, "error": "This extension is not active for the current session."}
             return function(*args, **kwargs)
@@ -181,8 +177,7 @@ class ExtensionRegistry:
 
     def tools(self) -> tuple[ExtensionTool, ...]:
         """Tools ready to combine with built-ins in the one ToolRegistry."""
-        # Wrappers are built per registry so their activation check always targets this instance.
-        return self._tools_for_registry()
+        return self._tools
 
     def is_active(self, session_id: str, extension_id: str) -> bool:
         return extension_id in self._active_sessions.get(session_id, frozenset())
