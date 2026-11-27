@@ -115,6 +115,9 @@ class ExtensionRegistry:
             raise ValueError("Extension tool names must be unique and use their extension namespace.")
         if not inspect.isfunction(function) or function.__name__ != metadata.name:
             raise ValueError("An extension tool function name must match its metadata name.")
+        if (not isinstance(metadata.description, str) or not 1 <= len(metadata.description) <= 200
+                or any(ord(char) < 0x20 for char in metadata.description)):
+            raise ValueError("Extension tool descriptions must be plain text between 1 and 200 characters.")
         if metadata.family not in TOOL_FAMILIES:
             raise ValueError("Extension tool family is not recognised.")
         if metadata.risk_level not in KNOWN_RISKS or metadata.risk_level != "low":
@@ -143,12 +146,14 @@ class ExtensionRegistry:
                     annotation = hints.get(parameter.name)
                     if annotation is None:
                         raise ValueError(f"Extension argument {parameter.name} must be annotated.")
-                    TypeAdapter(annotation).json_schema()
+                    try:
+                        TypeAdapter(annotation).json_schema()
+                    except Exception as exc:  # noqa: BLE001 - unsupported schemas are rejected at registration
+                        raise ValueError(f"Extension argument {parameter.name} cannot be represented as a JSON schema.") from exc
         except (NameError, TypeError) as exc:
             raise ValueError("Extension tool argument annotations must produce JSON schemas.") from exc
 
-    @staticmethod
-    def _guarded_function(extension_id: str, function: Callable[..., Any]) -> Callable[..., Any]:
+    def _guarded_function(self, extension_id: str, function: Callable[..., Any]) -> Callable[..., Any]:
         signature = inspect.signature(function)
 
         @wraps(function)
@@ -158,8 +163,7 @@ class ExtensionRegistry:
                 context = args[-1]
             session = getattr(context, "session", None)
             session_id = getattr(session, "id", None)
-            # The registry check is attached by _tools_for_registry, below.
-            if not isinstance(session_id, str) or not call._extension_registry.is_active(session_id, extension_id):  # type: ignore[attr-defined]
+            if not isinstance(session_id, str) or not self.is_active(session_id, extension_id):
                 return {"ok": False, "error": "This extension is not active for the current session."}
             return function(*args, **kwargs)
 
@@ -171,7 +175,6 @@ class ExtensionRegistry:
         for manifest in self._manifests:
             for item in manifest.tools:
                 guarded = self._guarded_function(manifest.extension_id, item.function)
-                guarded._extension_registry = self  # type: ignore[attr-defined]
                 result.append(ExtensionTool(item.metadata, guarded))
         return tuple(result)
 
@@ -193,6 +196,9 @@ class ExtensionRegistry:
             return tuple(ExtensionLifecycleResult(m.extension_id, "start", False) for m in self._manifests)
 
         active: set[str] = set()
+        # Publish each successful start immediately so cancellation during a later hook
+        # still leaves earlier extensions reachable from Bridge.close().
+        self._active_sessions[session_id] = frozenset()
         results: list[ExtensionLifecycleResult] = []
         for manifest in self._manifests:
             hook = manifest.on_session_start
@@ -200,11 +206,11 @@ class ExtensionRegistry:
                 if hook is not None:
                     await asyncio.wait_for(hook(session_id), timeout=HOOK_TIMEOUT_SECONDS)
                 active.add(manifest.extension_id)
+                self._active_sessions[session_id] = frozenset(active)
                 results.append(ExtensionLifecycleResult(manifest.extension_id, "start", True))
             except Exception as exc:  # noqa: BLE001 - a plugin must not take down a voice session
                 logger.warning("Extension %s start hook failed (%s)", manifest.extension_id, type(exc).__name__)
                 results.append(ExtensionLifecycleResult(manifest.extension_id, "start", False))
-        self._active_sessions[session_id] = frozenset(active)
         return tuple(results)
 
     async def stop_session(self, session_id: str) -> tuple[ExtensionLifecycleResult, ...]:
