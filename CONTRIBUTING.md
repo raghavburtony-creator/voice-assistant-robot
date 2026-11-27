@@ -57,5 +57,6 @@ A milestone is a release: a set of issues that ship together and that a visitor 
 | 0.6 Personal memory | Otto remembers what the desktop owner tells him across restarts, recalls it when asked, and shows and forgets it on request. |
 | 0.7 Extensions and MCP | Skills and MCP servers add tools to Otto through the existing tool gateway and policy, without changing the orchestrator. |
 | 0.8 Hand pointer and roaming | Hand control moves a pointer and drags windows through the checked desktop actions, and Otto walks along window edges. |
+| 0.9 Durable tasks, approvals and delivery | Background work, approvals and Otto's replies survive a restart of Otto or the desktop window; work that needs the visitor waits as a pending item until answered. |
 
 Unscheduled work has no milestone. Give it one when it is planned, not when it is filed.

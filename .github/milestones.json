@@ -5,5 +5,6 @@
   { "title": "0.5 Window management", "description": "Otto lists, focuses, moves, resizes, minimises, maximises, restores and closes other windows and switches workspaces by voice, and checks every result against a fresh observation." },
   { "title": "0.6 Personal memory", "description": "Otto remembers what the desktop owner tells him across restarts, recalls it when asked, and shows and forgets it on request." },
   { "title": "0.7 Extensions and MCP", "description": "Skills and MCP servers add tools to Otto through the existing tool gateway and policy, without changing the orchestrator." },
-  { "title": "0.8 Hand pointer and roaming", "description": "Hand control moves a pointer and drags windows through the checked desktop actions, and Otto walks along window edges." }
+  { "title": "0.8 Hand pointer and roaming", "description": "Hand control moves a pointer and drags windows through the checked desktop actions, and Otto walks along window edges." },
+  { "title": "0.9 Durable tasks, approvals and delivery", "description": "Background work, approvals and Otto's replies survive a restart of Otto or the desktop window; work that needs the visitor waits as a pending item until answered." }
 ]

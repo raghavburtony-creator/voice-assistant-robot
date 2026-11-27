@@ -65,6 +65,14 @@ Planned work, not shipped behaviour. The brief is [upgrade.md](../upgrade.md); t
 
 Size, position and mode are saved by the host between runs.
 
+### App lifecycle (0.4, SHELL-04)
+
+Taken as concepts from AnyModelBot's Electron shell and built with Tauri plugins:
+- **One instance.** A second launch focuses the running window (`tauri-plugin-single-instance`).
+- **Tray.** Show, hide and quit, with a badge counting pending items once 0.9 lands.
+- **Close to tray.** A setting, off by default. When off, closing the window quits Otto.
+- **Start at login.** A setting, off by default; it starts hidden in the tray (`tauri-plugin-autostart`, which supports Linux).
+
 ### Which session works
 
 | Session on GNOME (Zorin OS 18.1, GNOME 46) | Listing and moving other windows |
@@ -78,6 +86,8 @@ Size, position and mode are saved by the host between runs.
 1. **Otto GNOME Shell extension** (GJS, ES modules, GNOME 46 and later): runs inside the shell, reads `Meta.Window` (frame rect, WM class, title, workspace, monitor, focus, minimised or maximised) and performs `activate`, `move_resize_frame`, `minimize`, `maximize`, `unmaximize`, `delete` and workspace moves. It exports these on the session D-Bus and emits a signal when windows change. It is written for Otto; [gnomelets](https://github.com/raghavburtony-creator/gnomelets) is a design reference only (GPL-3.0, see [source-attribution.md](source-attribution.md)). Enabling a newly installed extension on Wayland needs a logout and login.
 2. **Tauri host:** a `zbus` client reads `DesktopState` (monitors, workspaces, windows, Otto's own window) and computes what changed since the previous read. Window ids are opaque handles valid only until the window closes.
 3. **Server and browser:** `desktop_observe` and `desktop_window` are checked tools on the server (closed kinds, an id from the latest observation, a closed layout vocabulary such as `left_half` or `beside`), and `toAssistantAction` checks the action again. The model never sends coordinates from free text.
+AnyModelBot drives the desktop through the Cua Driver binary. On Wayland that reads windows through AT-SPI and acts only on the foreground window through XWayland, and nothing checks the result, so it is a reference for its bounded tool list, not the backend.
+
 4. **Observe → act → verify:** every action reads the state, acts, reads again and compares with what was asked, re-reads once on a mismatch, and otherwise returns a verification failure that Otto says out loud. This generalises the shipped move check (`verifyDesktopMovement`).
 
 ### Memory on the desktop (0.6)
