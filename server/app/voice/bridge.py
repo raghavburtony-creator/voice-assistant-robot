@@ -496,6 +496,8 @@ class Bridge:
                 await self.live.audio_end()
             elif kind == "continuity_clear":
                 self.withdraw_continuity()
+            elif kind == "cancel_task":
+                self.cancel_task(event.get("id"))
             elif kind == "memory_consent":
                 result = await self.resolve_memory_consent(event)
                 if result is not None:
@@ -581,6 +583,16 @@ class Bridge:
         promotion = asyncio.get_running_loop().create_task(self._send_promotion(text))
         self._promotions.add(promotion)
         promotion.add_done_callback(self._promotions.discard)
+
+    def cancel_task(self, task_id: object) -> None:
+        """The visitor pressed Stop on a running background task (`cancel_task` on the wire). Only the visitor can: no tool
+        reaches this (D-22). The id is checked like any browser input, and the engine's own answer decides what happens: a
+        task that cannot be stopped safely is left running and Otto says so, one that is already over or unknown is ignored.
+        A task that is stopped ends as `cancelled`, so Otto is told "Cancelled." and the model hears the usual status."""
+        if not is_runtime_id(task_id):
+            return
+        if self.tasks.cancel(task_id) == "not_cancellable":
+            self.avatar({"kind": "waiting", "message": "That can't be stopped safely right now."})
 
     def _start_task(self, request: object) -> None:
         """Starts the background task a checked tool asked for. The request came through `tools.py`, which already checked

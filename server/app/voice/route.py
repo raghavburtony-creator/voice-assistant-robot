@@ -7,6 +7,7 @@
                              | {"type":"capture","source":"camera"|"screen"|null,"generation":...}   (a share starts or stops; generation is monotonically increasing, D-21/D-30)
                              | {"type":"frame","data":<base64 JPEG>}   (while sharing: at most 1/s, 256 KB; others dropped)
                              | {"type":"continuity_clear"}   (visitor withdrawal: deletes the saved task and suppresses task saves for this session)
+                             | {"type":"cancel_task","id":...}   (visitor presses Stop on one running background task; only the visitor can, no tool reaches it, D-22)
                              | {"type":"memory_consent","request_id":...,"accepted":true|false}   (visitor confirms or rejects one pending memory proposal)
                              | {"type":"desktop_result","request_id":...,"action":...,"consent_certificate":...,"result":...}   (native-host receipt and result; audit only, never execution authority)
     server -> client  text   {"type":"ready","limitSeconds":600} | {"type":"transcript","role":"user"|"assistant","text":...}

@@ -92,6 +92,30 @@ export function applyMemoryResult(
   )
 }
 
+/** A background task the server is running (TASK-01, #49), as the panel lists it: its id and the label the server set. */
+export type BackgroundTask = { id: string; label: string }
+/** More than this many are not listed; the server runs at most four at once (MAX_ACTIVE in tasks.py). */
+export const MAX_BACKGROUND_TASKS = 8
+
+/** Keeps the panel's list of running background tasks from the avatar events the server sends: a `working` event with an
+ *  id adds one, and a `success` or `failure` with that id removes it. Any other event, or an id that is not a runtime id
+ *  (the server would refuse it), changes nothing. */
+export function applyBackgroundTask(tasks: BackgroundTask[], event: AvatarEvent): BackgroundTask[] {
+  if (event.kind === 'working') {
+    if (!isRuntimeId(event.id) || tasks.some(task => task.id === event.id) || tasks.length >= MAX_BACKGROUND_TASKS) return tasks
+    return [...tasks, { id: event.id, label: event.topic ?? 'Background task' }]
+  }
+  if ((event.kind === 'success' || event.kind === 'failure') && event.id !== undefined && tasks.some(task => task.id === event.id)) {
+    return tasks.filter(task => task.id !== event.id)
+  }
+  return tasks
+}
+
+/** The visitor pressed Stop on one background task. Only the visitor sends it; the server checks the id again. */
+export function cancelTaskMessage(id: string): { type: 'cancel_task'; id: string } {
+  return { type: 'cancel_task', id }
+}
+
 export const NO_RETRY_CODES = ['not_configured', 'bad_start']
 
 type Options = {
@@ -178,6 +202,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
   const [endedMessage, setEndedMessage] = useState('')
   const [actions, setActions] = useState<ActionRecord[]>([])
   const [memoryProposals, setMemoryProposals] = useState<MemoryProposalEntry[]>([])
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([])
   const [micMuted, setMicMuted] = useState(false)
   const [micSilent, setMicSilent] = useState(false)
   const [micNote, setMicNote] = useState('')
@@ -367,6 +392,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     sharing.current = null
     sharingGeneration.current += 1
     lastFrameAt.current = null
+    setBackgroundTasks([])  // the server ends its tasks with the session (the engine is closed), so none is left to stop
     const ws = socket.current
     socket.current = null
     if (ws) {
@@ -535,6 +561,7 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
             if (avatar) {
               // A question to the visitor is also in the panel as text, not only in Otto's bubble and a screen reader's live region.
               if (avatar.kind === 'permission' && avatar.state === 'asking' && avatar.message) addCard({ title: 'Asking your permission', body: avatar.message })
+              setBackgroundTasks(current => applyBackgroundTask(current, avatar))
               avatarRef.current?.(avatar)
             }
           }
@@ -745,6 +772,14 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'continuity_clear' }))
   }, [])
 
+  /** The visitor's Stop on one running background task. The task leaves the list when the server says it ended. */
+  const stopBackgroundTask = useCallback((id: string) => {
+    const ws = socket.current
+    if (ws?.readyState !== WebSocket.OPEN || !isRuntimeId(id)) return false
+    ws.send(JSON.stringify(cancelTaskMessage(id)))
+    return true
+  }, [])
+
   /** Sends one base64 JPEG frame of the running share; a frame with no share, or sooner than a second after the last, is dropped. */
   const sendFrame = useCallback((data: string) => {
     const ws = socket.current
@@ -768,8 +803,8 @@ export function useVoiceAssistant({ language, page, onAction, createSocket, onDi
 
   return {
     mouth, speech, interrupt, interruptions,
-    status, transcript, error, errorCode, endedMessage, actions, memoryProposals, micMuted, micSilent, micNote, micReady, levelRef,
+    status, transcript, error, errorCode, endedMessage, actions, memoryProposals, backgroundTasks, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking,
-    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, resolveMemoryProposal, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
+    start, stop, stopSpeaking, undo, toggleMute, toggleTalk, sendText, sendCapture, sendFrame, clearContinuity, resolveMemoryProposal, stopBackgroundTask, chooseConsent, clearConsent, continueSession, setTalkMode, setAnswerLength,
   }
 }

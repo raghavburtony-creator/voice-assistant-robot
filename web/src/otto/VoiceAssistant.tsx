@@ -89,7 +89,7 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
   const {
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking, clearContinuity,
-    memoryProposals, resolveMemoryProposal,
+    memoryProposals, resolveMemoryProposal, backgroundTasks, stopBackgroundTask,
   } = assistant
   const [draft, setDraft] = useState('')
   const [wakeOn, setWakeOn] = useWakeSetting()
@@ -269,6 +269,13 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
           <span className="ui-visually-hidden">{entry.role === 'user' ? 'You said:' : 'Guide said:'} </span>{entry.text}
         </li>)}
     </ol>
+
+    {backgroundTasks.length > 0 && <ul className="voice-assistant__tasks" aria-label="Running in the background">
+      {backgroundTasks.map(task => <li key={task.id}>
+        <span>{task.label}</span>
+        <Button variant="text" aria-label={`Stop: ${task.label}`} onClick={() => stopBackgroundTask(task.id)}>Stop</Button>
+      </li>)}
+    </ul>}
 
     {memoryProposals.length > 0 && <section className="voice-assistant__memory-list" aria-label="Memory requests">
       {memoryProposals.map(proposal => <VoiceMemoryProposal

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { DESTINATIONS_CONTEXT_KEY, publishContext } from './context'
-import { applyMemoryResult, currentPageInfo, pageMessage, startMessage, type MemoryProposalEntry } from './useVoiceAssistant'
+import {
+  applyBackgroundTask, applyMemoryResult, cancelTaskMessage, currentPageInfo, MAX_BACKGROUND_TASKS, pageMessage, startMessage,
+  type BackgroundTask, type MemoryProposalEntry,
+} from './useVoiceAssistant'
 
 afterEach(() => publishContext(DESTINATIONS_CONTEXT_KEY, null))
 
@@ -51,5 +54,41 @@ describe('the server\'s answer to a memory proposal', () => {
     const other = { ...entry('pending'), request_id: 'b'.repeat(32) }
     const [first, second] = applyMemoryResult([entry('saving'), other], id, 'saved')
     expect([first.status, second.status]).toEqual(['saved', 'pending'])
+  })
+})
+
+describe('the background tasks the panel lets the visitor stop', () => {
+  const job: BackgroundTask = { id: 'task-1', label: 'Search the project docs' }
+
+  it('lists a task when the server says it is working, and drops it when it succeeds, fails or is cancelled', () => {
+    const listed = applyBackgroundTask([], { kind: 'working', id: 'task-1', topic: 'Search the project docs' })
+    expect(listed).toEqual([job])
+    expect(applyBackgroundTask(listed, { kind: 'success', id: 'task-1' })).toEqual([])
+    expect(applyBackgroundTask(listed, { kind: 'failure', id: 'task-1', message: 'Cancelled.' })).toEqual([])
+  })
+
+  it('labels a task with no topic, and lists each task once', () => {
+    expect(applyBackgroundTask([], { kind: 'working', id: 'task-2' })).toEqual([{ id: 'task-2', label: 'Background task' }])
+    const once = applyBackgroundTask([job], { kind: 'working', id: 'task-1', topic: 'Again' })
+    expect(once).toEqual([job])
+  })
+
+  it('leaves the list alone for other events, an end with no id or another id, and an id the server would refuse', () => {
+    for (const event of [
+      { kind: 'success' as const }, { kind: 'failure' as const, id: 'task-9' }, { kind: 'thinking' as const, id: 'task-1' },
+      { kind: 'waiting' as const, message: 'x' }, { kind: 'working' as const, id: 'bad id' }, { kind: 'working' as const, id: '/etc' },
+    ]) {
+      expect(applyBackgroundTask([job], event)).toEqual([job])
+    }
+  })
+
+  it('never lists more than the cap', () => {
+    let tasks: BackgroundTask[] = []
+    for (let n = 0; n < MAX_BACKGROUND_TASKS + 3; n++) tasks = applyBackgroundTask(tasks, { kind: 'working', id: `task-${n}` })
+    expect(tasks).toHaveLength(MAX_BACKGROUND_TASKS)
+  })
+
+  it('stops one task with a message that holds only its id', () => {
+    expect(cancelTaskMessage('task-1')).toEqual({ type: 'cancel_task', id: 'task-1' })
   })
 })
