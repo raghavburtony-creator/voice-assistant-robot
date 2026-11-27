@@ -199,10 +199,10 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 - What the model learns about the page goes through the context channel (`publishContext` and the session's `screens`), within a budget. Nothing opens a second channel.
 - New rules are core modules with tests, and their adapters are shell (D-13). Task state belongs to the guide (`guidance/task.ts`), and app events to `createOttoEvents`.
 - Everything Otto shows, says or signs is also text in the panel (D-06), and every new input keeps the privacy exclusions of D-17.
-- Runtime authority is the chain in [architecture.md](architecture.md#who-decides-at-runtime) (D-22): the model proposes, the server checks, the browser checks, the host executes, Otto decides how. Engineering agents have no runtime or architectural authority. They work within this log. A person reviews their pull requests, except that the owner has authorised an agent to review and squash-merge a PR it opened for them under the gate in [AGENTS.md](../AGENTS.md#review-and-merge); decisions, answers to a `Q-xx` and edits to that gate stay with a person.
+- Runtime authority is the chain in [architecture.md](architecture.md#who-decides-at-runtime) (D-22): the model proposes, the server checks, the browser checks, the host executes, Otto decides how. Engineering agents have no runtime or architectural authority. They work within this log. A person reviews their pull requests, except that the owner has authorised an agent to review and squash-merge a PR it opened for them under the gate in [CLAUDE.md](../CLAUDE.md#review-and-merge); decisions, answers to a `Q-xx` and edits to that gate stay with a person.
 
 **Why:** The checks in D-02, D-14, D-16 and D-17 hold only if every path goes through them. A parallel system for a new capability would need the same checks again, and would drift from them. The owner set this rule in issue #6.
-**Where:** [architecture.md](architecture.md); enforced by the existing tests for D-02, D-13 and D-17 (`server/tests/test_voice.py`, `web/src/otto/layers.test.ts`, `web/src/otto/messages.test.ts`, `web/src/otto/awareness/collectPage.test.ts`) and by review (AGENTS.md, "Review guidelines").
+**Where:** [architecture.md](architecture.md); enforced by the existing tests for D-02, D-13 and D-17 (`server/tests/test_voice.py`, `web/src/otto/layers.test.ts`, `web/src/otto/messages.test.ts`, `web/src/otto/awareness/collectPage.test.ts`) and by review (CLAUDE.md, "Review guidelines").
 
 ## D-20 A running task survives a reload in the same tab, as ids only
 

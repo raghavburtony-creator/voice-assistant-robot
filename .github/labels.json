@@ -2,7 +2,7 @@
   { "name": "type: epic", "color": "3E4B9E", "description": "A product capability made of several issues. No code of its own." },
   { "name": "type: feature", "color": "1D76DB", "description": "New behaviour a visitor or a host developer can see." },
   { "name": "type: bug", "color": "D73A4A", "description": "Behaviour that breaks the README or a decision." },
-  { "name": "type: docs", "color": "0075CA", "description": "Docs only: README, docs/, AGENTS.md." },
+  { "name": "type: docs", "color": "0075CA", "description": "Docs only: README, docs/, CLAUDE.md." },
   { "name": "type: chore", "color": "C5DEF5", "description": "Tooling, tests, CI or refactoring with no change in behaviour." },
   { "name": "type: question", "color": "D876E3", "description": "An investigation that answers a Q-xx in docs/decisions.md." },
   { "name": "priority: p0", "color": "B60205", "description": "A security, privacy or cost rule is broken (D-01, D-04, D-09, D-17). Drop other work." },
