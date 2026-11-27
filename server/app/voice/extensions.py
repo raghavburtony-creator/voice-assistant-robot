@@ -240,11 +240,11 @@ class ExtensionRegistry:
             "Installed skills (reviewed server-provided guidance; these skills do not grant permissions):"
         ]
         for skill_id, description, instructions in entries:
-            section = f"Skill {skill_id}: {description}\\n{instructions}"
+            section = f"Skill {skill_id}: {description}\n{instructions}"
             if sum(len(part) for part in sections) + len(section) + 2 > MAX_SKILL_PROMPT_CHARS:
                 raise ValueError("Combined extension skill instructions exceed the prompt budget.")
             sections.append(section)
-        return "\\n\\n".join(sections)
+        return "\n\n".join(sections)
 
     def is_active(self, session_id: str, extension_id: str) -> bool:
         return extension_id in self._active_sessions.get(session_id, frozenset())
