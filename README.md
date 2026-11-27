@@ -489,8 +489,23 @@ During a conversation, the panel has **Share screen** (in browsers with `getDisp
 
 The rules are core (`capture.ts`: `captureStop`, `frameDue`, `frameSize`, `maskBoxes`); the capture is shell (`useScreenShare.ts`, `ScreenShare.tsx`). `<otto-mascot>` doesn't capture. In the lab, "What the server has of a share" shows the source and a frame count, never the pictures. Whether the live endpoint accepts these frames is unverified until Q-01 is answered.
 
-### Sign input (adapter slice, no recognizer)
+### Hand gesture navigation
 
+Otto can navigate registered views with a webcam without starting a voice conversation. Open the panel and press **Start hand control**. After the browser camera prompt, the panel shows a local preview and tracked hand. Point with your index finger (fold the other fingers), hold still briefly, then swipe left for the previous registered view or right for the next. The first slice navigates only between host-supplied destinations; it does not click page elements, scroll, inject keystrokes or switch arbitrary desktop applications.
+
+The host supplies an ordered list of safe destination ids and retains route ownership:
+
+```tsx
+const gestureNavigation = {
+  destinations: PAGES.map(({ id, title }) => ({ id, label: title })),
+  onNavigate: (id: string) => { if (isPage(id)) window.location.hash = id }, // this app owns the route
+}
+<Otto page={page} onAction={onAction} gestureNavigation={gestureNavigation} />
+```
+
+Camera frames and hand landmarks are processed in the browser and are not sent to Otto's server or Gemini, and no camera/gesture data is stored. Camera access is independent of microphone consent and the voice session. Stop hand control, close the panel or hide the tab to release the camera; it never restarts by itself. MediaPipe's WASM/runtime and hand model are downloaded from jsDelivr and Google when started. MediaPipe's [privacy notice](https://developers.google.com/edge/mediapipe/solutions/privacy) says input images are processed on-device and not sent to Google, but the SDK sends performance/utilization metrics to Google; the panel links to that notice. This feature is defined by D-31 and is the narrow local-only exception to D-21.
+
+### Sign input (adapter slice, no recognizer)
 The panel can take signed input through a **recognizer adapter** the app plugs in (D-29). **The kit still ships no production recognizer**: no model is bundled or connected to the camera, and with no adapter configured the panel shows no sign controls. A separate, offline **personal BSL ML prototype** now lives in `ml/sign/`; it collects consented landmark sequences and provides a training/export pipeline, but does not alter runtime capture or close Q-09's broader community-validation requirements. What ships in the kit is the boundary around a future adapter:
 - **Its own notice, every time.** **Sign to Otto** opens a plain-language notice: what is captured (the camera is turned on and watches you sign), who receives it (the adapter's `recipient`), whether it is processed `local` or `remote`, the limits, that Otto keeps no video, and that the words it reads come back and are sent on to Otto's voice service, as if you had typed them, only after you confirm them. D-21's camera consent does not cover it, and nothing is remembered: each start asks again, and a stopped capture never restarts by itself.
 - **Shown the whole time.** "Signing is on" with **Stop signing**. It stops at Stop, when the tab is hidden, when the conversation ends, on an adapter failure, and after 120 seconds. Video held in memory is bounded (150 frames, 10 seconds, 16 MB, oldest dropped) and emptied at every stop. No frame goes to logs, storage, analytics, the lab or the server.

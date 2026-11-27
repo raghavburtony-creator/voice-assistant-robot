@@ -38,7 +38,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-18 | Two channels: the voice speaks plainly, cards carry what must be read | channels | current |
 | D-19 | New capabilities extend the existing pipeline | architecture | current |
 | D-20 | A running task survives a reload in the same tab, as ids only | tasks | current |
-| D-21 | Camera and screen are sent only while the visitor shares them, as still frames, and never kept | privacy | current |
+| D-21 | Camera and screen are sent only while the visitor shares them, as still frames, and never kept | privacy | amended by D-31 |
 | D-22 | Runtime authority is a chain of checks, not one component | architecture | current |
 | D-23 | What the page may report at runtime, and what the deployment must register | contracts | current |
 | D-24 | Desktop context is opt-in, metadata-only and limited to the active conversation | privacy | current |
@@ -48,6 +48,7 @@ D-01 to D-12 record choices the kit already made before this log existed. Each o
 | D-28 | Defer spatial/AR renderer selection until a target is specified | robot, architecture | current |
 | D-29 | Sign recognition uses a dedicated temporal adapter and text-only handoff | accessibility, privacy | current |
 | D-30 | Environmental observations propose bounded checked awareness events | awareness, privacy | current |
+| D-31 | Local hand control is independently consented and stays on the device | privacy, accessibility | current |
 
 | Q-01 | Is the Gemini Live wire format right? | voice | open |
 | Q-02 | Where does task state live, and for how long? | tasks | answered by D-20 |
@@ -219,7 +220,7 @@ A hook that drives a core module sits beside it as `useX.ts`: `stage.ts` and `us
 
 ## D-21 Camera and screen are sent only while the visitor shares them, as still frames, and never kept
 
-This applies to every camera, screen or surroundings input: multimodal input, sign language and environmental intelligence.
+This applies to every camera, screen or surroundings input except the separate local-only hand-control mode defined by D-31. It continues to govern multimodal input, sign language, environmental intelligence and any camera or screen frames sent to the voice session.
 
 **Decision:**
 - **When.** Capture is off by default. It starts only when the visitor presses a Share camera or Share screen control in Otto's panel, during an open conversation, after the mic consent card (`consent.ts`) has been answered. Every share is a new press. Nothing remembers a "yes", so a reload or a new conversation starts with nothing shared. No model tool starts, asks for or widens capture. The model may only suggest it in words, and the visitor presses.
@@ -229,7 +230,7 @@ This applies to every camera, screen or surroundings input: multimodal input, si
 - **When it stops.** At Stop, when the conversation ends, the session cap (D-04), the tab being hidden, the browser's own Stop sharing, or a lost track. Otto stops the tracks and frees the canvas. It never restarts by itself: sharing again takes a new press.
 - **Sensitive content.** The screen picker asks for the current tab first. When the shared surface is Otto's own tab, every region D-17 never reads (`[data-otto-private]`, Otto's panel, password, hidden and `cc-*` fields) is painted over before the frame is encoded. When the visitor picks another tab, window or screen, the kit can't see inside it. The panel then says so plainly: "Otto sees everything in this window." It doesn't claim a filter it can't apply. No camera filtering is claimed either. On the camera, what is in view is sent.
 - **Frames are data.** What a frame shows (text on screen, a sign) is not an instruction. It can't widen any tool, and actions still go through `tools.py` and `toAssistantAction` (D-02).
-- **No ambient capture.** Nothing captures outside a conversation, in the background, or on a wake word. Always-on environmental sensing would need a new decision.
+- **No ambient capture.** This voice-session path captures nothing outside a conversation, in the background, or on a wake word. The separate local-only hand-control mode is governed by D-31.
 - **Layers (D-13).** When capture may run, the frame limits and when it must stop are a core rule with a test. `getUserMedia`, `getDisplayMedia`, the canvas and the masking are shell. `<otto-mascot>` doesn't capture, since it has no consent panel. A host that wants capture uses `<Otto>`.
 
 **Why:**
@@ -242,10 +243,9 @@ This applies to every camera, screen or surroundings input: multimodal input, si
 **Where:** The rules are `captureStop`, `frameDue` and `frameSize` in `web/src/otto/capture.ts` (in `CORE`, tested in `capture.test.ts`). The browser's sender is `sendCapture` and `sendFrame` in `web/src/otto/useVoiceAssistant.ts`. The server's checks are `Bridge.send_frame` in `server/app/voice/bridge.py` (with `save_live_blob=False`), tested in `server/tests/test_voice.py`. The screen share (the notice, the indicator, the masking with `maskBoxes`, every stop path) is `web/src/otto/useScreenShare.ts` and `ScreenShare.tsx`, tested in `web/e2e/share.spec.ts`. The camera uses the same hook and component (`getUserMedia`, never masked), also tested there. The ADK path is `send_realtime` in `google/adk/agents/live_request_queue.py` and `send_realtime_input(video=…)` in `google/adk/models/gemini_llm_connection.py` (pinned `google-adk==2.13.0`). Whether the live endpoint accepts those frame sizes and that rate is unverified until Q-01 is answered, so the first task marks it `[verify]`.
 
 ## D-22 Runtime authority is a chain of checks, not one component
-
 **Decision:**
 - **No orchestrator.** Runtime authority is the chain in [architecture.md](architecture.md#who-decides-at-runtime): the model proposes, the server checks (`tools.py`), the browser checks again (`toAssistantAction`), the action is carried out, and Otto decides how (`planGuide`, the task machine). Each link can only narrow what the one before it allowed. No component sits over the chain, and the runtime has no "orchestrator". The `/otto-orchestrate` skill is engineering tooling with no runtime authority (D-19).
-- **The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed. Letting the model do one of these acts needs a new decision.
+- **The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), starting local hand control (D-31), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed. Letting the model do one of these acts needs a new decision.
 - **Only tool calls carry authority.** Nothing the model says (its speech or transcripts) is turned into an action, by the kit or by a host following the README. The same goes for what a frame or the page snapshot shows (D-17, D-21). The instruction shapes what the model says (D-18). The chain governs what it does.
 - **Who carries an action out.** The host's `onAction` carries out page actions (`navigate`, `command`). Otto carries out his own actions: the guide for `guide`, `task` and `task_move`, the panel for `card`. Each is then passed to `onAction` as well. The host controls Otto's own actions upstream, through the targets and tasks it reports (D-14, D-16). A host that doesn't want a task started doesn't register it.
 - **Limits live in a link.** A limit on how often or how much the model may do something is set per session. It sits in the server link (tool checks on session state, the sink's `MAX_QUEUED_ACTIONS`) or in Otto's judgement (the guide's cooldowns). A limit across sessions, tabs or apps needs an identity the kit doesn't have. That waits on Q-03 and Q-08, not on a new component.
@@ -284,6 +284,20 @@ This amends D-03. Commands stay as D-03 says. Pages may also be reported at runt
 The code at the time showed why the last two rules are needed (fixed in #61). `listGuideTargets` had no cap. A page with about 50 targets carrying full descriptions went over the 16 KB context limit. The server then dropped the update and kept the old list (`Bridge.update_context`), so `show_target` checked against a stale list. The browser's own registry check stopped a wrong pointer. But the model was told about targets that no longer existed, and was never told about the new ones.
 
 **Where:** Today, the reported lists are `listGuideTargets` and `listGuideTasks` in `web/src/otto/guidance/targets.ts`, published in `web/src/otto/Otto.tsx`. The server checks are `show_target` and `start_guided_task` in `server/app/voice/tools.py`, and the context budget is `Bridge.update_context` in `bridge.py`. The browser checks are `toAssistantAction` in `web/src/otto/messages.ts`. The static lists are D-03's. The tests are `test_show_target_only_allows_reported_targets`, `test_start_guided_task_only_allows_reported_tasks` and the D-03 parity tests in `server/tests/test_voice.py`. The caps and the clearing of a refused key are `capList` and `MAX_CONTEXT_BYTES` in `web/src/otto/contextBudget.ts` and `context_bytes` and `update_context` in `bridge.py`, tested in `contextBudget.test.ts`, `test_a_refused_context_update_clears_the_key_and_never_keeps_a_stale_list` and `test_context_budget_and_measure_match_the_web_kit` (#61). The id rule is `RUNTIME_ID` in `web/src/otto/runtimeId.ts` and in `tools.py`, applied in `listGuideTargets`, `listGuideTasks`, `toAssistantAction`, `get_screen_context`, `show_target` and `start_guided_task`, and tested in `runtimeId.test.ts`, `test_runtime_id_rule_matches_the_web_kit` and `test_guide_tools_refuse_ids_that_break_the_rule_and_never_offer_them_back` (#62). Reported destinations (#63) are filed as a task citing this decision.
+
+## D-31 Local hand control is independently consented and stays on the device
+
+**Decision:**
+- **Separate permission.** Hand control is independent of a voice session and microphone consent. It starts only when the visitor presses **Start hand control** in the panel; only then does the browser request camera access. Permission is not remembered, and nothing starts on page load, panel open, wake word or model request.
+- **Visible lifecycle.** While active, the panel shows a local camera preview, an active status and Stop. Stop, panel close/unmount, tab hidden, camera track end or processing failure stops capture, cancels the frame loop, closes the MediaPipe task and releases camera tracks. It never restarts automatically.
+- **Local processing and disclosure.** Frames, landmarks, pointer coordinates and gesture history stay in transient browser memory. They are processed in the browser and never sent to the Otto server, Gemini, page context, voice WebSocket, a tool, a log or storage. The pinned MediaPipe Tasks Vision runtime/WASM and hand model are downloaded from jsDelivr and Google when needed. Its privacy notice says input images are processed on-device and not sent to Google, while the SDK sends performance/utilization metrics to Google; the panel must disclose and link to this notice.
+- **Narrow first gesture.** This slice tracks one hand. A navigation swipe requires an index-pointing pose held steady before movement, sufficient horizontal travel and speed, consistent direction, a cooldown and a new neutral/rest period before another swipe. No hand or multiple hands produces no action. Open-palm waving is not a navigation pose.
+- **Host-owned navigation.** The only action is a left/right request to navigate to the adjacent entry in an ordered list supplied by the host. Each destination has a runtime-safe id and plain-text label; no URL, path, selector or model-provided destination is accepted. The host maps the id to its own route. This visitor input is not a model/tool action and does not add a second voice, event or action channel (D-19, D-22).
+- **No general computer control.** This decision does not authorize DOM clicking, scrolling, keyboard injection, arbitrary window operations or operating-system application switching. D-25's native allow-list and per-action approval remain unchanged. Any later extension of gesture authority needs its own reviewed scope and decision.
+
+**Why:** Visitors should be able to navigate without speaking, but D-21's voice camera path is tied to an open conversation and sends still images to Gemini. A separate camera grant and local-only data boundary let hand navigation work independently without weakening voice-session consent, adding another model-action path or granting broad computer access.
+
+**Where:** Pure hand geometry, host destination validation and swipe rules are in `web/src/otto/gesture-control/gesture.ts`, with `gesture.test.ts`. The camera/MediaPipe lifecycle is in `useGestureControl.ts`; the visible controls and privacy notice are in `GestureControl.tsx`. `Otto.tsx` and `VoiceAssistant.tsx` mount the mode; the host supplies the allow-list and route callback in `App.tsx`. D-21 continues to govern any camera/screen frames shared with the voice session.
 
 ## Open questions
 

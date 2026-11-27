@@ -40,6 +40,10 @@ export default function App() {
   useEffect(() => { document.title = `${PAGES.find(item => item.id === page)?.title} · Otto voice kit` }, [page])
 
   const goTo = (next: PageId) => { window.location.hash = next }
+  const gestureNavigation = useMemo(() => ({
+    destinations: PAGES.map(({ id, title }) => ({ id, label: title })),
+    onNavigate: (destinationId: string) => { if (isPage(destinationId)) window.location.hash = destinationId },
+  }), [])
 
   // Otto's actions arrive here, already checked against otto.config.ts. Handle each kind your server's tools can send.
   const onAction = useCallback((action: AssistantAction, reportDesktopResult: (report: DesktopActionReport) => boolean) => {
@@ -157,6 +161,6 @@ export default function App() {
       {page === 'about' && <p>While the voice guide is open, your voice and what you type are sent to Google's Gemini to answer you. This app saves none of it.</p>}
       {message && <p className="app-message" role="status">{message}</p>}
     </main>
-    <Otto page={page} onAction={onAction} guide={guide} events={events} />
+    <Otto page={page} onAction={onAction} guide={guide} events={events} gestureNavigation={gestureNavigation} />
   </>
 }

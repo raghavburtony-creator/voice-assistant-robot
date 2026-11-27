@@ -9,6 +9,8 @@ import type { AssistantCard, MemoryProposalStatus } from './messages'
 import type { MemoryProposalEntry } from './useVoiceAssistant'
 import ScreenShare, { canShare } from './ScreenShare'
 import SignInput from './sign/SignInput'
+import GestureControl from './gesture-control/GestureControl'
+import type { GestureNavigation } from './gesture-control/gesture'
 import { Button, Icon, IconButton, Notice } from './ui'
 import { NO_RETRY_CODES, type useVoiceAssistant } from './useVoiceAssistant'
 import { recognitionCtor, useWakeSetting } from './wakeWord'
@@ -83,7 +85,7 @@ function VoiceMemoryProposal({ proposal, onResolve }: {
 
 const ANSWER_LENGTHS: readonly { value: AnswerLength; label: string }[] = [{ value: 'short', label: 'Short' }, { value: 'detailed', label: 'Detailed' }]
 
-export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void }) {
+export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEnabled, onDesktopAwarenessChange, currentPage, gestureNavigation }: { assistant: Assistant; onClose: () => void; desktopAwarenessEnabled: boolean; onDesktopAwarenessChange: (enabled: boolean) => void; currentPage: string; gestureNavigation?: GestureNavigation }) {
   const {
     status, transcript, error, errorCode, endedMessage, actions, micMuted, micSilent, micNote, micReady, levelRef,
     consent, consentAsked, talkMode, talking, answerLength, limitWarning, waking, clearContinuity,
@@ -191,6 +193,8 @@ export default function VoiceAssistant({ assistant, onClose, desktopAwarenessEna
       </div>
       <IconButton aria-label="Close voice guide" onClick={onClose}><Icon className="voice-assistant__icon" name="close" /></IconButton>
     </header>
+
+    {gestureNavigation && <GestureControl currentPage={currentPage} navigation={gestureNavigation} />}
 
     {/* Only these three changes are announced: Listening and Speaking come back after every reply and would talk over the guide. */}
     <p className="ui-visually-hidden" role="status">{status === 'connecting' || status === 'error' || status === 'ended' ? statusText : ''}</p>

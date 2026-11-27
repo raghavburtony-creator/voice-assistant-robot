@@ -23,6 +23,7 @@ Each part of the kit has one job:
 | Context | `context.ts` (`publishContext`, `useAssistantContext`), `bridge.py` | The page tells the model what it shows, under named keys, budgeted | D-17 |
 | Memory | `memory_service.py`, `memory_consent.py`, `bridge.py` | The model may propose a bounded entry after an explicit visitor request; only the visitor's one-use panel confirmation reaches the identity-scoped store. Sensitive records are excluded from model context | D-17, D-22, D-26 |
 | Awareness | `awareness/` | App events in, Otto's reactions out. Local: the model doesn't see these events | D-13 |
+| Hand control | `gesture-control/`, `Otto.tsx`, `VoiceAssistant.tsx` | Visitor-started local camera, hand landmarks and filtered swipe-to-host-navigation intent; never enters the voice session | D-13, D-19, D-21, D-22, D-23, D-31 |
 | Avatar events | `awareness/avatar.ts`, `avatar.py`, `bridge.py` (`avatar`) | A backend tells Otto's character how things are going (working, asking permission, success...). Presentation only: it becomes ordinary awareness events, never a second bus, and carries no authority | D-19, D-22 |
 | Guidance | `guidance/` | The host says what to show, Otto decides how. Guided tasks follow observed progress | D-14, D-16 |
 | Body | `robot/`, `movement/`, `mouth.ts`, `sound.ts` | The robot: decorative, reduced-motion aware, synthesised sound | D-06, D-07, D-10, D-11, D-12 |
@@ -60,7 +61,7 @@ Authority is a chain, not one component (D-22). Each link can only narrow what t
 5. **The action is carried out.** Page actions (`navigate`, `command`) by the host's `onAction`, under its own rules. Otto's own actions (`guide`, `task`, `task_move`) by the guide, in `Otto.tsx`, and `card` by the panel; each is then passed to `onAction` too. The host controls Otto's own actions upstream, through the targets and tasks it reports.
 6. **Otto decides how.** `planGuide` and the task machine decide how much of his attention a request gets, and hold back what doesn't deserve it (D-14, D-16).
 
-**The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed.
+**The visitor is above the chain.** Some acts are the visitor's alone, and no tool may do them, checked or not: answering the mic consent, turning on "Hey Otto" (D-08), starting a camera or screen share (D-21), starting local hand control (D-31), and pressing a card's follow-up (D-18). The visitor's Stop, Not now and the panel's undo win over anything the model proposed.
 
 ### Visitor-confirmed memory writes (MEM-01)
 
@@ -68,8 +69,15 @@ The model has no persistent-memory write tool. After the visitor explicitly asks
 
 Pending proposals are capped at three per session and disappear with the session. A stale, malformed, replayed or cross-session id cannot write memory. The model cannot produce the browser confirmation message, set the memory opt-in flag or call the resolver directly. This is a visitor-confirmation step within the existing WebSocket and Bridge path, not a second event bus, action router or orchestrator (D-19, D-22, D-26).
 
-### Environmental observation proposals (D-30)
+### Local hand control (D-31)
 
+Hand navigation is a separate browser-side input mode. The visitor opens the panel and presses **Start hand control** even when no voice conversation is running; microphone consent is not involved. The browser then requests camera permission, shows a local preview and active status, and runs MediaPipe Hand Landmarker over video frames. The first slice accepts one index-pointing hand and a filtered horizontal swipe. A host-supplied ordered destination list maps left/right to an adjacent safe id; the host owns route resolution. No URL, selector, click, scroll, keyboard or native desktop operation is produced.
+
+Frames, landmarks and gesture history remain in transient browser memory. They are not sent through the voice WebSocket, session context, server, Gemini, logs or storage. The MediaPipe runtime/WASM and model are downloaded from jsDelivr and Google when the visitor starts the feature; MediaPipe's privacy notice says input images are processed on-device and not sent to Google, while the SDK may send usage/performance metrics. The panel discloses that distinction. Stop, panel close/unmount, tab hidden, track end or processing failure cancels the frame loop, releases the camera and closes the task; a new Start press is required to resume.
+
+This is direct visitor input to one host callback for a host-owned id, not a model action path or event bus. D-25 continues to govern native desktop operations, and D-21 continues to govern camera/screen frames shared with the voice session.
+
+### Environmental observation proposals (D-30)
 While the visitor has actively shared the camera in the current voice session, the model may call one narrow environmental-proposal tool. This is the only permitted bridge from visual interpretation to environmental awareness: speech, transcripts and ordinary model text never create an event. The server checks the closed proposal schema, current session and camera-share lifecycle, then applies per-session rate and duplicate suppression. The browser validates the proposal independently and confirms the share is still active. A valid proposal maps only to the existing `attention` event, with a bounded topic and short plain-text message, and is dispatched through the host's existing `createOttoEvents` instance. Otto's normal reaction policy remains in charge.
 
 The proposal cannot set a page location, selector, guidance target, help target, arbitrary data, or action. It cannot report success, failure, permission, task, expression, movement, or trigger navigation/desktop/page commands. Unknown, uncertain, malformed, stale, duplicate, over-rate, cross-session and post-Stop proposals are dropped. Stop, hidden-tab stop, session end, disconnect and consent withdrawal invalidate pending proposals. Camera consent and the visible indicator remain D-21's responsibility; screen sharing alone does not enable this first slice. No frames or derived visual data are retained. See D-30 in [decisions.md](decisions.md).
