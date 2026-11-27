@@ -185,7 +185,13 @@ def test_duplicate_or_missing_entry_points_are_skipped(monkeypatch, caplog):
 
 
 def test_extension_tools_reject_mutating_and_non_async_capabilities(monkeypatch):
+    observed = []
+
     async def mutating(arguments):
+        return {"ok": True}
+
+    async def safe_lookup(arguments):
+        observed.append(dict(arguments))
         return {"ok": True}
 
     def sync_lookup(arguments):
@@ -197,7 +203,7 @@ def test_extension_tools_reject_mutating_and_non_async_capabilities(monkeypatch)
         (
             make_tool("mutate", mutating, read_only=False),
             ExtensionTool("sync", "Sync tool", LookupInput, sync_lookup, read_only=True),
-            make_tool("valid"),
+            make_tool("valid", safe_lookup),
         ),
     )
     assert [metadata.name for metadata, _ in registered] == ["ext_demo_valid"]
@@ -205,6 +211,8 @@ def test_extension_tools_reject_mutating_and_non_async_capabilities(monkeypatch)
     parameters = inspect.signature(function).parameters
     assert "tool_context" in parameters
     assert "_invoke" not in parameters
+    run(function(LookupInput(query="public input"), tool_context=SimpleNamespace(state={"private": "secret"})))
+    assert observed == [{"query": "public input"}]
 
 
 def test_mcp_adapter_exposes_only_explicitly_read_only_non_destructive_tools():
