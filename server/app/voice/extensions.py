@@ -253,7 +253,10 @@ def _model_from_json_schema(
 
 
 def _bounded_tool_output(value: object) -> dict[str, Any]:
-    result = dict(value) if isinstance(value, Mapping) else {"value": value}
+    # Keep external fields under one namespace so they cannot impersonate the gateway's
+    # evidence, provenance, verification, error or execution-status fields.
+    external = dict(value) if isinstance(value, Mapping) else {"value": value}
+    result = {"external_data": external}
     try:
         encoded = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
         if len(encoded.encode("utf-8")) > MAX_TOOL_OUTPUT_BYTES:
