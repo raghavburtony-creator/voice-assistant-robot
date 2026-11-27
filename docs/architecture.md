@@ -145,6 +145,25 @@ Source brief: [upgrade.md](../upgrade.md). It asks for JARVIS, IRIS, Kaizumi, Mu
 - **Structured state, not pixels.** The host returns `DesktopState` (monitors, workspaces, windows with id, app, title, rect, workspace, focused, state, and Otto's own window) plus what changed since the previous observation. Screenshots stay out of the first milestone.
 - **Policy.** Desktop actions get tiers inside the existing `PolicyEngine`, not a second engine. Ideas taken from JARVIS's `policy_engine.py`: fail closed for an unregistered tool, a pending approval bound to a hash of its arguments with a short expiry.
 - **Memory.** `SQLiteMemoryService` already has remember/recall/update/forget/resurface; what is missing is an identity on the desktop, typed kinds, read tools for the model and a panel to see and forget. JARVIS's memory (a JSON keyword store) is weaker and is not adopted.
+- **The durable layer (0.9, Q-14).** A task store, an approval store and an outbox sit under the gateway as services: they keep and deliver state, and never decide what Otto does. Today the task engine is one per voice session and everything but memory and continuity is in memory, so a restart loses running work.
+
+#### AnyModelBot reuse map
+
+From reading [modelflare-ai/AnyModelBot](https://github.com/modelflare-ai/AnyModelBot) @ `06b05e2` (TypeScript, Electron; MIT). The brief's §18 table, corrected by the source:
+
+| AnyModelBot area | Otto action | Otto home | Why |
+|---|---|---|---|
+| `agent/approvals.ts` (ApprovalCenter) | Adapt | `policy.py` (POL-03) | Durable rows, lifetime per context, allow-once, restart expiry, a fail-closed bridge |
+| `tasks/` (runs, `run_inputs`, stages, slots) | Adapt | `tasks.py` (TASK-02, TASK-03) | Exactly-once resume after a restart and a first-class "needs you" state; Otto keeps its own states and checks |
+| `core/outbox.ts`, `delivery/` | Adapt | `output.py` side, new store (OUT-01) | Stable ids, order, backoff; quiet hours, digests and chat quotas are channel concerns and are skipped |
+| Context steward (`steward.ts`) | Adapt | bridge session lifecycle (CTX-01) | 80% / 95% lines and a bounded handoff note; Gemini Live's own compression is tried first |
+| Memory (Markdown, About me) | Adapt ideas only | `memory_service.py` (MEM-03) | Locked user-written lines and a "never re-learn" list; its substring recall and post-turn automatic writes are not adopted (writes stay visitor-saved) |
+| Electron shell (`electron/main.ts`) | Adapt concepts | Tauri host (SHELL-04) | Single instance, tray, close-to-tray, hidden autostart, through Tauri plugins |
+| `tools/computer-use/` (Cua Driver) | Reference only | WM-01..WM-05 | A bounded tool manifest is a good pattern, but on Wayland it reads windows through AT-SPI and acts only on the foreground window, and it verifies nothing |
+| Permission presets, workspace sandbox | Deferred | | Otto has no file or command tools to fence |
+| `llm/`, magpie gateway, Modelflare | Ignore | | ADK and Gemini Live are Otto's model layer |
+| `channels/` (WeChat, Feishu, Telegram, Slack, Discord) | Ignore | | Otto's channel is the voice panel |
+| Multi-bot, its agent loop (DeepSeek Harness), its UI | Ignore | | One assistant, one ADK agent, Otto's own face |
 
 **CI-2/CI-3 task continuity:** the host-scoped SQLite adapter (`server/app/voice/continuity_store.py`) keeps one record per opaque host identity, containing only scope, task, step and savedAt. The bridge saves only a task/step pair present in the current interface's `guide_tasks` report and expires it after seven days. Completion, cancellation and visitor withdrawal delete it. When the model requests navigation to a runtime destination, `tools.py` first checks the id against the current interface's reported destinations; if a valid task is active, it marks a one-session handoff without recording the destination. The old interface's target, task and destination registries are then cleared in the server and browser. A source-interface unmount consumes that one-shot marker instead of deleting the saved task. The destination interface must report its own task registry; the server validates the saved task and step there, and the browser validates them again before `ottoGuide.startTask(spec, step)`. Missing tasks/steps are discarded. The host maps destination ids to routes; no URL, path, page snapshot or global identity crosses the boundary. The ADK live session remains ephemeral and unchanged.
 

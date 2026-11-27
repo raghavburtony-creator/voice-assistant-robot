@@ -11,14 +11,15 @@ Otto's product epics, how they depend on each other, and what is filed for the f
 | **E3 Multimodal input** ([#9](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/9)) | Otto can take camera or screen input, with consent and a visible indicator. | none (Q-07 answered by D-21) | not scheduled |
 | **E5 Environmental intelligence** ([#11](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/11)) | Otto reacts to what is around the visitor, through the existing awareness vocabulary. | E3 (Q-07 answered by D-21); Q-10 answered by D-30 | not scheduled |
 | **E6 Spatial / AR presence** ([#12](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/12)) | Otto appears in spatial or AR interfaces, using the same robot state. | A named target device/runtime and user-facing rendering and interaction requirements (D-28) | not scheduled |
-| **E7 Desktop personal assistant** (issue to be filed; absorbs [#142](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/142)) | Otto is a normal Linux desktop app that arranges the owner's windows by voice, checks every result, and remembers the owner across restarts. Brief: [upgrade.md](../upgrade.md). | Q-11, Q-12, Q-13 | 0.4 to 0.8 |
+| **E7 Desktop personal assistant** (issue to be filed; absorbs [#142](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/142)) | Otto is a normal Linux desktop app that arranges the owner's windows by voice, checks every result, and remembers the owner across restarts. Brief: [upgrade.md](../upgrade.md). | Q-11, Q-12, Q-13, Q-14 | 0.4 to 0.9 |
 
 ```
 E1 Task-aware ──► E2 Continuity across interfaces
 E3 Multimodal ──► E5 Environmental intelligence (D-30)
 E6 Spatial / AR (independent; waits for a target and requirements to be specified in issue #12, per D-28)
 E7 Desktop assistant: 0.4 shell ──► 0.5 window management (Q-11) ──► 0.8 hand pointer and roaming (Q-13)
-                      0.6 personal memory (Q-12)     0.7 extensions and MCP (independent)
+                      0.6 personal memory (Q-12) ──► 0.9 durable tasks, approvals and delivery (Q-14)
+                      0.7 extensions and MCP (independent)
 ```
 
 Each later epic gets its tasks once its blocking questions are answered. Sign-language support (E4) was retired on 2026-11-27 and is no longer an active roadmap capability; see the archive note below. For E6, Q-06 is answered by D-28; issue #12 must first name the target device/runtime and user-facing requirements.
@@ -73,7 +74,7 @@ D-30 answers Q-10. Environmental observations may propose only a bounded `attent
 | **ENV-01** ([#98](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/98)) | Add a provider-neutral, typed environmental proposal contract and deterministic adapter; validate session/camera lifecycle generations, allow-listed topics, rate and duplicates on server and browser; map accepted proposals to the existing `attention` event | none | D-02, D-18, D-19, D-21, D-22, D-30 |
 ## E7 Desktop personal assistant
 
-Source brief: [upgrade.md](../upgrade.md). How it maps onto the code: [architecture.md](architecture.md#target-the-desktop-personal-assistant-e7). The desktop details are in [desktop.md](desktop.md). One ADK agent stays the only decision-maker (D-22); JARVIS, IRIS, Kaizumi, Muninn and gnomelets are sources of mechanisms, recorded in [source-attribution.md](source-attribution.md).
+Source brief: [upgrade.md](../upgrade.md), now the AnyModelBot integration brief; the earlier JARVIS brief is in this file's history. How it maps onto the code: [architecture.md](architecture.md#target-the-desktop-personal-assistant-e7). The desktop details are in [desktop.md](desktop.md). One ADK agent stays the only decision-maker (D-22); JARVIS, IRIS, Kaizumi, Muninn and gnomelets are sources of mechanisms, recorded in [source-attribution.md](source-attribution.md).
 
 Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a working desktop companion that moves a window on request ("Move VS Code to the left"), verifies it, and still knows the owner's name after a restart. Slice names are working titles; each gets an issue when its milestone is filed.
 
@@ -84,6 +85,7 @@ Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a workin
 | **SHELL-01** | Otto's main window is a normal application window: a taskbar entry, a drag region, minimise, maximise, restore and close, no permanent always-on-top | none | D-06, D-25 |
 | **SHELL-02** | A compact assistant window beside the full window; the visitor (never the model) may pin the compact window on top; size, position and mode survive a restart | SHELL-01 | D-07, D-22 |
 | **SHELL-03** | The panel states the session (Wayland or Xorg), whether the Otto GNOME extension is present, and which desktop features are available | SHELL-01 | D-06, D-24 |
+| **SHELL-04** | A desktop app lifecycle: one instance (a second launch focuses the first), a tray icon with show, hide, quit and a badge for pending items, close-to-tray and start-at-login as settings that start off (the AnyModelBot Electron shell, through Tauri plugins) | SHELL-01 | D-06, D-08 |
 
 ### 0.5 Window management, observe → act → verify (blocked by Q-11)
 
@@ -120,4 +122,22 @@ Milestones 0.4, 0.5 and 0.6 together are the brief's "first milestone": a workin
 | **HAND-01** | In the desktop app, hand control moves a pointer and pinch-drags a window through the checked desktop actions | Q-13, WM-05 | D-31 |
 | [#143](https://github.com/raghavburtony-creator/voice-assistant-robot/issues/143) | Otto walks along the screen and window top edges, using `DesktopState` | Q-11, WM-02 | D-07, D-24 |
 
-Deferred on purpose: Otto as an MCP server, Playwright browser computer use, raw keyboard and mouse injection (blind on Wayland), screenshots in the desktop state, and embeddings for memory search. Each can be filed later.
+### 0.9 Durable tasks, approvals and delivery (blocked by Q-14)
+
+| Slice | Outcome | Blocked by | Decisions |
+|---|---|---|---|
+| **Q-14** | Decide what assistant state Otto may keep on disk, and for how long | none | D-17, D-21, D-26 |
+| **TASK-02** | One task engine for the whole server, backed by SQLite, instead of one per voice session; a restart marks live runs interrupted and recovers them, re-delivering only inputs that were never taken; adds pause and resume | Q-14, MEM-02 | D-19, D-22 |
+| **TASK-03** | Work that needs the visitor (approval, input, confirmation, retry) waits as a pending item in the panel and the tray, and resumes from its state when answered | TASK-02, POL-03 | D-06, D-22 |
+| **POL-03** | Approvals and the policy audit survive a restart: approval rows with a lifetime per context, allow-once, bound to the action's arguments; a restart expires blocking rows; model text never approves | Q-14 | D-22, D-25 |
+| **OUT-01** | Task results and pending items that arrive while the window is closed are kept and delivered, in order, when it reconnects | Q-14, TASK-02 | D-02, D-04 |
+| **CTX-01** | Long conversations stay usable: Gemini Live context compression and session resumption first, then a handoff note that carries identity, task, decisions, open questions, tool results and desktop state into the next segment | Q-14, MEM-03 | D-17, D-22 |
+
+Deferred on purpose:
+- Otto as an MCP server, Playwright browser computer use, screenshots in the desktop state, and embeddings for memory search.
+- Raw keyboard and mouse tools (`desktop.mouse`, `click`, `type`, `scroll`): the brief puts them after reliable window control, and on Wayland they would be blind.
+- Workspace isolation (READ / WRITE_WORKSPACE / WRITE_EXTERNAL / EXECUTE / SYSTEM): Otto has no file or command tools, so there is nothing to fence yet. File it with the first tool that touches files.
+- A multi-provider `ModelProvider`: ADK Live is Gemini-only, and Q-01 owns the voice provider boundary.
+- `NEEDS_AUTHENTICATION`: no tool needs sign-in yet.
+
+Each can be filed later.
