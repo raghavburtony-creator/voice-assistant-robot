@@ -46,7 +46,10 @@ class Settings(BaseSettings):
     @field_validator("otto_enabled_extensions")
     @classmethod
     def _valid_enabled_extensions(cls, value: str) -> str:
-        identifiers = [item.strip() for item in value.split(",") if item.strip()]
+        raw_items = [item.strip() for item in value.split(",")]
+        if value.strip() and any(not item for item in raw_items):
+            raise ValueError("OTTO_ENABLED_EXTENSIONS cannot contain empty ids")
+        identifiers = [item for item in raw_items if item]
         if len(identifiers) > 8 or len(set(identifiers)) != len(identifiers):
             raise ValueError("OTTO_ENABLED_EXTENSIONS may contain at most eight unique ids")
         if any(not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", item) for item in identifiers):
