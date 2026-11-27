@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_OTTO_CONFIG } from '../config'
 import { createOttoEvents, type OttoEvent } from './events'
-import { createReactor, type AwarenessSettings } from './reactions'
+import { attentionAnnouncement, createReactor, type AwarenessSettings } from './reactions'
 
 const SETTINGS = DEFAULT_OTTO_CONFIG.awareness
 const AWAKE = { self: { asleep: false, talking: false, walking: false, mayMove: true }, user: { present: true, idle: false } }
@@ -126,5 +126,33 @@ describe('context', () => {
     const job = events.task('up', { topic: 'upload', where: '#drop' })
     job.succeed('Uploaded'); job.fail()
     expect(seen.map(e => `${e.type}:${e.task}:${e.topic}`)).toEqual(['task:up:upload', 'success:up:upload'])
+  })
+})
+
+
+describe('accessible attention announcements', () => {
+  it('announces permitted minor and normal attention events as text', () => {
+    const event: OttoEvent = { type: 'attention', importance: 'minor', topic: 'object', message: 'A parcel is on the table.' }
+    expect(attentionAnnouncement(event, { size: 'glance' })).toBe('A parcel is on the table.')
+    expect(attentionAnnouncement({ ...event, importance: 'normal' }, { size: 'gesture' })).toBe('A parcel is on the table.')
+  })
+
+  it('does not announce suppressed reactions, other event types or missing messages', () => {
+    const event: OttoEvent = { type: 'attention', message: 'A cable is across the path.' }
+    expect(attentionAnnouncement(event, { size: 'none' })).toBeNull()
+    expect(attentionAnnouncement({ ...event, type: 'success' }, { size: 'glance' })).toBeNull()
+    expect(attentionAnnouncement({ type: 'attention' }, { size: 'glance' })).toBeNull()
+    expect(attentionAnnouncement({ type: 'attention', message: '\u0000  ' }, { size: 'glance' })).toBeNull()
+    expect(attentionAnnouncement({ type: 'attention', message: 5 } as unknown as OttoEvent, { size: 'glance' })).toBeNull()
+  })
+
+  it('cleans control characters and URLs and caps the announcement', () => {
+    const cleaned = attentionAnnouncement({
+      type: 'attention',
+      message: '  A\u0000 parcel\n is here. See https://example.test/details now.  ',
+    }, { size: 'glance' })
+    expect(cleaned).toBe('A parcel is here. See now.')
+    expect(attentionAnnouncement({ type: 'attention', message: 'x'.repeat(500) }, { size: 'glance' }))
+      .toHaveLength(120)
   })
 })
