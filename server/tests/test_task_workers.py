@@ -53,3 +53,24 @@ def test_worker_registry_rejects_invalid_or_duplicate_names_and_late_registratio
     adapter.seal()
     with pytest.raises(RuntimeError):
         adapter.register("late", worker)
+
+def test_bridge_owns_the_session_worker_allow_list_and_keeps_it_server_side():
+    from app.voice.bridge import Bridge
+    from tests.test_voice import FakeLive
+
+    async def worker(ctx):
+        return "private result"
+
+    async def go():
+        bridge = Bridge(object(), FakeLive(), task_workers={"internal_report": worker})  # type: ignore[arg-type]
+        submission = bridge.task_workers.submit("internal_report", "Internal report")
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        snapshot = bridge.tasks.get(submission.task_id)
+        await bridge.tasks.close()
+        return submission, snapshot
+
+    submission, snapshot = asyncio.run(go())
+    assert submission.ok
+    assert snapshot.state == "completed"
+    assert snapshot.result == "private result"
