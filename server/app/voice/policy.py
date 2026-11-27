@@ -79,6 +79,17 @@ class PermissionPolicy:
         if not supports_state(state):
             return "deny", "Session permission state is unavailable."
 
+        if permission.startswith("extension:"):
+            extension_id = permission.removeprefix("extension:")
+            enabled = state.get("enabled_extensions")
+            if (
+                extension_id
+                and isinstance(enabled, (list, tuple))
+                and extension_id in enabled
+            ):
+                return "allow", "The extension is enabled by this deployment for the active session."
+            return "deny", "The extension is not enabled for this session."
+
         if permission == "voice_session":
             return "allow", "The tool is scoped to the active voice session."
 
